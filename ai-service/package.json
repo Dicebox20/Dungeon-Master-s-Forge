@@ -1,0 +1,19 @@
+{
+  "name": "dungeon-masters-forge-ai-service",
+  "version": "1.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Reference AI compilation service for Dungeon Master's Forge.",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/cli.mjs",
+    "start:env": "node --env-file=.env src/cli.mjs",
+    "smoke": "node scripts/smoke-client.mjs",
+    "smoke:batch": "node scripts/batch-smoke-client.mjs",
+    "smoke:capabilities": "node scripts/capabilities-client.mjs",
+    "check": "node --check src/cli.mjs && node --check src/server.mjs && node --check src/adapters/openai.mjs",
+    "test": "node scripts/run-tests.mjs"
+  }
+}

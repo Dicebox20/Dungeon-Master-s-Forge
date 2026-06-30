@@ -1,0 +1,47 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+
+const script = await readFile(new URL("../scripts/dungeon-masters-forge.js", import.meta.url), "utf8");
+const styles = await readFile(new URL("../styles/dungeon-masters-forge.css", import.meta.url), "utf8");
+const settingsTemplate = await readFile(new URL("../templates/forge-settings.hbs", import.meta.url), "utf8");
+
+assert.match(script, /aria-live="polite"/);
+assert.match(script, /function bindForgeUsability\(/);
+assert.match(script, /game\.settings\.registerMenu\(MODULE_ID, "forgeSettings"/);
+assert.match(script, /approval\.addEventListener\("change"/);
+assert.match(script, /specs\.addEventListener\("input"/);
+assert.doesNotMatch(script, /action: "close"/);
+assert.match(styles, /\.codex-forge-panel[\s\S]*overflow-y: auto/);
+assert.match(styles, /\.codex-forge-workflow[\s\S]*grid-template-columns: minmax\(0, 0\.95fr\) minmax\(0, 1\.05fr\)/);
+assert.match(styles, /\.codex-item-forge \.form-footer \[data-action="create"\][\s\S]*margin-left: auto/);
+assert.match(styles, /button\.codex-forge-create:disabled/);
+assert.match(styles, /\.codex-forge-request[\s\S]*flex: 1 1 auto/);
+assert.match(script, /buildReviewSummaries/);
+assert.match(script, /class="codex-forge-review-summary"/);
+assert.match(script, /data-forge-panel="request"/);
+assert.match(script, /data-forge-panel="review"/);
+assert.match(script, /<span>Description<\/span>/);
+assert.match(script, /<span>Result<\/span>/);
+assert.match(script, /data-action="open-settings"/);
+assert.match(styles, /\.codex-forge-pane-header/);
+assert.match(styles, /\.codex-forge-provider-summary/);
+assert.match(styles, /\.codex-forge-settings-grid/);
+assert.match(script, /<details class="codex-forge-advanced">/);
+assert.match(styles, /\.codex-forge-item-summary/);
+assert.match(script, /_codexReviewValidated/);
+assert.match(settingsTemplate, /name="providerEndpoint"/);
+assert.match(settingsTemplate, /name="providerModel"/);
+assert.match(settingsTemplate, /name="providerApiToken"/);
+assert.match(settingsTemplate, /name="rememberProviderApiToken"/);
+assert.match(settingsTemplate, /data-action="example"/);
+assert.match(settingsTemplate, /data-action="diagnostics"/);
+assert.match(settingsTemplate, /data-action="save-provider"/);
+assert.match(script, /providerSessionConfiguration/);
+assert.match(script, /syncSettingsProviderPanel/);
+assert.match(settingsTemplate, /data-action="check-provider"/);
+assert.match(script, /requestRemoteHealth/);
+assert.match(script, /mock mode/);
+assert.match(script, /game\.settings\.set\(MODULE_ID, "providerApiToken", rememberApiToken \? partitioned\.session\.apiToken : ""\)/);
+assert.match(settingsTemplate, /Use only on a trusted computer/);
+
+export const testedUsabilityContractCount = 38;
