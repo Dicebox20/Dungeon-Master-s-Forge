@@ -1,0 +1,25 @@
+[
+  {
+    "kind": "weaponExtraDamage",
+    "name": "Forge v0.1 - Emberglass Dagger",
+    "img": "icons/weapons/daggers/dagger-curved-red.webp",
+    "description": "A translucent red-black dagger that looks like cooled volcanic glass. Its edge glows faintly when it strikes.",
+    "rarity": "uncommon",
+    "attunement": "",
+    "weaponType": "simpleM",
+    "baseItem": "dagger",
+    "properties": ["mgc", "fin", "lgt", "thr"],
+    "damage": {
+      "base": { "number": 1, "denomination": 4, "bonus": "@mod", "types": ["piercing"] },
+      "versatile": { "number": null, "denomination": null, "bonus": "", "types": [] }
+    },
+    "magicalBonus": "",
+    "range": { "value": 20, "long": 60, "reach": 5, "units": "ft" },
+    "mastery": "nick",
+    "weight": 1,
+    "extraDamageParts": [
+      { "number": 1, "denomination": 4, "bonus": "", "types": ["fire"] }
+    ],
+    "attackName": "Strike with Emberglass Dagger"
+  }
+]
