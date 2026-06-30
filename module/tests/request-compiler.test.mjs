@@ -1,0 +1,171 @@
+import assert from "node:assert/strict";
+import { compileItemRequest } from "../scripts/request-compiler.js";
+
+const rifle = compileItemRequest("Make a rifle that does fire damage");
+assert.equal(rifle.specs[0].kind, "weaponExtraDamage");
+assert.equal(rifle.specs[0].extraDamageParts[0].denomination, 4);
+assert.deepEqual(rifle.specs[0].extraDamageParts[0].types, ["fire"]);
+
+const ring = compileItemRequest(`
+Ring of Steadfast Warding
+Rarity: Rare
+Attunement: Required
+Apply +1 bonus to AC and saving throws.
+`);
+assert.deepEqual(
+  ring.specs[0].effects[0].changes.map(change => change.key),
+  ["system.attributes.ac.bonus", "system.bonuses.abilities.save"]
+);
+
+const command = compileItemRequest(`
+Crown of the Ashen King
+Legendary crown, requires attunement. It casts Command once per dawn; the target makes a DC 18 Wisdom save.
+`);
+assert.equal(command.specs[0].kind, "legendaryEquipmentSuite");
+assert.deepEqual(command.specs[0].saveActivities[0].save, { ability: "wis", dc: 18 });
+assert.equal(command.specs[0].saveActivities[0].damageParts.length, 0);
+
+const wand = compileItemRequest(`
+Wand of Thunderous Force
+Uncommon wand requiring attunement by a spellcaster. Action. 15-foot cube originating from the wielder.
+Constitution save, DC 13. 2d8 thunder damage, half on success. 7 charges; spend 1 charge.
+Regains 1d6 + 1 charges daily at dawn.
+`);
+assert.equal(wand.specs[0].kind, "chargedSaveDamage");
+assert.equal(wand.specs[0].target.template.type, "cube");
+assert.equal(wand.specs[0].target.template.size, 15);
+assert.equal(wand.specs[0].uses.recovery[0].formula, "1d6 + 1");
+
+const summon = compileItemRequest("Create a rare item that summons a friendly wolf once per long rest.");
+assert.equal(summon.specs[0].kind, "nativeSummon");
+assert.match(summon.specs[0].activityId, /^[A-Za-z0-9]{16}$/);
+assert.match(summon.specs[0].profileId, /^[A-Za-z0-9]{16}$/);
+
+const deferred = compileItemRequest("Create a helm that restores 1 Ki point.");
+assert.ok(deferred.warnings.some(message => message.includes("Class-specific")));
+assert.equal(deferred.specs[0].unresolvedMechanics[0].category, "classResource");
+assert.equal(deferred.specs[0].unresolvedMechanics[0].resolved, false);
+assert.match(deferred.specs[0].unresolvedMechanics[0].id, /^[A-Za-z0-9]{16}$/);
+assert.equal(deferred.unresolvedMechanics[0].itemName, deferred.specs[0].name);
+
+const unresolvedSuite = compileItemRequest(`
+Crown of Shared Aura
+Legendary crown requiring attunement. It emits a 30-foot aura that grants allies +1 AC.
+It restores 1 sorcery point once per long rest. It casts Fly once per dawn.
+`);
+assert.deepEqual(
+  unresolvedSuite.specs[0].unresolvedMechanics.map(mechanic => mechanic.category),
+  ["allyAura", "classResource", "unmappedSpell"]
+);
+assert.ok(unresolvedSuite.specs[0].unresolvedMechanics.every(mechanic => mechanic.requestedText.length > 0));
+assert.ok(unresolvedSuite.specs[0].unresolvedMechanics.every(mechanic => mechanic.handling.length > 0));
+assert.match(unresolvedSuite.specs[0].unresolvedMechanics[0].requestedText, /grants allies \+1 AC/i);
+assert.equal(unresolvedSuite.specs[0].effects.length, 0, "An ally aura must not become a personal AC effect.");
+assert.equal(unresolvedSuite.decisions[0].unresolvedCount, 3);
+assert.equal(unresolvedSuite.unresolvedMechanics.length, 3);
+
+const separatedBatch = compileItemRequest(`
+Make a rifle that does fire damage
+---
+Ring of Steadfast Warding
+Rarity: Rare
+Attunement: Required
+Apply +1 bonus to AC and saving throws.
+`);
+assert.equal(separatedBatch.requestCount, 2);
+assert.deepEqual(separatedBatch.specs.map(spec => spec.kind), ["weaponExtraDamage", "passiveEffectEquipment"]);
+assert.deepEqual(separatedBatch.decisions.map(decision => decision.name), ["Fire Rifle", "Ring of Steadfast Warding"]);
+assert.ok(separatedBatch.assumptions.every(message => /^\[[^\]]+\]/.test(message)));
+
+const fieldBatch = compileItemRequest(`
+Item name: Emberglass Dagger
+Item type: Weapon, dagger
+Rarity: Uncommon
+Damage: Normal dagger damage plus 1d4 fire damage
+
+Item name: Moonhowl Whistle
+Item type: Wondrous item
+Rarity: Rare
+It summons a friendly wolf once per long rest.
+`);
+assert.equal(fieldBatch.requestCount, 2);
+assert.deepEqual(fieldBatch.specs.map(spec => spec.name), ["Emberglass Dagger", "Moonhowl Whistle"]);
+assert.deepEqual(fieldBatch.specs.map(spec => spec.kind), ["weaponExtraDamage", "nativeSummon"]);
+
+const winterStaff = compileItemRequest(`
+Staff of Winter's Judgment
+Rare staff requiring attunement by a wizard. It has 10 charges and a spell save DC of 15.
+It casts Ice Storm for 4 charges and Cone of Cold for 5 charges.
+Ice Storm deals 2d8 bludgeoning plus 4d6 cold damage. Cone of Cold deals 8d8 cold damage. Half damage on a successful save.
+The staff regains 1d6 + 4 charges daily at dawn.
+`);
+assert.equal(winterStaff.specs[0].kind, "multiActivityStaff");
+assert.deepEqual(winterStaff.specs[0].activities.map(activity => activity.chargeCost), [4, 5]);
+assert.deepEqual(winterStaff.specs[0].activities.map(activity => activity.save), [
+  { ability: "dex", dc: 15 },
+  { ability: "con", dc: 15 }
+]);
+assert.equal(winterStaff.specs[0].uses.max, "10");
+assert.equal(winterStaff.specs[0].uses.recovery[0].formula, "1d6 + 4");
+
+const fiendStone = compileItemRequest(`
+Infernal Calling Stone
+Very rare wondrous item requiring attunement. Once per long rest, as an action, summon a friendly fiend spirit within 90 feet.
+Choose Demon, Devil, or Yugoloth. The summon lasts 1 hour and uses concentration.
+`);
+assert.equal(fiendStone.specs[0].kind, "nativeMultiProfileSummon");
+assert.deepEqual(fiendStone.specs[0].summonProfiles.map(profile => profile.profileName), ["Demon", "Devil", "Yugoloth"]);
+assert.ok(fiendStone.specs[0].summonProfiles.every(profile => /^[A-Za-z0-9]{16}$/.test(profile.profileId)));
+assert.ok(fiendStone.specs[0].summonProfiles.every(profile => profile.actor.type === "fiend"));
+assert.equal(fiendStone.specs[0].uses.recovery[0].period, "lr");
+
+const emberOil = compileItemRequest(`
+Oil of Ember Edge
+Uncommon consumable oil that does not require attunement. As an action, apply it to one nonmagical weapon.
+For 1 hour, the weapon becomes magical and deals an extra 1d4 fire damage. The oil has one use and is consumed.
+`);
+assert.equal(emberOil.specs[0].kind, "nativeEnchant");
+assert.equal(emberOil.specs[0].duration.seconds, 3600);
+assert.equal(emberOil.specs[0].restrictions.type, "weapon");
+assert.equal(emberOil.specs[0].uses.autoDestroy, true);
+assert.deepEqual(emberOil.specs[0].enchantChanges.map(change => change.key), ["system.properties", "system.damage.parts"]);
+assert.match(emberOil.specs[0].activityId, /^[A-Za-z0-9]{16}$/);
+assert.match(emberOil.specs[0].effectId, /^[A-Za-z0-9]{16}$/);
+
+const mindCirclet = compileItemRequest(`
+Mindshard Circlet
+Very rare circlet requiring attunement. It has 5 charges and regains all charges on a long rest.
+As an action, spend 1 charge to make a ranged psychic attack using Intelligence against one enemy within 90 feet. On a hit it deals 4d8 psychic damage.
+`);
+assert.equal(mindCirclet.specs[0].kind, "equipmentPowerSuite");
+assert.equal(mindCirclet.specs[0].attackActivities.length, 1);
+assert.equal(mindCirclet.specs[0].attackActivities[0].ability, "int");
+assert.equal(mindCirclet.specs[0].attackActivities[0].attackType, "ranged");
+assert.equal(mindCirclet.specs[0].attackActivities[0].chargeCost, 1);
+assert.deepEqual(mindCirclet.specs[0].attackActivities[0].range, { value: 90, units: "ft" });
+assert.deepEqual(mindCirclet.specs[0].attackActivities[0].damageParts[0], {
+  number: 4, denomination: 8, bonus: "", types: ["psychic"]
+});
+
+const stormfire = compileItemRequest(`
+Stormfire Reaver
+Create a +3 artifact greataxe requiring attunement. Its attacks deal an extra 1d6 fire and 1d6 lightning damage.
+While equipped and attuned, it grants +1 to AC. As a bonus action, ignite or extinguish its light: 20 feet of bright light and an additional 20 feet of dim light.
+Once per dawn, cast Flame Strike at DC 18 Dexterity. It deals 4d6 fire and 4d6 radiant damage, half on a successful save.
+`);
+const stormfireSpec = stormfire.specs[0];
+assert.equal(stormfireSpec.kind, "artifactWeaponHybrid");
+assert.equal(stormfireSpec.magicalBonus, "3");
+assert.deepEqual(stormfireSpec.extraDamageParts.map(part => part.types[0]), ["fire", "lightning"]);
+assert.deepEqual(stormfireSpec.passiveEffects[0].changes, [
+  { key: "system.attributes.ac.bonus", mode: "ADD", value: "1" }
+]);
+assert.equal(stormfireSpec.toggleLight.bright, 20);
+assert.equal(stormfireSpec.toggleLight.dim, 40);
+assert.match(stormfireSpec.toggleLight.activityId, /^[A-Za-z0-9]{16}$/);
+assert.match(stormfireSpec.toggleLight.effectId, /^[A-Za-z0-9]{16}$/);
+assert.deepEqual(stormfireSpec.saveActivities[0].save, { ability: "dex", dc: 18 });
+assert.deepEqual(stormfireSpec.saveActivities[0].damageParts.map(part => part.types[0]), ["fire", "radiant"]);
+assert.equal(stormfireSpec.uses.recovery[0].period, "dawn");
+
+export const testedRequestCount = 14;

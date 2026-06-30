@@ -1,0 +1,59 @@
+<form class="codex-forge-settings-shell" autocomplete="off">
+  <section class="codex-forge-settings-grid">
+    <section class="codex-forge-settings-card">
+      <h2>Connection</h2>
+      <p>Choose the generation provider and manage Bring Your Own API details outside the main Forge workflow.</p>
+
+      <label>
+        <span>Generation provider</span>
+        <select name="providerId" aria-label="Generation provider">
+          {{{providerOptions}}}
+        </select>
+      </label>
+
+      <div class="codex-forge-provider-configuration" data-provider-configuration="bring-your-own" {{#unless isBringYourOwn}}hidden{{/unless}}>
+        <label>
+          <span>Endpoint</span>
+          <input type="url" name="providerEndpoint" value="{{providerEndpoint}}" placeholder="https://forge.example/api/compile">
+        </label>
+        <label>
+          <span>Model</span>
+          <input type="text" name="providerModel" value="{{providerModel}}">
+        </label>
+        <label>
+          <span>API token</span>
+          <input type="password" name="providerApiToken" value="{{providerToken}}" autocomplete="new-password">
+        </label>
+        <label class="codex-forge-token-storage">
+          <input type="checkbox" name="rememberProviderApiToken" {{#if rememberProviderToken}}checked{{/if}}>
+          <span>Remember token on this device</span>
+          <small>Stored in this browser's Foundry settings. Use only on a trusted computer.</small>
+        </label>
+      </div>
+
+      <output class="codex-forge-settings-provider-status" data-forge-settings-provider-status data-state="{{providerStatusState}}" aria-live="polite">
+        <i class="fa-solid {{providerStatusIcon}}"></i>
+        <span>{{providerStatusMessage}}</span>
+      </output>
+
+      <div class="codex-forge-settings-actions">
+        <button type="button" data-action="save-provider">Save Connection</button>
+        <button type="button" data-action="check-provider">Check Connection</button>
+      </div>
+    </section>
+
+    <section class="codex-forge-settings-card">
+      <h2>Utilities</h2>
+      <p>Keep examples and diagnostics nearby without crowding the Forge window.</p>
+
+      <div class="codex-forge-settings-actions">
+        <button type="button" data-action="example">Load Example</button>
+        <button type="button" data-action="diagnostics">Run Diagnostics</button>
+        <button type="button" data-action="open-forge">Open Forge</button>
+      </div>
+
+      <div class="codex-forge-diagnostics" data-forge-settings-diagnostics hidden></div>
+      <output class="codex-forge-settings-status" data-forge-settings-status data-state="idle" aria-live="polite">Connection and utilities are ready.</output>
+    </section>
+  </section>
+</form>

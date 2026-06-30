@@ -1,0 +1,33 @@
+{
+  "id": "codex-item-forge",
+  "title": "Dungeon Master's Forge V2",
+  "description": "Dungeon Master's Forge V2: a reusable DND5e item creation engine for Foundry VTT v14.",
+  "authors": [
+    {
+      "name": "Dungeon Master's Forge V2 Project"
+    }
+  ],
+  "version": "2.21.2",
+  "compatibility": {
+    "minimum": "14",
+    "verified": "14"
+  },
+  "relationships": {
+    "systems": [
+      {
+        "id": "dnd5e",
+        "type": "system",
+        "compatibility": {
+          "minimum": "5.3.3",
+          "verified": "5.3.3"
+        }
+      }
+    ]
+  },
+  "esmodules": [
+    "scripts/dungeon-masters-forge.js"
+  ],
+  "styles": [
+    "styles/dungeon-masters-forge.css"
+  ]
+}
