@@ -1060,9 +1060,49 @@
   border-color: #c17fc4;
 }
 
+.app.window-app.codex-item-forge-settings,
+.codex-item-forge-settings.window-app {
+  color: #f0ece5;
+  border: 1px solid rgb(180 42 51 / 38%);
+  background:
+    radial-gradient(circle at top, rgb(134 24 31 / 16%), transparent 38%),
+    linear-gradient(180deg, rgb(18 15 18 / 98%), rgb(17 20 24 / 98%));
+  box-shadow:
+    0 18px 36px rgb(0 0 0 / 35%),
+    inset 0 1px 0 rgb(255 255 255 / 4%);
+}
+
+.codex-item-forge-settings .window-header {
+  color: #f6ebe2;
+  border-bottom: 1px solid rgb(180 42 51 / 28%);
+  background: linear-gradient(180deg, rgb(43 17 22 / 96%), rgb(24 20 24 / 92%));
+}
+
+.codex-item-forge-settings .window-header .window-title,
+.codex-item-forge-settings .window-header .header-button,
+.codex-item-forge-settings .window-header button,
+.codex-item-forge-settings .window-header a {
+  color: #f6ebe2;
+  text-shadow: 0 1px 0 rgb(0 0 0 / 45%);
+}
+
 .codex-item-forge-settings .window-content {
   padding: 12px 16px 16px;
-  background: var(--color-bg-primary);
+  color: #f0ece5;
+  background:
+    linear-gradient(180deg, rgb(19 22 27 / 98%), rgb(13 16 20 / 98%)) !important;
+}
+
+.codex-item-forge-settings .standard-form,
+.codex-item-forge-settings .standard-form .form-group,
+.codex-item-forge-settings .standard-form label,
+.codex-item-forge-settings .standard-form p,
+.codex-item-forge-settings .standard-form output,
+.codex-item-forge-settings .standard-form h1,
+.codex-item-forge-settings .standard-form h2,
+.codex-item-forge-settings .standard-form h3,
+.codex-item-forge-settings .standard-form h4 {
+  color: #f0ece5;
 }
 
 .codex-forge-settings-shell {
@@ -1073,10 +1113,13 @@
 
 .codex-forge-settings-shell .form-header {
   margin: 6px 0 0;
+  color: #d14a52;
+  text-shadow: 0 1px 0 rgb(0 0 0 / 45%);
 }
 
 .codex-forge-settings-intro {
   margin: -4px 0 4px;
+  color: #d7c8bc;
 }
 
 .codex-forge-settings-shell .form-group {
@@ -1085,6 +1128,8 @@
 
 .codex-forge-settings-shell .form-group > label {
   flex: 0 0 180px;
+  color: #efe3d7;
+  font-weight: 700;
 }
 
 .codex-forge-settings-shell .form-fields {
@@ -1094,6 +1139,9 @@
 .codex-forge-settings-shell input,
 .codex-forge-settings-shell select {
   width: 100%;
+  color: #f0ece5;
+  border-color: rgb(180 42 51 / 26%);
+  background: linear-gradient(180deg, rgb(31 25 30 / 96%), rgb(19 22 27 / 96%));
 }
 
 .codex-forge-settings-actions {
@@ -1105,6 +1153,24 @@
 .codex-forge-settings-actions button {
   flex: 0 0 auto;
   min-width: 132px;
+  color: #f6ebe2;
+  font-weight: 700;
+  border: 1px solid rgb(229 161 93 / 58%);
+  background: linear-gradient(180deg, rgb(54 27 24 / 94%), rgb(33 21 24 / 96%));
+}
+
+.codex-forge-settings-actions button:hover,
+.codex-forge-settings-actions button:focus-visible {
+  border-color: rgb(229 161 93 / 82%);
+  background: linear-gradient(180deg, rgb(74 34 28 / 96%), rgb(43 24 26 / 98%));
+}
+
+.codex-item-forge-settings .notes {
+  color: #cdbfb4;
+}
+
+.codex-item-forge-settings .form-fields .checkbox {
+  color: #f0ece5;
 }
 
 .codex-forge-settings-shell .form-fields.codex-forge-settings-actions {

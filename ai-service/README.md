@@ -61,6 +61,23 @@ For server-key mode, enter the same `DMF_CLIENT_TOKEN` in Foundry's **API token*
 
 In Foundry V2.18 and newer, use **Check Connection** after the service starts. A healthy live setup should report `openai` mode; if it reports `mock`, the Forge is still using deterministic test output.
 
+## Current Recommended Local Launch Path
+
+For the current release candidate, the canonical local live-testing endpoint is:
+
+- `http://localhost:8788/v1/forge/compile`
+
+Recommended launch command on Windows:
+
+```powershell
+cd "C:\Users\rujie\Documents\Codex\2026-06-25\can\outputs\dungeon-masters-forge-ai-service"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\start-openai-service.ps1 -Port 8788
+```
+
+Leave that terminal window open while Foundry performs **Check Connection**, compile, validate, and create.
+
+This is especially useful on local Windows setups where a detached background launcher may not stay alive reliably during active testing.
+
 ## Environment
 
 Copy `.env.example` to `.env` and run `npm run start:env`, or set variables directly in the process environment. In client-key mode you may leave `OPENAI_API_KEY` blank and use the Foundry token field on a trusted computer instead.
@@ -97,6 +114,11 @@ npm run smoke:capabilities
 ```
 
 The smoke commands expect the service to already be running. They print only contract versions and generated item names, never credentials or full requests. The batch smoke proves two explicitly named items survive the complete request/response path. The automated suite drives all fourteen supported Forge families through a mocked OpenAI Responses call and the complete compiler pipeline, then rejects incomplete or unsafe weapons, effects, charged powers, enchantments, summons, suites, and hybrid artifacts before they can reach Foundry.
+
+For the current release candidate, a direct local smoke proof was verified successfully against:
+
+- `http://127.0.0.1:8788/v1/forge/compile`
+- `http://127.0.0.1:8788/v1/forge/capabilities`
 
 ## HTTP Contract
 

@@ -15,12 +15,14 @@ Updated: 2026-07-01
 
 1. Repoint Foundry BYO testing to `http://localhost:8788/v1/forge/compile`, verify the updated live draft-provider handoff, and complete one live AI compile-and-validate smoke pass in `DMF Test World`.
 2. Re-run that smoke pass against the patched AI service build that now accepts `pattern` as a live-model alias for Forge `kind`.
-2. Verify the manifest install path using the public repo layout:
+3. Verify the manifest install path using the public repo layout:
    - `module/module.json`
    - `releases/dungeon-masters-forge-v2-2.21.7.zip`
-3. Push the updated public export to `main` on `Dicebox20/Dungeon-Master-s-Forge`.
 4. Confirm GitHub raw URLs resolve publicly after push.
 5. Install the module from the public manifest URL on a second machine.
+6. Keep the local reference service launch instructions explicit for Windows testers:
+   - `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\\start-openai-service.ps1 -Port 8788`
+   - leave the service terminal open during local testing if detached launchers do not stay alive reliably
 
 ## Needed Before Patreon Promotion
 
