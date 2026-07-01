@@ -21,6 +21,7 @@ import {
   redactProviderConfiguration,
   requestRemoteHealth,
   requestRemoteCapabilities,
+  requestRemoteServiceStatus,
   requestRemoteCompilation
 } from "./provider-contract.js";
 import { DIAGNOSTIC_CASES, runLocalDiagnostics } from "./diagnostics.js";
@@ -38,6 +39,8 @@ import {
   serializeProviderProfile
 } from "./provider-profile.js";
 import { buildReviewSummaries } from "./review-summary.js";
+import { getTier, listTiers } from "./tier-catalog.js";
+import { reviewTierFit } from "./tier-review.js";
 
 const MODULE_ID = "codex-item-forge";
 const MODULE_TITLE = PRODUCT_TITLE;
@@ -184,6 +187,15 @@ function registerSettings() {
     type: String,
     default: ""
   });
+
+  game.settings.register(MODULE_ID, "planningTier", {
+    name: "Planning tier",
+    hint: "Adds offline review notes for mechanics that are planned for higher project tiers.",
+    scope: "client",
+    config: false,
+    type: String,
+    default: "master"
+  });
 }
 
 function currentProviderId() {
@@ -194,6 +206,11 @@ function currentProviderId() {
 function currentUnresolvedPolicy() {
   const storedUnresolvedPolicy = game.settings.get(MODULE_ID, "unresolvedPolicy") || "review";
   return ["review", "block"].includes(storedUnresolvedPolicy) ? storedUnresolvedPolicy : "review";
+}
+
+function currentPlanningTier() {
+  const storedPlanningTier = game.settings.get(MODULE_ID, "planningTier") || "master";
+  return getTier(storedPlanningTier)?.id ?? "master";
 }
 
 function currentProviderToken({ rememberProviderToken } = {}) {
@@ -278,7 +295,12 @@ async function validateSpecs(input) {
   assertEnvironment();
   const specs = normalizeSpecs(input);
   const validation = await runCodexItemForge(currentConfig(), specs, { validateOnly: true });
-  return { ...validation, warnings: dependencyWarnings(specs), specs };
+  return {
+    ...validation,
+    warnings: dependencyWarnings(specs),
+    specs,
+    tierReview: reviewTierFit(specs, currentPlanningTier())
+  };
 }
 
 async function createFromSpecs(input, configOverrides = {}) {
@@ -320,6 +342,13 @@ function unresolvedPolicyOptionsHTML(selectedPolicy) {
   }).join("");
 }
 
+function planningTierOptionsHTML(selectedTierId) {
+  return listTiers().map(tier => {
+    const selected = tier.id === selectedTierId ? " selected" : "";
+    return `<option value="${escapeHTML(tier.id)}"${selected}>${escapeHTML(tier.label)}</option>`;
+  }).join("");
+}
+
 function providerStatusSnapshot(providerId, configuration, connection = null) {
   const provider = getProvider(providerId);
   const readiness = providerReadiness(providerId, configuration);
@@ -345,19 +374,17 @@ function providerStatusSnapshot(providerId, configuration, connection = null) {
 function forgeProviderSummaryHTML(unresolvedPolicy) {
   const configuredProvider = configuredProviderState({ unresolvedPolicy });
   const snapshot = providerStatusSnapshot(configuredProvider.id, configuredProvider.configuration);
+  const planningTier = getTier(currentPlanningTier());
   return `
     <section class="codex-forge-provider-summary">
       <div class="codex-forge-provider-summary-copy">
         <strong>${escapeHTML(snapshot.provider?.label ?? "Provider")}</strong>
         <span class="codex-forge-provider-summary-meta">
           <i class="fa-solid ${escapeHTML(snapshot.icon)}"></i>
-          <span data-forge-provider-summary-text>${escapeHTML(snapshot.message)}</span>
-        </span>
-      </div>
-      <button type="button" class="codex-forge-ghost-button" data-action="open-settings">
-        <i class="fa-solid fa-gear"></i>
-        <span>Forge Settings</span>
-      </button>
+        <span data-forge-provider-summary-text>${escapeHTML(snapshot.message)}</span>
+      </span>
+      <small class="codex-forge-provider-summary-tier" data-forge-planning-tier-text>Planning tier: ${escapeHTML(planningTier?.label ?? "Master")}</small>
+    </div>
     </section>
   `;
 }
@@ -404,7 +431,6 @@ function forgeContent() {
           <header class="codex-forge-pane-header">
             <h2><span class="codex-forge-step" aria-hidden="true">2</span><i class="fa-solid fa-scroll"></i><span>Result</span></h2>
           </header>
-          <div class="codex-forge-compile-report" data-forge-compile-report hidden></div>
           <div class="codex-forge-review-summary" data-forge-preview hidden></div>
           <div class="codex-forge-options">
             <label>
@@ -435,7 +461,11 @@ function forgeContent() {
         </section>
       </div>
 
-      <output class="codex-forge-message" data-forge-status data-state="idle" aria-live="polite">Ready.</output>
+      <section class="codex-forge-bottom-tray">
+        <div class="codex-forge-compile-report" data-forge-compile-report hidden></div>
+        <div class="codex-forge-notice-stack" data-forge-notices hidden></div>
+        <output class="codex-forge-message" data-forge-status data-state="idle" aria-live="polite">Ready.</output>
+      </section>
     </section>
   `;
 }
@@ -448,7 +478,7 @@ function formControl(form, name) {
 
 function readDialogForm(form) {
   const rawSpecs = formControl(form, "specs").value.trim();
-  const provider = configuredProviderState({
+  const provider = activeProviderState({
     unresolvedPolicy: formControl(form, "unresolvedPolicy").value
   });
   return {
@@ -531,23 +561,77 @@ function providerConnectionSummary(provider, readiness, connection) {
   };
 }
 
+function providerConnectionDetailText(connection) {
+  if (!connection) return "";
+
+  const serviceName = String(connection.health?.service?.name ?? "Remote provider").trim();
+  const serviceVersion = String(connection.health?.service?.version ?? "").trim();
+  const serviceLabel = `${serviceName}${serviceVersion ? ` ${serviceVersion}` : ""}`;
+  const healthStatus = String(connection.health?.status ?? "").trim().toLowerCase();
+  const mode = String(connection.health?.mode ?? "").trim().toLowerCase();
+  const compatibleKinds = Number(connection.capabilities?.compatibleKinds?.length ?? 0);
+  const rateLimit = Number(connection.health?.requestLimits?.perMinute ?? 0);
+  const compatibility = connection.capabilities?.status;
+  const rateText = rateLimit ? ` Rate limit: ${rateLimit}/minute.` : "";
+
+  if (mode === "mock") {
+    return `${serviceLabel} is connected in mock mode. ${compatibleKinds} Forge item famil${compatibleKinds === 1 ? "y is" : "ies are"} compatible.${rateText} Switch the service to openai mode for live AI generation.`;
+  }
+  if (mode === "openai") {
+    return `${serviceLabel} is connected in openai mode. ${compatibleKinds} Forge item famil${compatibleKinds === 1 ? "y is" : "ies are"} compatible.${rateText}`;
+  }
+  if (healthStatus === "legacy-bridge") {
+    return `${serviceLabel} responded through its legacy bridge route. Compile requests can still proceed.${rateText}`;
+  }
+  if (compatibility === "not-supported") {
+    return `${serviceLabel} responded. Capabilities discovery is unavailable, but compile requests can still proceed.${rateText}`;
+  }
+  if (compatibility === "not-advertised") {
+    return `${serviceLabel} responded. Health is available, but the provider did not advertise capabilities.${rateText}`;
+  }
+  return `${serviceLabel} responded.${rateText}`;
+}
+
+async function checkProviderConnection(providerState) {
+  if (providerState?.id !== "bring-your-own") {
+    return {
+      providerId: providerState?.id ?? DEFAULT_PROVIDER_ID,
+      checkedAt: new Date().toISOString(),
+      health: null,
+      capabilities: null
+    };
+  }
+
+  const status = await requestRemoteServiceStatus({
+    endpoint: providerState.configuration.endpoint,
+    token: providerState.configuration.apiToken,
+    supportedKinds: SUPPORTED_SPEC_KINDS
+  });
+  return {
+    providerId: providerState.id,
+    ...status
+  };
+}
+
 function refreshForgeProviderSummary(dialog, form) {
   if (!(form instanceof HTMLFormElement)) return;
 
-  const provider = configuredProviderState({
+  const provider = activeProviderState({
     unresolvedPolicy: formControl(form, "unresolvedPolicy").value
   });
-  const snapshot = providerStatusSnapshot(provider.id, provider.configuration);
+  const snapshot = providerStatusSnapshot(provider.id, provider.configuration, dialog._codexProviderConnection);
   const summary = dialog.element?.querySelector(".codex-forge-provider-summary");
   const label = summary?.querySelector("strong");
   const text = summary?.querySelector("[data-forge-provider-summary-text]");
   const icon = summary?.querySelector(".codex-forge-provider-summary-meta i");
+  const planningTier = summary?.querySelector("[data-forge-planning-tier-text]");
   const compileButton = dialog.element?.querySelector('button[data-action="compile"]');
 
   if (summary) summary.dataset.state = snapshot.state;
   if (label) label.textContent = snapshot.provider?.label ?? "Provider";
   if (text) text.textContent = snapshot.message;
   if (icon) icon.className = `fa-solid ${snapshot.icon}`;
+  if (planningTier) planningTier.textContent = `Planning tier: ${getTier(currentPlanningTier())?.label ?? "Master"}`;
   if (compileButton instanceof HTMLButtonElement) compileButton.disabled = !snapshot.readiness.ready;
 }
 
@@ -588,17 +672,17 @@ function bindForgeUsability(dialog, element) {
   const approval = formControl(form, "reviewApproval");
   const specs = formControl(form, "specs");
   const unresolvedPolicy = formControl(form, "unresolvedPolicy");
-  const openSettingsButton = form.querySelector('[data-action="open-settings"]');
   approval.addEventListener("change", () => syncCreateAction(dialog));
   unresolvedPolicy.addEventListener("change", () => refreshForgeProviderSummary(dialog, form));
-  openSettingsButton?.addEventListener("click", () => openForgeSettings());
   specs.addEventListener("input", () => {
     dialog._codexCompilation = null;
     setReviewValidated(dialog, false);
     const report = dialog.element?.querySelector("[data-forge-compile-report]");
     const preview = dialog.element?.querySelector("[data-forge-preview]");
+    const notices = dialog.element?.querySelector("[data-forge-notices]");
     if (report) report.hidden = true;
     if (preview) preview.hidden = true;
+    if (notices) notices.hidden = true;
     setStatus(dialog, "warning", "Specifications changed. Validate to refresh the item review.");
   });
   setReviewValidated(dialog, false);
@@ -633,27 +717,172 @@ function reviewNoteHTML(note) {
   `;
 }
 
+function footerReviewNoteHTML(note) {
+  return `
+    <div class="codex-forge-footer-note" data-state="${escapeHTML(note.state)}">
+      ${reviewNoteHTML(note)}
+    </div>
+  `;
+}
+
+function footerReviewBadgeHTML(note) {
+  const icons = {
+    assumption: "fa-lightbulb",
+    deferred: "fa-hand",
+    reference: "fa-book-open",
+    unresolved: "fa-triangle-exclamation",
+    warning: "fa-triangle-exclamation"
+  };
+  const tooltip = [note.label, note.message, note.handling].filter(Boolean).join(" - ");
+  return `
+    <span class="codex-forge-footer-badge" data-state="${escapeHTML(note.state)}" title="${escapeHTML(tooltip)}">
+      <i class="fa-solid ${icons[note.state] ?? "fa-circle-info"}"></i>
+      <span>${escapeHTML(note.label)}</span>
+    </span>
+  `;
+}
+
+function summarizeFooterNotes(notes) {
+  const groups = [
+    { state: "warning", label: "Warnings" },
+    { state: "unresolved", label: "Unresolved" },
+    { state: "deferred", label: "Manual" },
+    { state: "assumption", label: "Assumptions" },
+    { state: "reference", label: "References" }
+  ];
+  return groups
+    .map(group => ({
+      ...group,
+      notes: notes.filter(note => note.state === group.state)
+    }))
+    .filter(group => group.notes.length);
+}
+
+function itemNoteBadgesHTML(notes) {
+  const groups = summarizeFooterNotes(notes ?? []);
+  if (!groups.length) return "";
+  return `
+    <section class="codex-forge-item-sheet-card codex-forge-item-sheet-notes">
+      <div class="codex-forge-item-sheet-card-head">
+        <strong>Review notes</strong>
+        <span>${notes.length} notice${notes.length === 1 ? "" : "s"}</span>
+      </div>
+      <div class="codex-forge-item-note-badges">
+        ${groups.map(group => footerReviewBadgeHTML({
+          state: group.state,
+          label: `${group.label} ${group.notes.length}`,
+          message: group.notes.slice(0, 2).map(note => note.message).join(" | "),
+          handling: group.notes.length > 2 ? `${group.notes.length - 2} more note${group.notes.length - 2 === 1 ? "" : "s"} in the footer details.` : "Open the footer notes for full details."
+        })).join("")}
+        <span class="codex-forge-item-note-hint">Full details stay in the footer notes.</span>
+      </div>
+    </section>
+  `;
+}
+
 function reviewItemHTML(summary) {
   return `
-    <article class="codex-forge-item-summary" data-state="${summary.unresolvedCount ? "unresolved" : "ready"}">
-      <header>
+    <article class="codex-forge-item-summary codex-forge-item-sheet" data-state="${summary.unresolvedCount ? "unresolved" : "ready"}">
+      <header class="codex-forge-item-sheet-header">
         <img src="${escapeHTML(summary.img)}" alt="">
-        <div>
-          <h3>${escapeHTML(summary.name)}</h3>
-          <div class="codex-forge-item-meta">
+        <div class="codex-forge-item-sheet-titlewrap">
+          <div class="codex-forge-item-sheet-titlebar">
+            <h3>${escapeHTML(summary.name)}</h3>
+          </div>
+          <div class="codex-forge-item-sheet-ribbon">
             <span>${escapeHTML(summary.kindLabel)}</span>
             <span>${escapeHTML(summary.rarity)}</span>
             <span>${escapeHTML(summary.attunement)}</span>
           </div>
         </div>
       </header>
-      ${summary.description ? `<p class="codex-forge-item-description">${escapeHTML(summary.description)}</p>` : ""}
-      <ul class="codex-forge-mechanics">
-        ${summary.mechanics.map(mechanic => `<li><i class="fa-solid fa-bolt"></i><span>${escapeHTML(mechanic)}</span></li>`).join("")}
-      </ul>
-      ${summary.notes.length ? `<div class="codex-forge-review-notes">${summary.notes.map(reviewNoteHTML).join("")}</div>` : ""}
+      <div class="codex-forge-item-sheet-tabs" aria-hidden="true">
+        <span class="codex-forge-item-sheet-tab is-active">Description</span>
+        <span class="codex-forge-item-sheet-tab">Details</span>
+        <span class="codex-forge-item-sheet-tab">Activities${summary.activityCount ? ` <em>${summary.activityCount}</em>` : ""}</span>
+        <span class="codex-forge-item-sheet-tab">Effects${summary.effectCount ? ` <em>${summary.effectCount}</em>` : ""}</span>
+      </div>
+      <div class="codex-forge-item-sheet-body">
+        <p class="codex-forge-item-sheet-subtitle">${escapeHTML(summary.subtitle)}</p>
+        ${summary.description ? `<div class="codex-forge-item-sheet-description">${escapeHTML(summary.description)}</div>` : ""}
+        <section class="codex-forge-item-sheet-card">
+          <div class="codex-forge-item-sheet-card-head">
+            <strong>Mechanical preview</strong>
+            <span>${summary.mechanics.length} detail${summary.mechanics.length === 1 ? "" : "s"}</span>
+          </div>
+          ${summary.mechanics.length
+            ? `
+              <ul class="codex-forge-mechanics codex-forge-item-sheet-stats">
+                ${summary.mechanics.map(mechanic => `<li><i class="fa-solid fa-bolt"></i><span>${escapeHTML(mechanic)}</span></li>`).join("")}
+              </ul>
+            `
+            : `
+              <div class="codex-forge-empty-state">
+                <i class="fa-solid fa-scroll"></i>
+                <div>
+                  <strong>No confirmed mechanics yet</strong>
+                  <span>This request currently resolves mostly as description and review notes. Adjust the wording or edit the generated specification if you want a stronger automated result.</span>
+                </div>
+              </div>
+            `
+          }
+        </section>
+        ${itemNoteBadgesHTML(summary.notes)}
+      </div>
     </article>
   `;
+}
+
+function collectFooterNotes(summaries, validation) {
+  const notes = [];
+  const seen = new Set();
+  for (const summary of summaries ?? []) {
+    for (const note of summary.notes ?? []) {
+      const key = `${note.state}|${note.label}|${note.message}|${note.handling ?? ""}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      notes.push(note);
+    }
+  }
+  for (const warning of validation?.warnings ?? []) {
+    const note = { state: "warning", label: "Validation warning", message: warning, handling: "" };
+    const key = `${note.state}|${note.label}|${note.message}|`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    notes.push(note);
+  }
+  const order = { warning: 0, unresolved: 1, deferred: 2, assumption: 3, reference: 4 };
+  return notes.sort((left, right) => (order[left.state] ?? 99) - (order[right.state] ?? 99));
+}
+
+function renderFooterNotices(dialog, summaries, validation) {
+  const output = dialog.element?.querySelector("[data-forge-notices]");
+  if (!output) return;
+  const notes = collectFooterNotes(summaries, validation);
+  output.hidden = notes.length === 0;
+  const groups = summarizeFooterNotes(notes);
+  output.innerHTML = notes.length
+    ? `
+      <details class="codex-forge-footer-disclosure">
+        <summary class="codex-forge-footer-head">
+          <div class="codex-forge-footer-summary">
+            <strong>Review notes</strong>
+            <span>${notes.length} notice${notes.length === 1 ? "" : "s"}</span>
+          </div>
+          <div class="codex-forge-footer-badges">
+            ${groups.map(group => footerReviewBadgeHTML({
+              state: group.state,
+              label: `${group.label} ${group.notes.length}`,
+              message: `${group.notes.length} ${group.label.toLowerCase()} note${group.notes.length === 1 ? "" : "s"}`,
+              handling: group.notes.slice(0, 3).map(note => note.message).join(" | ")
+            })).join("")}
+            <span class="codex-forge-footer-more">Expand for details</span>
+          </div>
+        </summary>
+        <div class="codex-forge-footer-notes">${notes.map(footerReviewNoteHTML).join("")}</div>
+      </details>
+    `
+    : "";
 }
 
 function titleCaseWords(value) {
@@ -681,6 +910,13 @@ function specReferenceLookups(spec) {
     if (!normalized) return;
     references.push({ kind, name: normalized, label });
   };
+  const summonActorReferenceName = actor => {
+    const explicit = actor?.systemReferenceName ?? actor?.referenceName ?? actor?.sourceName;
+    if (String(explicit ?? "").trim()) return explicit;
+    const actorName = String(actor?.name ?? "").trim();
+    if (actorName && !/^Forge Summon\s*-/i.test(actorName)) return actorName;
+    return "";
+  };
 
   if (["weaponExtraDamage", "weaponConditionOnHit", "shieldArmorBonus"].includes(spec.kind)) {
     add("equipment", titleCaseWords(spec.baseItem || (spec.kind === "shieldArmorBonus" ? "shield" : "")), "System equipment");
@@ -692,6 +928,14 @@ function specReferenceLookups(spec) {
 
   if (spec.baseItem && ["multiActivityStaff", "artifactWeaponHybrid", "equipmentPowerSuite", "legendaryEquipmentSuite", "casterUtilityEquipment", "passiveEffectEquipment"].includes(spec.kind)) {
     add("equipment", titleCaseWords(spec.baseItem), "System equipment");
+  }
+
+  if (spec.summonActor) {
+    add("actor", summonActorReferenceName(spec.summonActor), "System actor");
+  }
+
+  for (const profile of spec.summonProfiles ?? []) {
+    add("actor", summonActorReferenceName(profile.actor), "System actor");
   }
 
   for (const activity of [
@@ -747,7 +991,7 @@ async function renderPreview(dialog, validation) {
   if (!preview) return;
 
   const enrichedSpecs = await enrichSpecsWithSystemReferences(validation.specs);
-  const summaries = buildReviewSummaries(enrichedSpecs, dialog._codexCompilation);
+  const summaries = buildReviewSummaries(enrichedSpecs, dialog._codexCompilation, validation.tierReview);
   setReviewValidated(dialog, true);
   preview.hidden = false;
   preview.innerHTML = `
@@ -757,18 +1001,23 @@ async function renderPreview(dialog, validation) {
     </div>
     <div class="codex-forge-review-items">${summaries.map(reviewItemHTML).join("")}</div>
   `;
+  renderFooterNotices(dialog, summaries, validation);
 }
 
 function renderCompilationReport(dialog, compilation) {
   const report = dialog.element?.querySelector("[data-forge-compile-report]");
   if (!report) return;
   dialog._codexCompilation = compilation;
+  const connectionDetail = compilation.providerMode === "network"
+    ? providerConnectionDetailText(dialog._codexProviderConnection)
+    : "";
   report.hidden = false;
   report.innerHTML = `
     <div class="codex-forge-compile-head">
       <strong>${escapeHTML(compilation.providerLabel ?? "Local Rules")}</strong>
       <span>${compilation.decisions.map(decision => escapeHTML(decision.pattern)).join(", ")}</span>
     </div>
+    ${connectionDetail ? `<small>${escapeHTML(connectionDetail)}</small>` : ""}
   `;
 }
 
@@ -860,15 +1109,28 @@ async function saveDialogState(rawSpecs, config, provider) {
   ]);
 }
 
-function settingsFormProviderState(form) {
+function settingsFormElement() {
+  const root = forgeSettingsApp?.element?.[0] ?? forgeSettingsApp?.element;
+  const form = root?.querySelector?.("form");
+  return form instanceof HTMLFormElement ? form : null;
+}
+
+function settingsFormProviderState(form, overrides = {}) {
   return configuredProviderState({
     providerId: formControl(form, "providerId").value,
     endpoint: formControl(form, "providerEndpoint").value.trim(),
     model: formControl(form, "providerModel").value.trim(),
     apiToken: formControl(form, "providerApiToken").value,
     rememberApiToken: formControl(form, "rememberProviderApiToken").checked,
-    unresolvedPolicy: currentUnresolvedPolicy()
+    unresolvedPolicy: overrides.unresolvedPolicy ?? currentUnresolvedPolicy()
   });
+}
+
+function activeProviderState(overrides = {}) {
+  const settingsForm = settingsFormElement();
+  return settingsForm
+    ? settingsFormProviderState(settingsForm, overrides)
+    : configuredProviderState(overrides);
 }
 
 function syncSettingsProviderPanel(app) {
@@ -949,9 +1211,10 @@ class ForgeSettingsApplication extends FormApplication {
   }
 
   getData() {
-    const provider = configuredProviderState();
+    const provider = activeProviderState();
     const snapshot = providerStatusSnapshot(provider.id, provider.configuration, this._codexProviderConnection);
     const rememberProviderToken = provider.rememberApiToken === true;
+    const planningTier = currentPlanningTier();
 
     return {
       isBringYourOwn: provider.id === "bring-your-own",
@@ -960,6 +1223,8 @@ class ForgeSettingsApplication extends FormApplication {
       providerModel: provider.configuration.model,
       providerToken: provider.configuration.apiToken,
       rememberProviderToken,
+      planningTier,
+      planningTierOptions: planningTierOptionsHTML(planningTier),
       providerStatusIcon: snapshot.icon,
       providerStatusState: snapshot.state,
       providerStatusMessage: snapshot.message
@@ -969,7 +1234,7 @@ class ForgeSettingsApplication extends FormApplication {
   activateListeners(html) {
     super.activateListeners(html);
     const root = html[0];
-    const form = root?.querySelector?.("form");
+    const form = root instanceof HTMLFormElement ? root : root?.querySelector?.("form");
     if (!(form instanceof HTMLFormElement)) return;
 
     const providerSelect = formControl(form, "providerId");
@@ -980,6 +1245,7 @@ class ForgeSettingsApplication extends FormApplication {
       formControl(form, "providerApiToken"),
       formControl(form, "rememberProviderApiToken")
     ];
+    const planningTier = formControl(form, "planningTier");
 
     providerSelect.addEventListener("change", () => {
       clearProviderConnection(this);
@@ -1010,60 +1276,47 @@ class ForgeSettingsApplication extends FormApplication {
       }
     });
 
+    root.querySelector('[data-action="save-planning"]')?.addEventListener("click", async () => {
+      try {
+        await game.settings.set(MODULE_ID, "planningTier", planningTier.value);
+        if (forgeDialog?.rendered) {
+          refreshForgeProviderSummary(forgeDialog, forgeDialog.element?.querySelector("form"));
+        }
+        setSettingsStatus(this, "success", `Planning tier saved as ${getTier(planningTier.value)?.label ?? planningTier.value}.`);
+      } catch (error) {
+        reportError(this, error);
+      }
+    });
+
     root.querySelector('[data-action="check-provider"]')?.addEventListener("click", async () => {
       try {
         const providerState = settingsFormProviderState(form);
         if (providerState.id !== "bring-your-own") {
           clearProviderConnection(this);
+          if (forgeDialog?.rendered) {
+            clearProviderConnection(forgeDialog);
+            refreshForgeProviderSummary(forgeDialog, forgeDialog.element?.querySelector("form"));
+          }
           syncSettingsProviderPanel(this);
           setSettingsStatus(this, "success", "Local Rules runs entirely in Foundry and does not need a remote service.");
           return;
         }
 
         setSettingsStatus(this, "working", "Checking the remote provider...");
-        const health = await requestRemoteHealth({
-          endpoint: providerState.configuration.endpoint,
-          token: providerState.configuration.apiToken
-        });
-        const capabilities = await requestRemoteCapabilities({
-          endpoint: providerState.configuration.endpoint,
-          token: providerState.configuration.apiToken,
-          supportedKinds: SUPPORTED_SPEC_KINDS
-        });
-        this._codexProviderConnection = {
-          providerId: providerState.id,
-          checkedAt: new Date().toISOString(),
-          health,
-          capabilities
-        };
-        syncSettingsProviderPanel(this);
-
-        const serviceName = health.service?.name || "Remote provider";
-        const serviceVersion = health.service?.version ? ` ${health.service.version}` : "";
-        const rateLimit = Number(health.requestLimits?.perMinute ?? 0);
-        const rateText = rateLimit ? ` Rate limit: ${rateLimit}/minute.` : "";
-        const compatibleKinds = Number(capabilities.compatibleKinds?.length ?? 0);
-        const capabilityText = capabilities.status === "compatible"
-          ? ` ${compatibleKinds} Forge item famil${compatibleKinds === 1 ? "y is" : "ies are"} compatible.`
-          : health.status === "legacy-bridge"
-            ? " This bridge does not expose the standard Forge capabilities route, but compile requests can still proceed."
-          : capabilities.status === "not-supported"
-            ? " Capabilities discovery is unavailable, but compile requests can still proceed."
-            : capabilities.status === "not-advertised"
-              ? " Health responded, but the provider did not advertise capabilities."
-              : "";
-
-        if (health.mode === "mock") {
-          setSettingsStatus(this, "warning", `${serviceName}${serviceVersion} is connected in mock mode.${capabilityText}${rateText} Switch the service to openai mode for live AI generation.`);
-        } else if (health.mode === "openai") {
-          setSettingsStatus(this, "success", `${serviceName}${serviceVersion} is connected in openai mode.${capabilityText}${rateText}`);
-        } else if (health.status === "legacy-bridge") {
-          setSettingsStatus(this, "success", `${serviceName}${serviceVersion} responded through its legacy bridge route.${capabilityText}${rateText}`);
-        } else {
-          setSettingsStatus(this, "success", `${serviceName}${serviceVersion} responded.${capabilityText}${rateText}`);
+        this._codexProviderConnection = await checkProviderConnection(providerState);
+        if (forgeDialog?.rendered) {
+          forgeDialog._codexProviderConnection = this._codexProviderConnection;
+          refreshForgeProviderSummary(forgeDialog, forgeDialog.element?.querySelector("form"));
         }
+        syncSettingsProviderPanel(this);
+        const detail = providerConnectionDetailText(this._codexProviderConnection);
+        setSettingsStatus(this, this._codexProviderConnection.health?.mode === "mock" ? "warning" : "success", detail);
       } catch (error) {
         clearProviderConnection(this);
+        if (forgeDialog?.rendered) {
+          clearProviderConnection(forgeDialog);
+          refreshForgeProviderSummary(forgeDialog, forgeDialog.element?.querySelector("form"));
+        }
         syncSettingsProviderPanel(this);
         reportError(this, error);
       }
@@ -1105,6 +1358,7 @@ class ForgeSettingsApplication extends FormApplication {
     if (!(form instanceof HTMLFormElement)) return;
     const providerState = settingsFormProviderState(form);
     await persistProviderState(providerState);
+    await game.settings.set(MODULE_ID, "planningTier", formControl(form, "planningTier").value);
     if (forgeDialog?.rendered) {
       refreshForgeProviderSummary(forgeDialog, forgeDialog.element?.querySelector("form"));
     }
@@ -1126,6 +1380,50 @@ function openForgeSettings() {
   forgeSettingsApp = new ForgeSettingsApplication();
   forgeSettingsApp.render(true);
   return forgeSettingsApp;
+}
+
+function resolveElementRoot(element) {
+  if (!element) return null;
+  if (element instanceof HTMLElement) return element;
+  if (Array.isArray(element)) return resolveElementRoot(element[0]);
+  return element[0] instanceof HTMLElement ? element[0] : null;
+}
+
+function injectItemsSidebarLauncher(root = document) {
+  const base = root instanceof Document ? root : resolveElementRoot(root);
+  if (!(base instanceof Document || base instanceof HTMLElement)) return;
+
+  const sidebars = base instanceof Document
+    ? Array.from(base.querySelectorAll(".items-sidebar"))
+    : [
+      ...(base.matches?.(".items-sidebar") ? [base] : []),
+      ...base.querySelectorAll?.(".items-sidebar") ?? []
+    ];
+
+  for (const sidebar of sidebars) {
+    const searchControls = sidebar.querySelector(".directory-header search");
+    if (!(searchControls instanceof HTMLElement)) continue;
+    if (searchControls.querySelector('[data-codex-forge-launcher="open"]')) continue;
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "inline-control codex-forge-sidebar-launch icon fa-solid fa-hammer";
+    button.dataset.action = "openForge";
+    button.dataset.codexForgeLauncher = "open";
+    button.dataset.tooltip = `Open ${MODULE_TITLE}`;
+    button.setAttribute("aria-label", `Open ${MODULE_TITLE}`);
+    button.addEventListener("click", async event => {
+      event.preventDefault();
+      event.stopPropagation();
+      await openForge();
+    });
+
+    searchControls.append(button);
+  }
+}
+
+function scheduleItemsSidebarLauncherRefresh(root = document) {
+  window.requestAnimationFrame(() => injectItemsSidebarLauncher(root));
 }
 
 async function openForge() {
@@ -1166,9 +1464,23 @@ async function openForge() {
             const priorPreview = dialog.element?.querySelector("[data-forge-preview]");
             if (priorPreview) priorPreview.hidden = true;
             const request = formControl(button.form, "request").value.trim();
-            const provider = configuredProviderState({
+            const provider = activeProviderState({
               unresolvedPolicy: formControl(button.form, "unresolvedPolicy").value
             });
+            if (provider.id === "bring-your-own") {
+              setStatus(dialog, "working", "Checking remote service status...");
+              dialog._codexProviderConnection = await checkProviderConnection(provider);
+              refreshForgeProviderSummary(dialog, button.form);
+              const detail = providerConnectionDetailText(dialog._codexProviderConnection);
+              setStatus(
+                dialog,
+                dialog._codexProviderConnection.health?.mode === "mock" ? "warning" : "working",
+                `${detail} Compiling request...`
+              );
+            } else {
+              clearProviderConnection(dialog);
+              refreshForgeProviderSummary(dialog, button.form);
+            }
             const compilation = await compileWithProvider(request, {
               providerId: provider.id,
               configuration: provider.configuration,
@@ -1194,7 +1506,10 @@ async function openForge() {
             const validation = await validateSpecs(compilation.specs);
             await renderPreview(dialog, validation);
             showDialogView(button.form, "review");
-            const noteCount = compilation.assumptions.length + compilation.warnings.length + compilation.deferred.length;
+            const noteCount = compilation.assumptions.length
+              + compilation.warnings.length
+              + compilation.deferred.length
+              + (validation.tierReview?.noteCount ?? 0);
             const itemCount = compilation.specs.length;
             const draftLabel = `${itemCount} item${itemCount === 1 ? "" : "s"}`;
             setStatus(dialog, noteCount ? "warning" : "success", noteCount
@@ -1204,14 +1519,6 @@ async function openForge() {
             reportError(dialog, error);
           }
         }
-      },
-      {
-        action: "settings",
-        label: "Forge Settings",
-        icon: "fa-solid fa-gear",
-        tooltip: "Open provider settings, example tools, and diagnostics",
-        type: "button",
-        callback: async () => openForgeSettings()
       },
       {
         action: "validate",
@@ -1238,10 +1545,17 @@ async function openForge() {
             await game.settings.set(MODULE_ID, "lastSpecs", rawSpecs);
             await renderPreview(dialog, validation);
             const warning = validation.warnings.length ? ` ${validation.warnings.join(" ")}` : "";
+            const tierNotes = validation.tierReview?.noteCount
+              ? ` ${validation.tierReview.noteCount} tier-planning note${validation.tierReview.noteCount === 1 ? "" : "s"} require review.`
+              : "";
             const unresolved = validation.unresolvedMechanicCount
               ? ` ${validation.unresolvedMechanicCount} unresolved mechanic${validation.unresolvedMechanicCount === 1 ? "" : "s"} require review.`
               : "";
-            setStatus(dialog, validation.warnings.length || validation.unresolvedMechanicCount ? "warning" : "success", `Specs are valid.${warning}${unresolved}`);
+            setStatus(
+              dialog,
+              validation.warnings.length || validation.unresolvedMechanicCount || validation.tierReview?.noteCount ? "warning" : "success",
+              `Specs are valid.${warning}${tierNotes}${unresolved}`
+            );
           } catch (error) {
             reportError(dialog, error);
           }
@@ -1286,6 +1600,15 @@ async function openForge() {
             reportError(dialog, error);
           }
         }
+      },
+      {
+        action: "settings",
+        label: "",
+        icon: "fa-solid fa-gear",
+        tooltip: "Open provider settings, example tools, and diagnostics",
+        class: "codex-forge-settings-launch",
+        type: "button",
+        callback: async () => openForgeSettings()
       }
     ]
   });
@@ -1384,6 +1707,7 @@ Hooks.once("ready", async () => {
       normalizeHealth: normalizeRemoteHealth,
       normalizeResponse: normalizeRemoteProviderResponse,
       redactConfiguration: redactProviderConfiguration,
+      requestServiceStatus: requestRemoteServiceStatus,
       requestHealth: requestRemoteHealth,
       requestCapabilities: requestRemoteCapabilities,
       request: requestRemoteCompilation
@@ -1402,81 +1726,21 @@ Hooks.once("ready", async () => {
     example: () => foundry.utils.deepClone(EXAMPLE_SPECS)
   };
 
+  scheduleItemsSidebarLauncherRefresh();
   console.log(`${MODULE_TITLE} build ${BUILD_VERSION} ready (manifest ${module.version}).`);
 });
 
-Hooks.on("getHeaderControlsApplicationV2", (application, controls) => {
-  if (!game.user?.isGM) return;
-
-  const ItemDirectory = foundry.applications.sidebar.tabs.ItemDirectory;
-  if (!(application instanceof ItemDirectory)) return;
-  if (controls.some(control => control.action === MODULE_ID)) return;
-
-  controls.unshift({
-    action: MODULE_ID,
-    label: MODULE_TITLE,
-    icon: "fa-solid fa-hammer",
-    onClick: openForge
-  });
-
-  controls.unshift({
-    action: `${MODULE_ID}-settings`,
-    label: `${MODULE_TITLE} Settings`,
-    icon: "fa-solid fa-gear",
-    onClick: openForgeSettings
-  });
+Hooks.on("renderApplicationV2", (application, element) => {
+  if (application === forgeDialog) bindForgeUsability(application, element);
+  scheduleItemsSidebarLauncherRefresh(element);
 });
 
-function isItemDirectory(application) {
-  const ItemDirectory = foundry.applications.sidebar.tabs.ItemDirectory;
-  return application instanceof ItemDirectory
-    || application.collection === game.items
-    || application.options?.collection === "Item";
-}
+Hooks.on("renderSidebarTab", (_application, html) => {
+  scheduleItemsSidebarLauncherRefresh(html);
+});
 
-function addItemDirectoryButton(application, element) {
-  if (!game.user?.isGM || !isItemDirectory(application)) return;
-
-  const search = element?.querySelector?.(".directory-header search");
-  if (!search) return;
-
-  const controls = [
-    {
-      selector: "[data-dungeon-masters-forge-settings]",
-      className: "inline-control icon fa-solid fa-gear dungeon-masters-forge-settings-open",
-      label: `${MODULE_TITLE} Settings`,
-      dataset: "dungeonMastersForgeSettings",
-      handler: openForgeSettings
-    },
-    {
-      selector: "[data-dungeon-masters-forge]",
-      className: "inline-control icon fa-solid fa-hammer dungeon-masters-forge-open",
-      label: MODULE_TITLE,
-      dataset: "dungeonMastersForge",
-      handler: openForge
-    }
-  ];
-
-  const collapseButton = search.querySelector(".collapse-all");
-  for (const control of controls) {
-    if (search.querySelector(control.selector)) continue;
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = control.className;
-    button.dataset[control.dataset] = "";
-    button.dataset.tooltip = "";
-    button.setAttribute("aria-label", control.label);
-    button.title = control.label;
-    button.addEventListener("click", control.handler);
-    search.insertBefore(button, collapseButton ?? null);
-  }
-}
-
-Hooks.on("renderItemDirectory", addItemDirectoryButton);
-
-Hooks.on("renderApplicationV2", (application, element) => {
-  if (isItemDirectory(application)) addItemDirectoryButton(application, element);
-  if (application === forgeDialog) bindForgeUsability(application, element);
+Hooks.on("changeSidebarTab", tabName => {
+  if (tabName === "items") scheduleItemsSidebarLauncherRefresh();
 });
 
 export { compileItemRequest, createFromSpecs, openForge, validateSpecs };

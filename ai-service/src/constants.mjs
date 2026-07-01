@@ -1,5 +1,5 @@
 const SERVICE_NAME = "Dungeon Master's Forge AI Service";
-const SERVICE_VERSION = "1.1.0";
+const SERVICE_VERSION = "1.2.0";
 const FORGE_SCHEMA_VERSION = "1.0";
 const PROMPT_VERSION = "1.0.0";
 const MAX_SPECS_PER_REQUEST = 20;

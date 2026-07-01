@@ -3,7 +3,7 @@
  * Requires Dungeon Master's Forge V2 (2.0.0), Midi-QOL, and Item Macro.
  */
 
-const forge = game.modules.find(module => module.title === "Dungeon Master's Forge V2")?.api;
+const forge = game.modules.get("codex-item-forge")?.api;
 if (!forge) {
   ui.notifications.error("Dungeon Master's Forge V2 is not active.");
   return;

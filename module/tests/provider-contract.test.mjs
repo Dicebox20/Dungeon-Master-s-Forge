@@ -12,6 +12,7 @@ import {
   redactProviderConfiguration,
   requestRemoteHealth,
   requestRemoteCapabilities,
+  requestRemoteServiceStatus,
   requestRemoteCompilation
 } from "../scripts/provider-contract.js";
 
@@ -190,6 +191,28 @@ assert.equal(healthRequest.url, "https://forge.example/health");
 assert.equal(healthRequest.init.method, "GET");
 assert.equal(healthRequest.init.headers.Authorization, "Bearer private-token");
 assert.equal(discoveredHealth.mode, "openai");
+let serviceStatusRequests = [];
+const serviceStatus = await requestRemoteServiceStatus({
+  endpoint: "https://forge.example/v1/forge/compile",
+  token: "private-token",
+  supportedKinds: ["weaponExtraDamage"],
+  fetchImpl: async (url, init) => {
+    serviceStatusRequests.push({ url, init });
+    if (url === "https://forge.example/health") {
+      return { ok: true, status: 200, json: async () => validHealth };
+    }
+    if (url === "https://forge.example/v1/forge/capabilities") {
+      return { ok: true, status: 200, json: async () => validCapabilities };
+    }
+    throw new Error(`Unexpected URL ${url}`);
+  }
+});
+assert.deepEqual(serviceStatusRequests.map(request => request.url), [
+  "https://forge.example/health",
+  "https://forge.example/v1/forge/capabilities"
+]);
+assert.equal(serviceStatus.health.mode, "openai");
+assert.deepEqual(serviceStatus.capabilities.compatibleKinds, ["weaponExtraDamage"]);
 
 const legacyDiscovery = await requestRemoteCapabilities({
   endpoint: "https://forge.example/v1/forge/compile",
@@ -263,4 +286,4 @@ await assert.rejects(
   /reported status/
 );
 
-export const testedRemoteContractCases = 39;
+export const testedRemoteContractCases = 40;

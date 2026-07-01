@@ -1,59 +1,98 @@
-<form class="codex-forge-settings-shell" autocomplete="off">
-  <section class="codex-forge-settings-grid">
-    <section class="codex-forge-settings-card">
-      <h2>Connection</h2>
-      <p>Choose the generation provider and manage Bring Your Own API details outside the main Forge workflow.</p>
+<form class="codex-forge-settings-shell standard-form" autocomplete="off">
+  <h3 class="form-header">Connection</h3>
+  <p class="notes codex-forge-settings-intro">Choose the generation provider and manage Bring Your Own API details outside the main Forge workflow.</p>
 
-      <label>
-        <span>Generation provider</span>
-        <select name="providerId" aria-label="Generation provider">
-          {{{providerOptions}}}
-        </select>
-      </label>
+  <div class="form-group">
+    <label>Generation provider</label>
+    <div class="form-fields">
+      <select name="providerId" aria-label="Generation provider">
+        {{{providerOptions}}}
+      </select>
+    </div>
+    <p class="notes">Local Rules stays entirely inside Foundry. Bring Your Own API checks a user-configured Forge-compatible endpoint.</p>
+  </div>
 
-      <div class="codex-forge-provider-configuration" data-provider-configuration="bring-your-own" {{#unless isBringYourOwn}}hidden{{/unless}}>
-        <label>
-          <span>Endpoint</span>
-          <input type="url" name="providerEndpoint" value="{{providerEndpoint}}" placeholder="https://forge.example/api/compile">
-        </label>
-        <label>
-          <span>Model</span>
-          <input type="text" name="providerModel" value="{{providerModel}}">
-        </label>
-        <label>
-          <span>API token</span>
-          <input type="password" name="providerApiToken" value="{{providerToken}}" autocomplete="new-password">
-        </label>
-        <label class="codex-forge-token-storage">
+  <div class="codex-forge-provider-configuration" data-provider-configuration="bring-your-own" {{#unless isBringYourOwn}}hidden{{/unless}}>
+    <div class="form-group">
+      <label>Endpoint</label>
+      <div class="form-fields">
+        <input type="url" name="providerEndpoint" value="{{providerEndpoint}}" placeholder="https://forge.example/api/compile">
+      </div>
+      <p class="notes">Use the full compile endpoint for the service you want Foundry to call.</p>
+    </div>
+
+    <div class="form-group">
+      <label>Model</label>
+      <div class="form-fields">
+        <input type="text" name="providerModel" value="{{providerModel}}">
+      </div>
+      <p class="notes">Use a model allowed by the connected service.</p>
+    </div>
+
+    <div class="form-group">
+      <label>API token</label>
+      <div class="form-fields">
+        <input type="password" name="providerApiToken" value="{{providerToken}}" autocomplete="new-password">
+      </div>
+      <p class="notes">This can be a shared Forge service token or a personal API key, depending on how the service is configured.</p>
+    </div>
+
+    <div class="form-group codex-forge-token-storage">
+      <label>Remember token on this device</label>
+      <div class="form-fields">
+        <label class="checkbox">
           <input type="checkbox" name="rememberProviderApiToken" {{#if rememberProviderToken}}checked{{/if}}>
-          <span>Remember token on this device</span>
-          <small>Stored in this browser's Foundry settings. Use only on a trusted computer.</small>
         </label>
       </div>
+      <p class="notes">Stored in this browser's Foundry settings. Use only on a trusted computer.</p>
+    </div>
+  </div>
 
+  <div class="form-group">
+    <label>Connection status</label>
+    <div class="form-fields">
       <output class="codex-forge-settings-provider-status" data-forge-settings-provider-status data-state="{{providerStatusState}}" aria-live="polite">
         <i class="fa-solid {{providerStatusIcon}}"></i>
         <span>{{providerStatusMessage}}</span>
       </output>
+    </div>
+    <p class="notes">Use Check Connection to confirm the remote service, allowed models, and available Forge item families.</p>
+  </div>
 
-      <div class="codex-forge-settings-actions">
-        <button type="button" data-action="save-provider">Save Connection</button>
-        <button type="button" data-action="check-provider">Check Connection</button>
-      </div>
-    </section>
+  <div class="form-group">
+    <label>Connection tools</label>
+    <div class="form-fields codex-forge-settings-actions">
+      <button type="button" data-action="check-provider">Check Connection</button>
+    </div>
+  </div>
 
-    <section class="codex-forge-settings-card">
-      <h2>Utilities</h2>
-      <p>Keep examples and diagnostics nearby without crowding the Forge window.</p>
+  <h3 class="form-header">Utilities</h3>
+  <p class="notes codex-forge-settings-intro">Keep examples and diagnostics nearby without crowding the Forge window.</p>
 
-      <div class="codex-forge-settings-actions">
-        <button type="button" data-action="example">Load Example</button>
-        <button type="button" data-action="diagnostics">Run Diagnostics</button>
-        <button type="button" data-action="open-forge">Open Forge</button>
-      </div>
+  <div class="form-group">
+    <label>Utility actions</label>
+    <div class="form-fields codex-forge-settings-actions">
+      <button type="button" data-action="example">Load Example</button>
+      <button type="button" data-action="diagnostics">Run Diagnostics</button>
+      <button type="button" data-action="open-forge">Open Forge</button>
+    </div>
+    <p class="notes">These actions do not create or delete world documents.</p>
+  </div>
 
-      <div class="codex-forge-diagnostics" data-forge-settings-diagnostics hidden></div>
-      <output class="codex-forge-settings-status" data-forge-settings-status data-state="idle" aria-live="polite">Connection and utilities are ready.</output>
-    </section>
-  </section>
+  <div class="codex-forge-diagnostics" data-forge-settings-diagnostics hidden></div>
+
+  <h3 class="form-header">Planning</h3>
+  <p class="notes codex-forge-settings-intro">Review generated items against a future project tier without changing Local Rules creation behavior.</p>
+
+  <div class="form-group">
+    <label>Planning tier</label>
+    <div class="form-fields">
+      <select name="planningTier" aria-label="Planning tier">
+        {{{planningTierOptions}}}
+      </select>
+    </div>
+    <p class="notes">This affects offline planning and review notes only.</p>
+  </div>
+
+  <output class="codex-forge-settings-status" data-forge-settings-status data-state="idle" aria-live="polite">Connection and utilities are ready.</output>
 </form>

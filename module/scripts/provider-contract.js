@@ -396,6 +396,16 @@ async function requestRemoteCapabilities(options) {
   return { ...normalizeRemoteCapabilities(payload, { supportedKinds }), endpoint };
 }
 
+async function requestRemoteServiceStatus(options) {
+  const health = await requestRemoteHealth(options);
+  const capabilities = await requestRemoteCapabilities(options);
+  return {
+    checkedAt: new Date().toISOString(),
+    health,
+    capabilities
+  };
+}
+
 async function requestRemoteCompilation(options) {
   const endpoint = normalizeRemoteEndpoint(options?.endpoint);
   const fetchImpl = options?.fetchImpl ?? globalThis.fetch;
@@ -457,5 +467,6 @@ export {
   redactProviderConfiguration,
   requestRemoteHealth,
   requestRemoteCapabilities,
+  requestRemoteServiceStatus,
   requestRemoteCompilation
 };

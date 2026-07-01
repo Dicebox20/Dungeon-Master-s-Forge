@@ -7,7 +7,12 @@
       "name": "Dungeon Master's Forge V2 Project"
     }
   ],
-  "version": "2.21.2",
+  "version": "2.21.7",
+  "url": "https://github.com/Dicebox20/Dungeon-Master-s-Forge",
+  "manifest": "https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/main/module/module.json",
+  "download": "https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/main/releases/dungeon-masters-forge-v2-2.21.7.zip",
+  "readme": "https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/main/module/README.md",
+  "changelog": "https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/main/module/CHANGELOG.md",
   "compatibility": {
     "minimum": "14",
     "verified": "14"

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createForgeServer } from "../src/server.mjs";
 import { config, envelope } from "./helpers.mjs";
+import { validSpecs } from "./fixtures/valid-specs.mjs";
 
 async function runningServer(overrides = {}, options = {}) {
   const server = createForgeServer({
@@ -42,7 +43,7 @@ test("capabilities endpoint is read-only and does not invoke compilation", async
   const response = await fetch(`${app.baseUrl}/v1/forge/capabilities`, { headers: { Origin: origin } });
   const body = await response.json();
   assert.equal(response.status, 200);
-  assert.equal(body.service.version, "1.1.0");
+  assert.equal(body.service.version, "1.2.0");
   assert.equal(body.forge.schemaVersion, "1.0");
   assert.equal(body.forge.supportedKinds.length, 14);
   assert.equal(body.features.hostedForge, false);
@@ -96,6 +97,114 @@ test("wrong client tokens are rejected before compilation", async t => {
   });
   assert.equal(response.status, 401);
   assert.equal((await response.json()).error.code, "unauthorized");
+});
+
+test("openai mode accepts a client-supplied key when no server key is configured", async t => {
+  let seenRequestApiKey = "";
+  const app = await runningServer({
+    mode: "openai",
+    openaiApiKey: "",
+    clientToken: "",
+    cacheTtlMs: 0
+  }, {
+    openaiAdapter: async (envelope, options) => {
+      seenRequestApiKey = options.requestApiKey;
+      return {
+        specs: [{ ...validSpecs[0], name: "Client Key Blade" }],
+        assumptions: [],
+        warnings: [],
+        deferred: []
+      };
+    }
+  });
+  t.after(app.close);
+  const response = await fetch(`${app.baseUrl}/v1/forge/compile`, {
+    method: "POST",
+    headers: {
+      Origin: origin,
+      Authorization: "Bearer client-openai-key",
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(envelope())
+  });
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).schemaVersion, "1.0");
+  assert.equal(seenRequestApiKey, "client-openai-key");
+});
+
+test("openai HTTP compile normalizes pattern aliases before responding", async t => {
+  const app = await runningServer({
+    mode: "openai",
+    openaiApiKey: "",
+    clientToken: "",
+    cacheTtlMs: 0
+  }, {
+    openaiAdapter: async () => ({
+      specs: [{
+        pattern: "weaponExtraDamage",
+        name: "Pattern Blade",
+        description: "A live HTTP alias test.",
+        rarity: "uncommon",
+        attunement: "",
+        weaponType: "simpleM",
+        baseItem: "dagger",
+        properties: ["finesse", "light", "thrown", "magical"],
+        damage: {
+          base: { number: 1, denomination: "d4", bonus: "@mod", types: ["piercing"] },
+          versatile: { number: null, denomination: null, bonus: "", types: [] }
+        },
+        range: { value: 20, long: 60, reach: 5, units: "ft" },
+        mastery: "nick",
+        extraDamageParts: [{ number: 1, denomination: "d4", bonus: "", types: ["fire"] }],
+        attackName: "Pattern Strike"
+      }],
+      assumptions: [],
+      warnings: [],
+      deferred: []
+    })
+  });
+  t.after(app.close);
+  const response = await fetch(`${app.baseUrl}/v1/forge/compile`, {
+    method: "POST",
+    headers: {
+      Origin: origin,
+      Authorization: "Bearer client-openai-key",
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(envelope())
+  });
+  const body = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(body.specs[0].kind, "weaponExtraDamage");
+  assert.deepEqual(body.specs[0].properties, ["fin", "lgt", "thr", "mgc"]);
+  assert.equal(body.specs[0].damage.base.denomination, 4);
+  assert.equal(body.specs[0].extraDamageParts[0].denomination, 4);
+});
+
+test("openai client-key mode rejects missing bearer keys before compilation", async t => {
+  let calls = 0;
+  const app = await runningServer({
+    mode: "openai",
+    openaiApiKey: "",
+    clientToken: ""
+  }, {
+    openaiAdapter: async () => {
+      calls += 1;
+      return { specs: [{ kind: "weaponExtraDamage", name: "Never Runs" }], assumptions: [], warnings: [], deferred: [] };
+    }
+  });
+  t.after(app.close);
+  const response = await fetch(`${app.baseUrl}/v1/forge/compile`, {
+    method: "POST",
+    headers: {
+      Origin: origin,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(envelope())
+  });
+  assert.equal(response.status, 401);
+  assert.equal((await response.json()).error.code, "missing_openai_key");
+  assert.equal(calls, 0);
 });
 
 test("unconfigured browser origins are rejected", async t => {

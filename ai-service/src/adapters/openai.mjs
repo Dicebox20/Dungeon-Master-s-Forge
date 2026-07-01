@@ -39,12 +39,23 @@ function parseModelJson(text) {
   }
 }
 
+function resolveUpstreamApiKey(config, options = {}) {
+  const requestApiKey = String(options.requestApiKey ?? "").trim();
+  if (requestApiKey) return requestApiKey;
+
+  const configuredApiKey = String(config?.openaiApiKey ?? "").trim();
+  if (configuredApiKey) return configuredApiKey;
+
+  throw new ServiceError(401, "missing_openai_key", "An OpenAI API key is required for live compilation.");
+}
+
 async function compileWithOpenAI(envelope, options) {
   const { config } = options;
   const fetchImpl = options.fetchImpl ?? globalThis.fetch;
   if (typeof fetchImpl !== "function") throw new ServiceError(500, "missing_fetch", "No fetch implementation is available.");
 
   const model = chooseModel(envelope, config);
+  const apiKey = resolveUpstreamApiKey(config, options);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), config.openaiTimeoutMs);
   let response;
@@ -52,7 +63,7 @@ async function compileWithOpenAI(envelope, options) {
     response = await fetchImpl(`${config.openaiBaseUrl}/responses`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${config.openaiApiKey}`,
+        Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
         Accept: "application/json"
       },
@@ -95,4 +106,4 @@ async function compileWithOpenAI(envelope, options) {
   return parseModelJson(outputText(payload));
 }
 
-export { chooseModel, compileWithOpenAI, outputText, parseModelJson };
+export { chooseModel, compileWithOpenAI, outputText, parseModelJson, resolveUpstreamApiKey };
