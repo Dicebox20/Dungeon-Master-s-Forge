@@ -41,6 +41,7 @@ Updated: 2026-07-01
 - The currently installed Foundry build on disk is `2.21.7`.
 - The installed module file count is `36`, matching the current workspace copy.
 - A live BYO smoke retest is still pending against the updated canonical endpoint at `http://localhost:8788/v1/forge/compile`, which reports service `1.2.0` in `openai` mode.
+- A direct shell smoke proof now succeeds against the canonical `8788` service for both `/v1/forge/capabilities` and `/v1/forge/compile`.
 - The service-side contract normalizer now accepts `pattern` as a live-model alias for Forge `kind`; that patch is covered by tests and still needs one successful in-Foundry live compile confirmation.
 
 ## Next Release Tasks
