@@ -9,14 +9,16 @@ function createCompiler(options) {
     openai: options.openaiAdapter ?? compileWithOpenAI
   };
 
-  return async function compile(payload) {
+  return async function compile(input) {
+    const payload = input?.payload ?? input;
     const envelope = validateForgeRequest(payload, {
       maxRequestChars: config.maxRequestChars,
       maxItemsPerRequest: config.maxItemsPerRequest
     });
     const modelOutput = await adapters[config.mode](envelope, {
       config,
-      fetchImpl: options.fetchImpl
+      fetchImpl: options.fetchImpl,
+      requestApiKey: input?.requestApiKey ?? ""
     });
     return normalizeModelOutput(modelOutput, envelope, { makeId: options.makeId });
   };

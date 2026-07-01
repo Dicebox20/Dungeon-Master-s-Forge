@@ -52,6 +52,8 @@
 - Secret-free provider configuration profile export/import contract. Implemented in V2.12.
 - Bring Your Own API adapter, configuration UI, readiness gating, and mocked transport tests. Implemented in V2.15.
 - Remote health checks and mock-vs-live connection verification. Implemented in V2.18.
+- Tier catalog scaffolding and stable feature ids for future Hosted Forge entitlement checks. Implemented in workspace.
+- Tier-aware offline request review notes keyed to a selected planning tier. Implemented in workspace.
 - Hosted generation service with Patreon entitlement checks.
 - Server-side secrets, usage limits, logging controls, and abuse protection.
 - Optional item-image generation after text generation is stable.

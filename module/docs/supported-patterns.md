@@ -16,7 +16,7 @@ V2.5 maps the proven Stormfire Reaver family to `artifactWeaponHybrid`. Normal w
 
 V2.6 adds structured `unresolvedMechanics` records for ally auras, class resources, and spells outside the deterministic map. Each record preserves the requested text, reason, recommended handling, and editable resolution state. Aura clauses are excluded from personal passive-effect parsing, preventing an ally-only AC bonus from being applied to the wearer.
 
-V2.7 routes request compilation through a provider registry. `local-rules` remains the available offline compiler. `bring-your-own` and `hosted-forge` reserve stable provider IDs but remain unavailable until their network transports and credential boundaries are implemented. Provider configuration currently controls whether reviewed unresolved mechanics may be created or must block creation.
+V2.7 routes request compilation through a provider registry. `local-rules` remains the offline compiler. `bring-your-own` now supports the live reference service over the stable Forge `1.0` contract, including personal client-key mode and server-key mode. `hosted-forge` remains intentionally unavailable. Provider configuration controls whether reviewed unresolved mechanics may be created or must block creation.
 
 ## Provider API
 

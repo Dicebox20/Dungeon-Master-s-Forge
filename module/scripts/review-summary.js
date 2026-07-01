@@ -188,11 +188,23 @@ function compilationNotes(compilation, itemName, itemCount) {
   return notes;
 }
 
+function tierReviewNotes(tierReview, itemName) {
+  if (!tierReview?.items?.length) return [];
+  const match = tierReview.items.find(item => item.name === itemName);
+  return (match?.notes ?? []).map(note => ({
+    state: note.state ?? "warning",
+    label: note.label ?? "Tier planning",
+    message: note.message ?? "",
+    handling: note.handling ?? ""
+  }));
+}
+
 function summarizeSpec(spec, context = {}) {
   const mechanics = new Set();
   const add = value => {
     if (value) mechanics.add(value);
   };
+  let activityCount = 0;
 
   if (spec.kind === "shieldArmorBonus" && spec.armorValue) add(`Shield bonus ${signedBonus(spec.armorValue)} AC`);
   else if (spec.armorValue) add(`Base AC ${spec.armorValue}`);
@@ -222,6 +234,7 @@ function summarizeSpec(spec, context = {}) {
   }
 
   if (spec.damageParts?.length || spec.save) {
+    activityCount += 1;
     add(activityText({
       activityName: spec.activityName || `Use ${spec.name}`,
       chargeCost: spec.chargeCost,
@@ -237,14 +250,21 @@ function summarizeSpec(spec, context = {}) {
     ...(spec.attackActivities ?? []),
     ...(spec.utilityActivities ?? []),
     ...(spec.saveActivities ?? [])
-  ]) add(activityText(activity));
+  ]) {
+    activityCount += 1;
+    add(activityText(activity));
+  }
 
   if (spec.summonActor) {
+    activityCount += 1;
     const duration = durationText(spec.duration);
     const range = rangeText(spec.range);
     add(`Summon ${spec.profileName || spec.summonActor.name}${range ? ` within ${range}` : ""}${duration ? ` for ${duration}` : ""}`);
   }
-  if (spec.summonProfiles?.length) add(`Summon choice: ${spec.summonProfiles.map(profile => profile.profileName).join(", ")}`);
+  if (spec.summonProfiles?.length) {
+    activityCount += 1;
+    add(`Summon choice: ${spec.summonProfiles.map(profile => profile.profileName).join(", ")}`);
+  }
 
   if (spec.enchantChanges?.length) {
     const enchantments = spec.enchantChanges.map(effectChangeText).filter(Boolean);
@@ -269,6 +289,7 @@ function summarizeSpec(spec, context = {}) {
   }));
   const notes = [
     ...compilationNotes(context.compilation, spec.name, context.itemCount ?? 1),
+    ...tierReviewNotes(context.tierReview, spec.name),
     ...references,
     ...unresolved
   ];
@@ -280,16 +301,19 @@ function summarizeSpec(spec, context = {}) {
     kindLabel: KIND_LABELS[spec.kind] ?? titleCase(spec.kind),
     rarity: rarityLabel(spec.rarity),
     attunement: attunementLabel(spec.attunement),
+    subtitle: `${KIND_LABELS[spec.kind] ?? titleCase(spec.kind)}, ${rarityLabel(spec.rarity).toLowerCase()}${attunementLabel(spec.attunement) !== "No attunement" ? ` (${attunementLabel(spec.attunement)})` : ""}`,
     description: String(spec.description ?? "").trim(),
     mechanics: Array.from(mechanics),
+    activityCount,
+    effectCount: effects.length + (spec.enchantChanges?.length ?? 0) + (spec.toggleLight ? 1 : 0) + (spec.conditionOnHit ? 1 : 0),
     notes,
     unresolvedCount: unresolved.length
   };
 }
 
-function buildReviewSummaries(specs, compilation = null) {
+function buildReviewSummaries(specs, compilation = null, tierReview = null) {
   const items = Array.isArray(specs) ? specs : [];
-  return items.map(spec => summarizeSpec(spec, { compilation, itemCount: items.length }));
+  return items.map(spec => summarizeSpec(spec, { compilation, itemCount: items.length, tierReview }));
 }
 
 export { buildReviewSummaries, summarizeSpec };

@@ -8,6 +8,15 @@ Every tier can create dramatic, legendary, strange, funny, overpowered, or deepl
 
 The tiers limit mechanical complexity, automation, monthly volume, and advanced Foundry integration, not creativity.
 
+## Launch-Day Public Tiers
+
+The intended first public launch is simpler than the full long-term ladder:
+
+- **Apprentice (Free)** is the real public access tier
+- **Founding Patron** is a support-first thank-you tier
+
+The deeper automation ladder below remains useful as planning, but it should not be presented as fully live hosted entitlement logic on day one.
+
 ## Apprentice
 
 - Price: Free
@@ -110,18 +119,22 @@ Limits:
 ## Founding Patron
 
 - Price: $49.99 per month
-- Focus: premium early-supporter tier with advanced item-linked scene features
+- Focus: premium early-supporter tier centered on support, recognition, and future premium feature funding
 
 Adds:
 
-- highest monthly generation allowance
-- early access to experimental features
+- supports continued development
+- Founding Patron recognition and thanks
 - priority feedback consideration
 - project credits as a Founding Patron
-- Realmforged Items
-- Spellforged Realm Variants
-- optional bespoke item-icon image generation for generated items
-- optional Monk's Active Tile Triggers integration for supported item-linked scenes
+- helps fund Realmforged Items
+- helps fund Spellforged Realm Variants
+- helps fund optional bespoke item-icon image generation for generated items
+- helps fund optional Monk's Active Tile Triggers integration for supported item-linked scenes
+
+Launch-day note:
+
+Founding Patron should be described honestly as a support tier. It does not need to gate the core module at launch, and it should not imply that Hosted Forge entitlement automation is already finished.
 
 ## Realmforged Items
 

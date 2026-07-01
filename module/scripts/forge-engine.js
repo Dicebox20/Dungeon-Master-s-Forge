@@ -11,7 +11,7 @@ async function runCodexItemForge(FORGE, ITEMS, { validateOnly = false } = {}) {
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "")
-      .slice(0, 64) || "dmf-item";
+      .slice(0, 64) || "codex-item";
   }
 
   function assertActivityId(id) {

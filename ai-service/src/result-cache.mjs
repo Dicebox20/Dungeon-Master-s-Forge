@@ -20,6 +20,7 @@ function createCachedCompiler(compile, options = {}) {
   const ttlMs = options.ttlMs ?? 300000;
   const maxEntries = options.maxEntries ?? 100;
   const now = options.now ?? Date.now;
+  const keySelector = typeof options.keySelector === "function" ? options.keySelector : value => value;
   const cache = new Map();
   const pending = new Map();
 
@@ -40,7 +41,7 @@ function createCachedCompiler(compile, options = {}) {
       return { result: await compile(payload), cacheStatus: "BYPASS" };
     }
 
-    const key = cacheKey(payload);
+    const key = cacheKey(keySelector(payload));
     const timestamp = now();
     const cached = cache.get(key);
     if (cached?.expiresAt > timestamp) {

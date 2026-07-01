@@ -52,3 +52,35 @@ test("unsafe provider output is rejected after a successful adapter response", a
     error => error.status === 502 && error.code === "unsafe_model_output" && /macroCommand/.test(error.message)
   );
 });
+
+test("common live-model aliases are normalized before validation", async () => {
+  const compile = createCompiler({
+    config: config({ mode: "openai" }),
+    fetchImpl: responsesFetch({
+      specs: [{
+        name: "Alias Ember Dagger",
+        type: "weaponExtraDamage",
+        description: "Alias Ember Dagger description",
+        weaponType: "simpleM",
+        properties: ["finesse", "light", "thrown"],
+        damage: {
+          base: { number: 1, denomination: "d4", bonus: 0, types: ["piercing"] }
+        },
+        extraDamageParts: [
+          { number: 1, denomination: "d4", bonus: 0, types: ["fire"] }
+        ]
+      }],
+      assumptions: [],
+      warnings: [],
+      deferred: []
+    }),
+    makeId: ids()
+  });
+
+  const result = await compile(envelope({ request: "Item name: Alias Ember Dagger" }));
+  assert.equal(result.specs[0].kind, "weaponExtraDamage");
+  assert.deepEqual(result.specs[0].properties, ["fin", "lgt", "thr"]);
+  assert.equal(result.specs[0].damage.base.denomination, 4);
+  assert.equal(result.specs[0].extraDamageParts[0].denomination, 4);
+  assert.equal(result.specs[0].damage.base.bonus, "");
+});

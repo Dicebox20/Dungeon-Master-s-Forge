@@ -2,31 +2,31 @@ const SYSTEM_CONTENT_FIELDS = Object.freeze(["name", "type", "system.type.value"
 
 const CONTENT_KIND_CONFIG = Object.freeze({
   spell: Object.freeze({
-    preferredCollections: Object.freeze(["dnd5e.spells"]),
+    preferredCollections: Object.freeze(["dnd5e.spells24", "dnd5e.spells"]),
     preferredLabels: Object.freeze(["Spells"]),
     documentNames: Object.freeze(["Item"]),
     matchesEntry: entry => Object.freeze(["spell"]).includes(itemTypeForEntry(entry))
   }),
   equipment: Object.freeze({
-    preferredCollections: Object.freeze(["dnd5e.equipment"]),
+    preferredCollections: Object.freeze(["dnd5e.equipment24", "dnd5e.equipment"]),
     preferredLabels: Object.freeze(["Equipment"]),
     documentNames: Object.freeze(["Item"]),
     matchesEntry: entry => Object.freeze(["weapon", "equipment", "consumable", "tool", "loot", "backpack", "container"]).includes(itemTypeForEntry(entry))
   }),
   actor: Object.freeze({
-    preferredCollections: Object.freeze(["dnd5e.actors"]),
+    preferredCollections: Object.freeze(["dnd5e.actors24", "dnd5e.actors"]),
     preferredLabels: Object.freeze(["Actors"]),
     documentNames: Object.freeze(["Actor"]),
     matchesEntry: entry => Boolean(String(entry?.name ?? "").trim())
   }),
   monsterFeature: Object.freeze({
-    preferredCollections: Object.freeze(["dnd5e.monsterfeatures"]),
+    preferredCollections: Object.freeze(["dnd5e.monsterfeatures24", "dnd5e.monsterfeatures"]),
     preferredLabels: Object.freeze(["Monster Features"]),
     documentNames: Object.freeze(["Item"]),
     matchesEntry: entry => Boolean(String(entry?.name ?? "").trim())
   }),
   rollTable: Object.freeze({
-    preferredCollections: Object.freeze(["dnd5e.tables"]),
+    preferredCollections: Object.freeze(["dnd5e.tables24", "dnd5e.tables"]),
     preferredLabels: Object.freeze(["Roll Tables"]),
     documentNames: Object.freeze(["RollTable"]),
     matchesEntry: entry => Boolean(String(entry?.name ?? "").trim())
@@ -37,7 +37,10 @@ const SYSTEM_CONTENT_DIAGNOSTIC_CASES = Object.freeze([
   Object.freeze({ name: "Command", kind: "spell" }),
   Object.freeze({ name: "Flame Strike", kind: "spell" }),
   Object.freeze({ name: "Longsword", kind: "equipment" }),
-  Object.freeze({ name: "Plate Armor", kind: "equipment" })
+  Object.freeze({ name: "Plate Armor", kind: "equipment" }),
+  Object.freeze({ name: "Dire Wolf", kind: "actor" }),
+  Object.freeze({ name: "Magic Resistance", kind: "monsterFeature" }),
+  Object.freeze({ name: "Wand of Wonder Effects", kind: "rollTable" })
 ]);
 
 function normalizeLookupName(value) {

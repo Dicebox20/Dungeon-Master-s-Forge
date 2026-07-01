@@ -7,8 +7,8 @@ The service requires Node.js 20 or newer and has no package dependencies.
 ## Architecture
 
 - Foundry stores the service endpoint and optional model name.
-- The Foundry API token field carries an optional `DMF_CLIENT_TOKEN` used to authorize this service.
-- `OPENAI_API_KEY` exists only in the service process environment. It is never entered into Foundry or returned to the browser.
+- The Foundry API token field can carry either an optional `DMF_CLIENT_TOKEN` for a server-owned deployment, or a personal OpenAI API key for bring-your-own-key mode.
+- `OPENAI_API_KEY` can stay in the service process environment for server-owned operation. In client-key mode it may be left blank.
 - The service allows only configured browser origins, binds to loopback by default, limits request size and rate, enforces a model allowlist, rejects unsupported Forge kinds, and validates each supported factory's minimum mechanical structure.
 - Remote output is declarative-only. Executable macro fields, Foundry flags, scripts, active HTML, JavaScript URLs, oversized values, and abusive nesting are rejected before normalization.
 - Batch integrity is enforced. Separator-based and repeated `Item name:` requests must return the same item count, order, and explicit names.
@@ -42,26 +42,28 @@ Mock mode always returns a known-good longsword with `1d4` extra fire damage. It
 
 ## OpenAI Mode
 
-Set the key only in the server process. Do not paste the OpenAI key into Foundry.
+OpenAI mode supports two live setups:
+
+- **Server-key mode:** keep `OPENAI_API_KEY` in the service environment and optionally protect the service with `DMF_CLIENT_TOKEN`.
+- **Client-key mode:** leave `OPENAI_API_KEY` blank and paste a personal OpenAI API key into Foundry's **API token** field on a trusted device.
 
 ```powershell
 cd "C:\Users\rujie\Documents\Codex\2026-06-25\can\outputs\dungeon-masters-forge-ai-service"
 $env:DMF_AI_MODE = "openai"
 $env:DMF_ALLOWED_ORIGINS = "http://10.0.0.26:30000"
 $env:DMF_CLIENT_TOKEN = "choose-a-long-random-service-token"
-$env:OPENAI_API_KEY = "your-openai-api-key"
 $env:OPENAI_MODEL = "gpt-5.4-mini"
 $env:DMF_ALLOWED_MODELS = "gpt-5.4-mini"
 node src/cli.mjs
 ```
 
-Enter the same `DMF_CLIENT_TOKEN` in Foundry's **API token** field. The default `gpt-5.4-mini` favors lower cost and latency; the server owner controls the allowlist and can change the default. OpenAI currently recommends the Responses API for model calls and supports JSON-formatted or schema-constrained output through `text.format`: [Structured model outputs](https://developers.openai.com/api/docs/guides/structured-outputs), [Models](https://developers.openai.com/api/docs/models).
+For server-key mode, enter the same `DMF_CLIENT_TOKEN` in Foundry's **API token** field if one was configured. For client-key mode, enter the personal OpenAI API key in Foundry's **API token** field instead. The default `gpt-5.4-mini` favors lower cost and latency; the server owner controls the allowlist and can change the default. OpenAI currently recommends the Responses API for model calls and supports JSON-formatted or schema-constrained output through `text.format`: [Structured model outputs](https://developers.openai.com/api/docs/guides/structured-outputs), [Models](https://developers.openai.com/api/docs/models).
 
 In Foundry V2.18 and newer, use **Check Connection** after the service starts. A healthy live setup should report `openai` mode; if it reports `mock`, the Forge is still using deterministic test output.
 
 ## Environment
 
-Copy `.env.example` to `.env` and run `npm run start:env`, or set variables directly in the process environment. Keep the OpenAI key only in the service environment or `.env`; never paste it into the Foundry UI.
+Copy `.env.example` to `.env` and run `npm run start:env`, or set variables directly in the process environment. In client-key mode you may leave `OPENAI_API_KEY` blank and use the Foundry token field on a trusted computer instead.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
@@ -69,7 +71,7 @@ Copy `.env.example` to `.env` and run `npm run start:env`, or set variables dire
 | `DMF_PORT` | `8787` | HTTP port. |
 | `DMF_AI_MODE` | `mock` | `mock` or `openai`. |
 | `DMF_ALLOWED_ORIGINS` | localhost Foundry origins | Comma-separated exact Foundry origins. |
-| `DMF_CLIENT_TOKEN` | empty | Optional bearer token shared with the Foundry client. |
+| `DMF_CLIENT_TOKEN` | empty | Optional bearer token shared with the Foundry client in server-key mode. |
 | `DMF_RATE_LIMIT_PER_MINUTE` | `20` | Per-client in-memory limit. |
 | `DMF_MAX_CONCURRENT_COMPILATIONS` | `2` | Maximum simultaneous compiler or model calls. |
 | `DMF_MAX_QUEUED_COMPILATIONS` | `20` | Waiting compilation limit; `0` rejects when all active slots are occupied. |
@@ -77,7 +79,7 @@ Copy `.env.example` to `.env` and run `npm run start:env`, or set variables dire
 | `DMF_CACHE_MAX_ENTRIES` | `100` | Maximum in-memory results; `0` disables caching. |
 | `DMF_MAX_REQUEST_CHARS` | `20000` | Maximum natural-language request length. |
 | `DMF_MAX_ITEMS_PER_REQUEST` | `10` | Maximum requested batch size; absolute ceiling is `20`. |
-| `OPENAI_API_KEY` | empty | Required only in OpenAI mode. |
+| `OPENAI_API_KEY` | empty | Optional in OpenAI mode. Leave blank to require a client-supplied OpenAI key from Foundry. |
 | `OPENAI_MODEL` | `gpt-5.4-mini` | Server default model. |
 | `DMF_ALLOWED_MODELS` | default model | Comma-separated model allowlist. |
 | `OPENAI_BASE_URL` | OpenAI API | Responses-compatible API base URL. |

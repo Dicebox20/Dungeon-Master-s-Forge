@@ -7,22 +7,30 @@ Dungeon Master's Forge is a Foundry VTT item-generation toolkit for the DND5e sy
 - `module/` - active Foundry module source
 - `ai-service/` - reference local AI compilation service
 - `docs/STATUS.md` - current verified project snapshot
+- `docs/TESTER_QUICKSTART.md` - shortest path for trusted testers and second-machine setup
+- `docs/PATREON_LAUNCH_CHECKLIST.md` - launch-facing readiness checklist
+- `docs/PATREON_PAGE_COPY.md` - draft Patreon copy that matches the current release state
 - `docs/SRD_PLAN.md` - system-native DND5e content-resolution plan
 - `releases/` - latest verified packaged build
 
-## Current Verified Baseline
+## Current Release Candidate
 
 - Foundry VTT: v14
 - DND5e: 5.3.3
-- Module build: 2.21.2
+- Module build: 2.21.7
 
-The current verified module includes:
+The current release candidate includes:
 
 - split-pane **Description** and **Result** workflow
 - review-before-create item generation
 - Local Rules and Bring Your Own API provider support
 - dedicated Forge Settings window
-- read-only native DND5e spell and equipment resolution
+- read-only native DND5e spell, equipment, actor, monster feature, and roll-table resolution
+
+## Manifest Install
+
+- Manifest URL: `https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/main/module/module.json`
+- Release ZIP: `https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/main/releases/dungeon-masters-forge-v2-2.21.7.zip`
 
 ## Using The Module
 
@@ -37,3 +45,5 @@ Open [ai-service/README.md](./ai-service/README.md) for the local service, mock 
 - This export is meant to be the cleaner GitHub-facing surface for the project.
 - The working development repo still contains older archives, experiments, regression macros, and extracted verification folders that are intentionally not mirrored here.
 - Hosted generation remains disabled. The supported live path is still the local or self-hosted Bring Your Own API workflow.
+- Patreon tier planning exists, but Patreon entitlement enforcement is not yet active in the product.
+- The intended launch shape is a real free public tier plus a support-first Founding Patron tier. Higher hosted or entitlement-driven tiers remain future work.
