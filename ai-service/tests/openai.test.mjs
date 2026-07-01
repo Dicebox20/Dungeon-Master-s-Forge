@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { chooseModel, compileWithOpenAI, outputText, parseModelJson } from "../src/adapters/openai.mjs";
+import { chooseModel, compileWithOpenAI, outputText, parseModelJson, resolveUpstreamApiKey } from "../src/adapters/openai.mjs";
 import { validateForgeRequest } from "../src/contract.mjs";
 import { config, envelope } from "./helpers.mjs";
 
@@ -34,9 +34,34 @@ test("OpenAI adapter uses Responses API JSON mode without leaking the key into t
   assert.equal(result.specs[0].name, "AI Ember Blade");
 });
 
+test("OpenAI adapter can use a client-supplied key when the service has no server key", async () => {
+  const request = validateForgeRequest(envelope());
+  let captured;
+  await compileWithOpenAI(request, {
+    config: config({ openaiApiKey: "" }),
+    requestApiKey: "client-openai-key",
+    fetchImpl: async (url, init) => {
+      captured = { url, init, body: JSON.parse(init.body) };
+      return new Response(JSON.stringify({
+        output_text: JSON.stringify({ specs: [{ kind: "weaponExtraDamage", name: "Client Key Blade" }], assumptions: [], warnings: [], deferred: [] })
+      }), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
+  });
+
+  assert.equal(captured.url, "https://api.openai.com/v1/responses");
+  assert.equal(captured.init.headers.Authorization, "Bearer client-openai-key");
+  assert.equal(captured.body.model, "gpt-5.4-mini");
+});
+
 test("raw output helpers support SDK and REST response shapes", () => {
   assert.equal(outputText({ output_text: "{\"ok\":true}" }), "{\"ok\":true}");
   assert.deepEqual(parseModelJson("```json\n{\"ok\":true}\n```"), { ok: true });
+});
+
+test("upstream key resolution requires either a server key or client key", () => {
+  assert.equal(resolveUpstreamApiKey(config(), {}), "test-openai-key");
+  assert.equal(resolveUpstreamApiKey(config({ openaiApiKey: "" }), { requestApiKey: "client-openai-key" }), "client-openai-key");
+  assert.throws(() => resolveUpstreamApiKey(config({ openaiApiKey: "" }), {}), /OpenAI API key/);
 });
 
 test("upstream provider bodies are not exposed in service errors", async () => {

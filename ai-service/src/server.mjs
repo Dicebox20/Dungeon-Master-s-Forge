@@ -93,6 +93,7 @@ function readJsonBody(request, limit) {
 function createForgeServer(options) {
   const { config } = options;
   const compile = options.compile ?? createCompiler(options);
+  const requiresClientOpenAiKey = config.mode === "openai" && !config.openaiApiKey;
   const compilationGate = createConcurrencyGate(compile, {
     maxConcurrent: config.maxConcurrentCompilations,
     maxQueued: config.maxQueuedCompilations
@@ -100,7 +101,8 @@ function createForgeServer(options) {
   const cachedCompile = createCachedCompiler(compilationGate.run, {
     ttlMs: config.cacheTtlMs,
     maxEntries: config.cacheMaxEntries,
-    now: options.now
+    now: options.now,
+    keySelector: input => input?.payload ?? input
   });
   const logger = options.logger ?? console;
   const rateLimit = createRateLimiter(config.rateLimitPerMinute, options.now);
@@ -148,7 +150,11 @@ function createForgeServer(options) {
       if (!String(request.headers["content-type"] ?? "").toLowerCase().startsWith("application/json")) {
         throw new ServiceError(415, "unsupported_media_type", "Content-Type must be application/json.");
       }
-      if (config.clientToken && !tokenEqual(bearerToken(request), config.clientToken)) {
+      const bearer = bearerToken(request);
+      if (requiresClientOpenAiKey && !bearer) {
+        throw new ServiceError(401, "missing_openai_key", "This service expects an OpenAI API key in Foundry's API token field.");
+      }
+      if (!requiresClientOpenAiKey && config.clientToken && !tokenEqual(bearer, config.clientToken)) {
         throw new ServiceError(401, "unauthorized", "A valid Forge service token is required.");
       }
 
@@ -162,7 +168,10 @@ function createForgeServer(options) {
       }
 
       const payload = await readJsonBody(request, config.bodyLimitBytes);
-      const { result, cacheStatus } = await cachedCompile(payload);
+      const { result, cacheStatus } = await cachedCompile({
+        payload,
+        requestApiKey: requiresClientOpenAiKey ? bearer : ""
+      });
       response.setHeader("X-Forge-Cache", cacheStatus);
       sendJson(response, 200, result);
     } catch (error) {

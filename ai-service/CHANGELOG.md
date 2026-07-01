@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.0 - 2026-06-30
+
+- Added personal client-key OpenAI mode so a trusted Foundry browser can supply its own upstream API key through the Forge token field.
+- Kept cache keys free of transient request secrets while preserving duplicate-request coalescing and result reuse.
+- Updated the launcher script so `.env` can omit `OPENAI_API_KEY` and optional port overrides work without rewriting the file.
+
 ## 1.1.0 - 2026-06-28
 
 - Added compatibility routes for `/api/compile` and `/api/capabilities`; `/v1/forge/*` remains canonical.

@@ -9,8 +9,11 @@ test("mock mode starts without an OpenAI key", () => {
   assert.equal(result.host, "127.0.0.1");
 });
 
-test("openai mode requires a server-side key", () => {
-  assert.throws(() => loadConfig({ DMF_AI_MODE: "openai" }), /OPENAI_API_KEY/);
+test("openai mode can fall back to a client-supplied key", () => {
+  const result = loadConfig({ DMF_AI_MODE: "openai" });
+  assert.equal(result.mode, "openai");
+  assert.equal(result.openaiApiKey, "");
+  assert.equal(result.allowClientApiKeyFallback, true);
 });
 
 test("configuration parses origin and model allowlists", () => {

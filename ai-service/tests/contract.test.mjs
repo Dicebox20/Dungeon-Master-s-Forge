@@ -81,6 +81,35 @@ test("model output becomes the exact Forge response envelope", () => {
   assert.equal(result.unresolvedMechanics[0].itemName, "Mind Crown");
 });
 
+test("pattern aliases normalize into Forge kinds", () => {
+  const request = validateForgeRequest(envelope());
+  const result = normalizeModelOutput({
+    specs: [{
+      pattern: "weaponExtraDamage",
+      name: "Alias Blade",
+      description: "A test weapon.",
+      rarity: "uncommon",
+      attunement: "",
+      weaponType: "simpleM",
+      baseItem: "dagger",
+      properties: ["finesse", "light", "thrown", "magical"],
+      damage: {
+        base: { number: 1, denomination: "d4", bonus: "@mod", types: ["piercing"] },
+        versatile: { number: null, denomination: null, bonus: "", types: [] }
+      },
+      range: { value: 20, long: 60, reach: 5, units: "ft" },
+      mastery: "nick",
+      extraDamageParts: [{ number: 1, denomination: "d4", bonus: "", types: ["fire"] }],
+      attackName: "Alias Strike"
+    }]
+  }, request, { makeId: ids() });
+
+  assert.equal(result.specs[0].kind, "weaponExtraDamage");
+  assert.deepEqual(result.specs[0].properties, ["fin", "lgt", "thr", "mgc"]);
+  assert.equal(result.specs[0].damage.base.denomination, 4);
+  assert.equal(result.specs[0].extraDamageParts[0].denomination, 4);
+});
+
 test("unsupported generated kinds cannot reach Foundry", () => {
   const request = validateForgeRequest(envelope());
   assert.throws(() => normalizeModelOutput({

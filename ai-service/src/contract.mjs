@@ -19,6 +19,83 @@ function secureId() {
   return randomBytes(8).toString("hex");
 }
 
+const PROPERTY_ALIASES = Object.freeze({
+  ammunition: "amm",
+  finesse: "fin",
+  heavy: "hvy",
+  light: "lgt",
+  loading: "lod",
+  magical: "mgc",
+  reach: "rch",
+  thrown: "thr",
+  twohanded: "two",
+  "two-handed": "two",
+  versatile: "ver"
+});
+
+const RARITY_ALIASES = Object.freeze({
+  "very rare": "veryRare",
+  veryrare: "veryRare"
+});
+
+function normalizeDieDenomination(value) {
+  if (typeof value === "string") {
+    const trimmed = value.trim().toLowerCase();
+    const dieMatch = /^d(\d+)$/.exec(trimmed);
+    if (dieMatch) return Number.parseInt(dieMatch[1], 10);
+  }
+  return value;
+}
+
+function normalizeDamagePart(part) {
+  if (!object(part)) return part;
+  if ("denomination" in part) part.denomination = normalizeDieDenomination(part.denomination);
+  if (part.bonus === 0) part.bonus = "";
+  return part;
+}
+
+function normalizeProperties(properties) {
+  if (!Array.isArray(properties)) return properties;
+  return properties.map(entry => {
+    const key = String(entry ?? "").trim().toLowerCase();
+    return PROPERTY_ALIASES[key] ?? entry;
+  });
+}
+
+function normalizeRemoteSpecAliases(rawSpec) {
+  if (!object(rawSpec)) return rawSpec;
+  const normalized = clone(rawSpec);
+  if (!normalized.kind && typeof normalized.type === "string") normalized.kind = normalized.type;
+  if (!normalized.kind && typeof normalized.pattern === "string") normalized.kind = normalized.pattern;
+  if (typeof normalized.rarity === "string") {
+    const key = normalized.rarity.trim().toLowerCase();
+    normalized.rarity = RARITY_ALIASES[key] ?? normalized.rarity;
+  }
+  if (Array.isArray(normalized.properties)) normalized.properties = normalizeProperties(normalized.properties);
+
+  if (object(normalized.damage)) {
+    if (object(normalized.damage.base)) normalized.damage.base = normalizeDamagePart(normalized.damage.base);
+    if (object(normalized.damage.versatile)) normalized.damage.versatile = normalizeDamagePart(normalized.damage.versatile);
+  }
+
+  for (const field of ["extraDamageParts", "damageParts"]) {
+    if (Array.isArray(normalized[field])) normalized[field] = normalized[field].map(normalizeDamagePart);
+  }
+  if (object(normalized.healing)) normalized.healing = normalizeDamagePart(normalized.healing);
+
+  for (const field of ["activities", "attackActivities", "saveActivities", "utilityActivities"]) {
+    if (!Array.isArray(normalized[field])) continue;
+    normalized[field] = normalized[field].map(activity => {
+      if (!object(activity)) return activity;
+      const next = clone(activity);
+      if (Array.isArray(next.damageParts)) next.damageParts = next.damageParts.map(normalizeDamagePart);
+      return next;
+    });
+  }
+
+  return normalized;
+}
+
 function validateForgeRequest(payload, limits = {}) {
   const maxRequestChars = limits.maxRequestChars ?? 20000;
   const maxItemsPerRequest = limits.maxItemsPerRequest ?? MAX_SPECS_PER_REQUEST;
@@ -152,8 +229,9 @@ function normalizeModelOutput(modelOutput, envelope, options = {}) {
   const names = new Set();
   const specs = modelOutput.specs.map((rawSpec, index) => {
     if (!object(rawSpec)) throw new ServiceError(502, "invalid_model_output", `Generated spec ${index + 1} is not an object.`);
-    const name = String(rawSpec.name ?? "").trim();
-    const kind = String(rawSpec.kind ?? "").trim();
+    const remoteSpec = normalizeRemoteSpecAliases(rawSpec);
+    const name = String(remoteSpec.name ?? "").trim();
+    const kind = String(remoteSpec.kind ?? "").trim();
     if (!name) throw new ServiceError(502, "invalid_model_output", `Generated spec ${index + 1} is missing a name.`);
     if (intent.hasCompleteExplicitNames && name.toLowerCase() !== intent.explicitNames[index].toLowerCase()) {
       throw new ServiceError(
@@ -168,11 +246,11 @@ function normalizeModelOutput(modelOutput, envelope, options = {}) {
     }
     names.add(name.toLowerCase());
     const spec = normalizeSpecIds({
-      ...rawSpec,
+      ...remoteSpec,
       name,
       kind,
-      description: typeof rawSpec.description === "string" && rawSpec.description.trim()
-        ? rawSpec.description
+      description: typeof remoteSpec.description === "string" && remoteSpec.description.trim()
+        ? remoteSpec.description
         : envelope.request
     }, makeId);
     validateRemoteContent(spec, { path: `$specs[${index}]` });

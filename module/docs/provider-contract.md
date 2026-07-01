@@ -91,9 +91,14 @@ The module validates the envelope before returning it to the Forge. Item specs s
 ## Module API
 
 ```js
-const forge = game.modules.find(module => module.title === "Dungeon Master's Forge V2")?.api;
+const forge = game.modules.get("codex-item-forge").api;
 const endpoint = forge.providerContract.normalizeEndpoint("https://example.test/compile");
 const body = forge.providerContract.buildRequest("Create a rare fire dagger", options);
+const status = await forge.providerContract.requestServiceStatus({
+  endpoint,
+  token,
+  supportedKinds: ["weaponExtraDamage", "chargedHealing"]
+});
 const result = await forge.providerContract.request({
   endpoint,
   request: "Create a rare fire dagger",
@@ -103,6 +108,8 @@ const result = await forge.providerContract.request({
 ```
 
 `redactConfiguration(value)` returns a cloned diagnostic-safe object with token, key, secret, authorization, password, and credential fields removed.
+
+`requestServiceStatus(options)` checks the configured provider's health and capabilities together so the Forge can report service version, mode, shared item-family compatibility, and rate allowance before a compile request is sent.
 
 ## Configuration Profiles
 

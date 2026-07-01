@@ -1,5 +1,32 @@
 # Changelog
 
+## 2.21.7 - 2026-07-01
+
+- Added compact per-item review-note badges to the Result cards so the Description and Result panes stay focused on the item preview instead of long note blocks.
+- Kept the full warning, assumption, manual, unresolved, and reference text in the footer disclosure so no review detail is lost.
+
+## 2.21.6 - 2026-06-30
+
+- Fixed the Forge compile flow to use the live Bring Your Own API draft from the open Forge Settings window instead of silently falling back to older saved provider values.
+- This removes the stale endpoint/model trap during live testing when the connection panel is already open and being edited.
+
+## 2.21.5 - 2026-06-30
+
+- Expanded the read-only DND5e system content resolver to explicitly prefer 2024 spell, equipment, actor, monster feature, and roll-table collections while still supporting system-owned legacy packs when needed.
+- Added exact-name diagnostics and source tests for system actors, monster features, and roll tables using real DND5e-native content names.
+- Let review enrichment surface system-actor provenance for summon specs when they point at an existing DND5e actor instead of a Forge-generated summon shell.
+
+## 2.21.4 - 2026-06-30
+
+- Fixed Forge Settings event binding when the application template root is the form itself, restoring provider switching, connection checks, utility buttons, and planning saves in the live window.
+- Added a regression assertion covering the root-form listener binding used by the settings application.
+
+## 2.21.3 - 2026-06-30
+
+- Added a reusable remote service-status preflight that checks health and capabilities together before Bring Your Own API compilation.
+- Reused that shared service check in Forge Settings and the main compile flow so network generation reports version, mode, compatibility, and rate allowance before compile requests fire.
+- Fixed the Forge provider summary so it reflects the latest checked remote connection instead of falling back to a generic ready state.
+
 ## 2.21.2 - 2026-06-29
 
 - Added early release roadmap coverage for optional bespoke item-icon image generation.
@@ -214,7 +241,7 @@
 
 - Renamed the visible product to Dungeon Master's Forge.
 - Added a GM-only hammer button directly to the Items directory search bar.
-- Kept the existing internal module ID and API path for compatibility.
+- Kept the existing `codex-item-forge` module ID and API path for compatibility.
 
 ## 0.1.0 - 2026-06-26
 

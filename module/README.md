@@ -5,15 +5,21 @@ Dungeon Master's Forge V2 packages the tested Foundry VTT v14 / DND5e v5.3.3 ite
 ## Install
 
 1. Close Foundry VTT.
-2. Copy this `module/` source into your Foundry `Data/modules/` area using your normal local packaging workflow.
+2. Copy the `codex-item-forge` folder into `{Foundry user data}/Data/modules/`.
 3. Start Foundry, open the world, and enable **Dungeon Master's Forge V2** in Manage Modules.
 4. Open the Items directory as a GM.
 5. Click the hammer button in the Items directory search bar.
 6. Use the gear shortcut or **Game Settings > Configure Settings > Module Settings > Dungeon Master's Forge V2** to open Forge Settings.
 
-This development line preserves its original internal package identifiers so existing test worlds, settings migrations, and generated-item metadata continue to work.
+The module can also be opened from a Script Macro:
 
-Bring Your Own API connection details live in **Forge Settings**. Endpoints and model names are client settings. API tokens remain session-only unless **Remember token on this device** is explicitly checked; remembered tokens are stored in that browser's local Foundry settings and should be used only on a trusted computer.
+```js
+game.modules.get("codex-item-forge").api.open();
+```
+
+The internal module ID remains `codex-item-forge` so existing macros, settings, and generated-item flags remain compatible.
+
+Bring Your Own API connection details now live in **Forge Settings**. Endpoints and model names are client settings. API tokens remain session-only unless **Remember token on this device** is explicitly checked; remembered tokens are stored in that browser's local Foundry settings and should be used only on a trusted computer. Depending on the service deployment, that token can be either a shared service token or a personal OpenAI API key for client-key mode.
 
 Use **Check Connection** in Forge Settings before live generation when you want to verify whether the remote service is still in deterministic `mock` mode or has been switched to server-side `openai` mode.
 
@@ -31,9 +37,9 @@ The known-good Emberglass Dagger JSON remains available through **Forge Settings
 
 ## Workflow Usability
 
-Description and Result share the window as split panes, so the request, preview, and JSON editor can be compared without switching tabs. On narrower layouts the panes stack vertically while keeping the same controls and status region.
+Description and Result now share the window as split panes, so the request, preview, and JSON editor can be compared without switching tabs. On narrower layouts the panes stack vertically while keeping the same controls and status region.
 
-Provider setup, connection checks, diagnostics, and the example loader live in a separate Forge Settings panel so the main creation surface stays focused on writing, reviewing, and creating items.
+Provider setup, connection checks, diagnostics, and the example loader now live in a separate Forge Settings panel so the main creation surface stays focused on writing, reviewing, and creating items.
 
 Review presents each generated item as a readable summary of its damage, healing, uses, saves, activities, effects, summons, and unresolved mechanics. Compiler assumptions and warnings appear with the affected item. The exact JSON remains available in the collapsed **Advanced specification editor**.
 
@@ -57,9 +63,9 @@ The Local Rules provider recognizes a conservative set of confirmed patterns:
 
 Multiple requests can be compiled together. Separate free-form requests with a line containing `---`, or paste multiple detailed blocks that each begin with `Item name:`. The Forge validates and previews the resulting batch before its single approval step.
 
-Generated JSON always remains editable. Missing details become visible assumptions. Class resources, ally auras, and unknown spells become structured `unresolvedMechanics` records with the original requested text, the automation limit, and a recommended manual handling step.
+Generated JSON always remains editable. Missing details become visible assumptions. Class resources, ally auras, and unknown spells become structured `unresolvedMechanics` records with the original requested text, the automation limit, and a recommended manual handling step. The Forge displays these records during review and preserves them on the created item's `flags.codex-item-forge.unresolvedMechanics` data.
 
-Forge Settings includes the generation provider selector. Local Rules compiles requests entirely offline. Bring Your Own API sends the versioned Forge request envelope to a user-configured HTTPS endpoint, with HTTP permitted only for loopback development. Its endpoint and model are client-persisted; its API token is held only in memory for the current Foundry session and is redacted from diagnostics. The remote service must implement the Forge `1.0` contract and permit requests from the Foundry origin. V2.16 adds explicit optional capabilities preflight for compatible endpoints while preserving providers that omit discovery. Portable provider profiles include only persistable fields and reject secrets during import. The unresolved-mechanics policy can allow creation after explicit review or block creation until every record is resolved.
+Forge Settings includes the generation provider selector. Local Rules compiles requests entirely offline. Bring Your Own API sends the versioned Forge request envelope to a user-configured HTTPS endpoint, with HTTP permitted only for loopback development. Its endpoint and model are client-persisted; its API token is held only in memory for the current Foundry session unless the user explicitly remembers it, and diagnostics redact it either way. The remote service must implement the Forge `1.0` contract and permit requests from the Foundry origin. The reference service now supports both server-key deployments and personal client-key deployments where the Foundry token field supplies the upstream OpenAI key on a trusted device. V2.16 adds explicit optional capabilities preflight for compatible endpoints while preserving providers that omit discovery. Hosted Forge remains disabled until its authentication and access control service is implemented. Portable provider profiles include only persistable fields and reject secrets during import. The unresolved-mechanics policy can allow creation after explicit review or block creation until every record is resolved.
 
 V2.18 adds an explicit connection check for Bring Your Own API. When the remote service exposes the reference `/health` route, the Forge reports whether that service is in `mock` or `openai` mode before any compile request is sent.
 
@@ -94,7 +100,7 @@ Or an object containing an `items` array:
 ## Module API
 
 ```js
-const forge = game.modules.find(module => module.title === "Dungeon Master's Forge V2")?.api;
+const forge = game.modules.get("codex-item-forge").api;
 
 await forge.validate(specs);
 await forge.create(specs);
@@ -111,6 +117,11 @@ const profile = forge.providerConfiguration.serializeProfile("bring-your-own", c
 const imported = forge.providerConfiguration.parseProfile(profile);
 const remoteSchema = forge.providerContract.schemaVersion;
 const remoteHealth = await forge.providerContract.requestHealth(configuration);
+const remoteStatus = await forge.providerContract.requestServiceStatus({
+  endpoint: configuration.endpoint,
+  token: configuration.apiToken,
+  supportedKinds: ["weaponExtraDamage", "chargedHealing"]
+});
 const health = forge.diagnostics();
 const foundryHealth = await forge.diagnosticsWithValidation();
 const command = await forge.contentResolver.resolveSpellByName("Command");

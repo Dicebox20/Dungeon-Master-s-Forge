@@ -60,9 +60,7 @@ function loadConfig(env = process.env) {
     maxOutputTokens: integer(env.DMF_MAX_OUTPUT_TOKENS, 12000, { min: 256, max: 128000 })
   };
 
-  if (mode === "openai" && !config.openaiApiKey) {
-    throw new ServiceError(500, "missing_openai_key", "OPENAI_API_KEY is required when DMF_AI_MODE=openai.");
-  }
+  config.allowClientApiKeyFallback = mode === "openai" && !config.openaiApiKey;
   return config;
 }
 
