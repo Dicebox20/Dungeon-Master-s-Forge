@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.6.0 - 2026-07-02
+
+- Added one bounded retry for malformed, unsafe, or contract-invalid model output.
+- Kept authentication, quota, network, timeout, and generic upstream failures non-retryable.
+- Added safe service error-code and request-id logging without request text or credentials.
+
 ## 1.5.0 - 2026-07-02
 
 - Added a persistent per-client calendar-month quota for the official Free Forge allowance.

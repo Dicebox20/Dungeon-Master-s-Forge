@@ -4,7 +4,7 @@ The current testing service can become the engine for a downloader-accessible fr
 
 ## Prepared Service Mode
 
-AI service `1.5.0` provides an explicit `DMF_PUBLIC_FREE_TIER=true` mode. It:
+AI service `1.6.0` provides an explicit `DMF_PUBLIC_FREE_TIER=true` mode. It:
 
 - keeps the OpenAI key only on the server;
 - accepts anonymous Forge requests without distributing a shared token;
@@ -14,6 +14,7 @@ AI service `1.5.0` provides an explicit `DMF_PUBLIC_FREE_TIER=true` mode. It:
 - stores keyed client digests rather than raw client IP addresses;
 - separates clients behind a trusted reverse proxy using `X-Forwarded-For`;
 - retains bounded concurrency, queueing, request size, batch size, caching, model allowlisting, and declarative-output validation;
+- retries malformed or contract-invalid model output once while leaving operational failures non-retryable;
 - advertises public free-tier status through health and capabilities responses.
 
 Use `ai-service/.env.free-tier.example` as the deployment template. Do not place a real key in the repository.

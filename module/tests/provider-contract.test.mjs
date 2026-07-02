@@ -9,6 +9,7 @@ import {
   normalizeRemoteCapabilities,
   normalizeRemoteHealth,
   normalizeRemoteProviderResponse,
+  remoteErrorDetail,
   redactProviderConfiguration,
   requestRemoteHealth,
   requestRemoteCapabilities,
@@ -279,6 +280,32 @@ await assert.rejects(
   requestRemoteCompilation({
     endpoint: "https://forge.example/api/compile",
     request: "Create a dagger",
+    fetchImpl: async () => ({
+      ok: false,
+      status: 502,
+      headers: { get: () => null },
+      json: async () => ({
+        error: {
+          code: "invalid_model_output",
+          message: "The generated damage activity was incomplete.",
+          requestId: "request-123"
+        }
+      })
+    })
+  }),
+  /damage activity was incomplete.*invalid_model_output.*request request-123.*HTTP 502/
+);
+assert.deepEqual(remoteErrorDetail({
+  error: { code: "bad<code>", message: "Bad\noutput<script>", requestId: "id-1" }
+}), {
+  code: "bad code",
+  message: "Bad output script",
+  requestId: "id-1"
+});
+await assert.rejects(
+  requestRemoteCompilation({
+    endpoint: "https://forge.example/api/compile",
+    request: "Create a dagger",
     fetchImpl: async () => ({ ok: true, status: 200, json: async () => { throw new Error("bad json"); } })
   }),
   /invalid JSON/
@@ -291,4 +318,4 @@ await assert.rejects(
   /reported status/
 );
 
-export const testedRemoteContractCases = 40;
+export const testedRemoteContractCases = 42;

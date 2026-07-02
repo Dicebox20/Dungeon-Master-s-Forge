@@ -2,8 +2,9 @@
 
 ## Unreleased
 
-- Added the `2.22.0-test.4` tester build with automatic Free Forge selection.
-- Removed the obsolete user-facing project planning phase and its review warnings; launch-day early release support does not gate product features.
+- Added the `2.22.0-test.5` tester build for service `1.6.0`.
+- Displayed safe structured remote error messages, error codes, and request IDs instead of reducing service failures to a bare HTTP status.
+- Removed the obsolete user-facing project planning phase and planning-review warnings; launch-day release plans do not gate module features.
 - Added a disabled-by-default Free Forge release configuration for a baked HTTPS endpoint.
 - Enabled private release builds to select Free Forge automatically on first launch without endpoint or token entry.
 - Unified remote connection checks and compilation across Bring Your Own API and Free Forge providers.
