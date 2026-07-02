@@ -20,7 +20,7 @@ This is a temporary testing channel. Its hosted endpoint and update path may cha
 
 ## Build
 
-- Version: `2.22.0-test.3`
-- Archive SHA-256: `DF564FC7C1CFEFDC13071F2D5453EFEE9074F77A830BC57A0E5D55DBFE4C7E22`
+- Version: `2.22.0-test.4`
+- Archive SHA-256: `41D662976A6AF724C519E7BC8AC5E441EF963BC0E42EFDB1B9ADFCB7E83C80DD`
 - Packaged module test files: 14/14 passing
-- Hosted provider capabilities and live generation: passing
+- Hosted provider capabilities and live generation: inherited unchanged from the passing `test.3` smoke
