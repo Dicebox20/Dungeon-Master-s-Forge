@@ -5,7 +5,7 @@ Dungeon Master's Forge remote providers use schema version `1.0`. Bring Your Own
 ## Endpoint Rules
 
 - Production endpoints must use HTTPS.
-- HTTP is accepted only for `localhost`, `127.0.0.1`, or `::1` development endpoints.
+- HTTP is accepted for loopback, RFC 1918 private IPv4, and Tailscale's `100.64.0.0/10` private-network testing endpoints.
 - Credentials must never be embedded in the endpoint URL.
 - URL fragments are rejected.
 - Bearer tokens are supplied separately and are not included in the JSON request body.

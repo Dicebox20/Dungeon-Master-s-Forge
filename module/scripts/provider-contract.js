@@ -13,6 +13,7 @@ function isPrivateIPv4Hostname(hostname) {
   const octets = hostname.split(".").map(Number);
   if (octets.length !== 4 || octets.some(value => !Number.isInteger(value) || value < 0 || value > 255)) return false;
   return octets[0] === 10
+    || (octets[0] === 100 && octets[1] >= 64 && octets[1] <= 127)
     || (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31)
     || (octets[0] === 192 && octets[1] === 168);
 }
