@@ -10,6 +10,7 @@ Dungeon Master's Forge is a Foundry VTT item-generation toolkit for the DND5e sy
 - `docs/TESTER_QUICKSTART.md` - shortest path for trusted testers and second-machine setup
 - `docs/PATREON_LAUNCH_CHECKLIST.md` - launch-facing readiness checklist
 - `docs/PATREON_PAGE_COPY.md` - draft Patreon copy that matches the current release state
+- `docs/FREE_TIER_DEPLOYMENT.md` - controlled public free-tier service deployment plan
 - `docs/SRD_PLAN.md` - system-native DND5e content-resolution plan
 - `releases/` - latest verified packaged build
 
@@ -17,7 +18,7 @@ Dungeon Master's Forge is a Foundry VTT item-generation toolkit for the DND5e sy
 
 - Foundry VTT: v14
 - DND5e: 5.3.3
-- Module build: 2.21.7
+- Module build: 2.21.11
 
 The current release candidate includes:
 
@@ -30,7 +31,7 @@ The current release candidate includes:
 ## Manifest Install
 
 - Manifest URL: `https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/main/module/module.json`
-- Release ZIP: `https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/main/releases/dungeon-masters-forge-v2-2.21.7.zip`
+- Release ZIP: `https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/main/releases/dungeon-masters-forge-v2-2.21.11.zip`
 
 ## Using The Module
 

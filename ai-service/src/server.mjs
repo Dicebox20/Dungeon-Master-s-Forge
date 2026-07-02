@@ -1,5 +1,6 @@
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import { createServer } from "node:http";
+import { isIP } from "node:net";
 import { serviceCapabilities } from "./capabilities.mjs";
 import { PROMPT_VERSION, SERVICE_NAME, SERVICE_VERSION } from "./constants.mjs";
 import { createCompiler } from "./compiler.mjs";
@@ -18,22 +19,37 @@ function bearerToken(request) {
   return value.startsWith("Bearer ") ? value.slice(7) : "";
 }
 
-function createRateLimiter(limit, now = Date.now) {
+function createRateLimiter(limit, now = Date.now, windowMs = 60000) {
   const clients = new Map();
+  let checks = 0;
   return function check(key) {
     const timestamp = now();
+    checks += 1;
+    if (checks % 1024 === 0) {
+      for (const [clientKey, entry] of clients) {
+        if (timestamp - entry.startedAt >= windowMs) clients.delete(clientKey);
+      }
+    }
     const current = clients.get(key);
-    if (!current || timestamp - current.startedAt >= 60000) {
+    if (!current || timestamp - current.startedAt >= windowMs) {
       clients.set(key, { startedAt: timestamp, count: 1 });
-      return { allowed: true, remaining: limit - 1, retryAfter: 60 };
+      return { allowed: true, remaining: limit - 1, retryAfter: Math.ceil(windowMs / 1000) };
     }
     current.count += 1;
     return {
       allowed: current.count <= limit,
       remaining: Math.max(0, limit - current.count),
-      retryAfter: Math.max(1, Math.ceil((60000 - (timestamp - current.startedAt)) / 1000))
+      retryAfter: Math.max(1, Math.ceil((windowMs - (timestamp - current.startedAt)) / 1000))
     };
   };
+}
+
+function clientAddress(request, config) {
+  if (config.trustProxy) {
+    const forwarded = String(request.headers["x-forwarded-for"] ?? "").split(",")[0].trim();
+    if (isIP(forwarded)) return forwarded;
+  }
+  return String(request.socket.remoteAddress ?? "unknown");
 }
 
 function allowedOrigin(origin, configured) {
@@ -106,6 +122,12 @@ function createForgeServer(options) {
   });
   const logger = options.logger ?? console;
   const rateLimit = createRateLimiter(config.rateLimitPerMinute, options.now);
+  const clientDailyLimit = config.clientDailyLimit > 0
+    ? createRateLimiter(config.clientDailyLimit, options.now, 86400000)
+    : null;
+  const globalDailyLimit = config.globalDailyLimit > 0
+    ? createRateLimiter(config.globalDailyLimit, options.now, 86400000)
+    : null;
 
   const server = createServer(async (request, response) => {
     const requestId = randomUUID();
@@ -128,12 +150,15 @@ function createForgeServer(options) {
           version: SERVICE_VERSION,
           promptVersion: PROMPT_VERSION,
           mode: config.mode,
+          access: config.publicFreeTier ? "public-free-tier" : "private",
           cache: config.cacheTtlMs > 0 && config.cacheMaxEntries > 0 ? "enabled" : "disabled",
           compilation: compilationGate.status(),
           requestLimits: {
             maxCharacters: config.maxRequestChars,
             maxItems: config.maxItemsPerRequest,
-            perMinute: config.rateLimitPerMinute
+            perMinute: config.rateLimitPerMinute,
+            perClientDay: config.clientDailyLimit,
+            globalPerDay: config.globalDailyLimit
           }
         });
         return;
@@ -158,13 +183,32 @@ function createForgeServer(options) {
         throw new ServiceError(401, "unauthorized", "A valid Forge service token is required.");
       }
 
-      const client = String(request.socket.remoteAddress ?? "unknown");
+      const client = clientAddress(request, config);
       const quota = rateLimit(client);
       response.setHeader("X-RateLimit-Limit", String(config.rateLimitPerMinute));
       response.setHeader("X-RateLimit-Remaining", String(quota.remaining));
       if (!quota.allowed) {
         response.setHeader("Retry-After", String(quota.retryAfter));
         throw new ServiceError(429, "rate_limited", "Forge AI request limit exceeded. Try again shortly.");
+      }
+
+      if (clientDailyLimit) {
+        const daily = clientDailyLimit(client);
+        response.setHeader("X-DailyLimit-Limit", String(config.clientDailyLimit));
+        response.setHeader("X-DailyLimit-Remaining", String(daily.remaining));
+        if (!daily.allowed) {
+          response.setHeader("Retry-After", String(daily.retryAfter));
+          throw new ServiceError(429, "daily_client_limit", "This free-tier client has reached its daily Forge AI limit.");
+        }
+      }
+      if (globalDailyLimit) {
+        const daily = globalDailyLimit("global");
+        response.setHeader("X-GlobalDailyLimit-Limit", String(config.globalDailyLimit));
+        response.setHeader("X-GlobalDailyLimit-Remaining", String(daily.remaining));
+        if (!daily.allowed) {
+          response.setHeader("Retry-After", String(daily.retryAfter));
+          throw new ServiceError(429, "daily_global_limit", "The Dungeon Master's Forge free-tier daily allowance has been reached.");
+        }
       }
 
       const payload = await readJsonBody(request, config.bodyLimitBytes);
@@ -190,4 +234,4 @@ function createForgeServer(options) {
   return server;
 }
 
-export { allowedOrigin, createForgeServer, createRateLimiter, readJsonBody, tokenEqual };
+export { allowedOrigin, clientAddress, createForgeServer, createRateLimiter, readJsonBody, tokenEqual };

@@ -53,6 +53,7 @@ Ship a Patreon-ready release where a supporter can:
 - launch messaging clearly states that the free public tier is the real product access tier
 - Founding Patron is framed as a support-first thank-you tier, not a required gameplay unlock
 - launch page copy does not imply Hosted Forge is already live
+- if public free AI generation is advertised, the HTTPS service, durable quotas, and global spending ceiling are live and verified first
 
 ### Support readiness
 
@@ -62,8 +63,9 @@ Ship a Patreon-ready release where a supporter can:
 - deferred integrations are listed honestly:
   - Hosted Forge
   - Patreon entitlement enforcement
-  - compatible Active Aura path
-  - Cauldron of Plentiful Resources integration
+- compatible Active Aura path
+- Cauldron of Plentiful Resources integration
+- automatic Free Forge access until the public service requirements are complete
 
 ## Recommended Before Public Promotion
 
