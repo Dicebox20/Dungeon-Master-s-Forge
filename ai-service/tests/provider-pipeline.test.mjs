@@ -3,7 +3,7 @@ import test from "node:test";
 import { createCompiler } from "../src/compiler.mjs";
 import { PROMPT_VERSION } from "../src/constants.mjs";
 import { ServiceError } from "../src/errors.mjs";
-import { ids, validSpecs } from "./fixtures/valid-specs.mjs";
+import { actor, damage, ids, validSpecs } from "./fixtures/valid-specs.mjs";
 import { config, envelope } from "./helpers.mjs";
 
 function responsesFetch(output, captures = []) {
@@ -84,6 +84,63 @@ test("common live-model aliases are normalized before validation", async () => {
   assert.equal(result.specs[0].damage.base.denomination, 4);
   assert.equal(result.specs[0].extraDamageParts[0].denomination, 4);
   assert.equal(result.specs[0].damage.base.bonus, "");
+});
+
+test("malformed top-level generated IDs are replaced with service IDs", async () => {
+  const spec = {
+    ...validSpecs[7],
+    activityId: "not-a-valid-activity-id",
+    effectId: "bad-effect-id"
+  };
+  const compile = createCompiler({
+    config: config({ mode: "openai" }),
+    fetchImpl: responsesFetch({ specs: [spec], assumptions: [], warnings: [], deferred: [] }),
+    makeId: ids()
+  });
+
+  const result = await compile(envelope({ request: `Item name: ${spec.name}` }));
+  assert.equal(result.specs[0].activityId, "0000000000000001");
+  assert.equal(result.specs[0].effectId, "0000000000000002");
+});
+
+test("malformed nested generated IDs are replaced with service IDs", async () => {
+  const spec = {
+    kind: "equipmentPowerSuite",
+    name: "Nested ID Suite",
+    description: "Nested ID Suite description",
+    effects: [{
+      name: "Nested Ward",
+      effectId: "effect-with-hyphen",
+      changes: [{ key: "system.attributes.ac.bonus", mode: "ADD", value: "1" }]
+    }],
+    attackActivities: [{
+      activityId: "attack with spaces",
+      activityName: "Mind Lance",
+      damageParts: [damage("psychic")]
+    }],
+    utilityActivities: [],
+    saveActivities: [],
+    summonActivity: {
+      activityId: "summon-activity-id",
+      activityName: "Summon Ally"
+    },
+    summonProfiles: [{
+      profileId: "profile-id-too-long",
+      profileName: "Wolf Ally",
+      actor: actor("Wolf Ally")
+    }]
+  };
+  const compile = createCompiler({
+    config: config({ mode: "openai" }),
+    fetchImpl: responsesFetch({ specs: [spec], assumptions: [], warnings: [], deferred: [] }),
+    makeId: ids()
+  });
+
+  const result = await compile(envelope({ request: `Item name: ${spec.name}` }));
+  assert.equal(result.specs[0].attackActivities[0].activityId, "0000000000000001");
+  assert.equal(result.specs[0].effects[0].effectId, "0000000000000002");
+  assert.equal(result.specs[0].summonProfiles[0].profileId, "0000000000000003");
+  assert.equal(result.specs[0].summonActivity.activityId, "0000000000000004");
 });
 
 test("contract-invalid model output receives one bounded retry", async () => {
