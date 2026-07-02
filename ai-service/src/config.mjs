@@ -53,7 +53,8 @@ function loadConfig(env = process.env) {
     publicFreeTier,
     trustProxy: flag(env.DMF_TRUST_PROXY, false),
     rateLimitPerMinute: integer(env.DMF_RATE_LIMIT_PER_MINUTE, 20, { min: 1, max: 10000 }),
-    clientDailyLimit: integer(env.DMF_CLIENT_DAILY_LIMIT, publicFreeTier ? 5 : 0, { min: 0, max: 100000 }),
+    clientDailyLimit: integer(env.DMF_CLIENT_DAILY_LIMIT, 0, { min: 0, max: 100000 }),
+    clientMonthlyLimit: integer(env.DMF_CLIENT_MONTHLY_LIMIT, publicFreeTier ? 20 : 0, { min: 0, max: 100000 }),
     globalDailyLimit: integer(env.DMF_GLOBAL_DAILY_LIMIT, publicFreeTier ? 100 : 0, { min: 0, max: 1000000 }),
     quotaDatabasePath: String(env.DMF_QUOTA_DATABASE_PATH ?? (publicFreeTier ? "./data/free-tier-quota.sqlite" : ":memory:")).trim(),
     quotaHashSecret: String(env.DMF_QUOTA_HASH_SECRET ?? ""),
@@ -83,8 +84,8 @@ function loadConfig(env = process.env) {
     if (!config.allowedOrigins.includes("*")) {
       throw new ServiceError(500, "invalid_configuration", "Public free-tier mode requires DMF_ALLOWED_ORIGINS=* so downloaded Foundry installations can connect.");
     }
-    if (config.clientDailyLimit < 1 || config.globalDailyLimit < 1) {
-      throw new ServiceError(500, "invalid_configuration", "Public free-tier mode requires positive client and global daily limits.");
+    if (config.clientMonthlyLimit < 1 || config.globalDailyLimit < 1) {
+      throw new ServiceError(500, "invalid_configuration", "Public free-tier mode requires positive client monthly and global daily limits.");
     }
     if (!config.quotaDatabasePath || config.quotaDatabasePath === ":memory:") {
       throw new ServiceError(500, "invalid_configuration", "Public free-tier mode requires a durable DMF_QUOTA_DATABASE_PATH.");

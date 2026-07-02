@@ -41,7 +41,7 @@ test("health endpoint reports mock mode and allows configured Foundry origin", a
   assert.equal(health.access, "private");
   assert.deepEqual(health.quotaStorage, { kind: "disabled", durable: false });
   assert.deepEqual(health.compilation, { active: 0, queued: 0, maxConcurrent: 2, maxQueued: 20 });
-  assert.deepEqual(health.requestLimits, { maxCharacters: 20000, maxItems: 10, perMinute: 20, perClientDay: 0, globalPerDay: 0 });
+  assert.deepEqual(health.requestLimits, { maxCharacters: 20000, maxItems: 10, perMinute: 20, perClientDay: 0, perClientMonth: 0, globalPerDay: 0 });
 });
 
 test("capabilities endpoint is read-only and does not invoke compilation", async t => {
@@ -51,7 +51,7 @@ test("capabilities endpoint is read-only and does not invoke compilation", async
   const response = await fetch(`${app.baseUrl}/v1/forge/capabilities`, { headers: { Origin: origin } });
   const body = await response.json();
   assert.equal(response.status, 200);
-  assert.equal(body.service.version, "1.4.0");
+  assert.equal(body.service.version, "1.5.0");
   assert.equal(body.forge.schemaVersion, "1.0");
   assert.equal(body.forge.supportedKinds.length, 14);
   assert.equal(body.features.hostedForge, false);
@@ -244,6 +244,7 @@ test("public free-tier mode accepts anonymous requests and reports bounded quota
     publicFreeTier: true,
     clientToken: "",
     clientDailyLimit: 2,
+    clientMonthlyLimit: 20,
     globalDailyLimit: 3,
     allowedOrigins: ["*"]
   }, { compile: async () => ({ schemaVersion: "1.0", compilerVersion: "test", requestCount: 1, specs: [] }) });
@@ -256,6 +257,7 @@ test("public free-tier mode accepts anonymous requests and reports bounded quota
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("access-control-allow-origin"), "*");
   assert.equal(response.headers.get("x-dailylimit-limit"), "2");
+  assert.equal(response.headers.get("x-monthlylimit-limit"), "20");
   assert.equal(response.headers.get("x-globaldailylimit-limit"), "3");
 });
 
@@ -279,6 +281,30 @@ test("public free-tier mode enforces per-client daily limits behind a trusted pr
   const limited = await request();
   assert.equal(limited.status, 429);
   assert.equal((await limited.json()).error.code, "daily_client_limit");
+});
+
+test("public free-tier mode enforces per-client monthly limits behind a trusted proxy", async t => {
+  const app = await runningServer({
+    mode: "openai",
+    publicFreeTier: true,
+    clientToken: "",
+    trustProxy: true,
+    clientDailyLimit: 10,
+    clientMonthlyLimit: 1,
+    globalDailyLimit: 10,
+    allowedOrigins: ["*"]
+  }, { compile: async () => ({ schemaVersion: "1.0", compilerVersion: "test", requestCount: 1, specs: [] }) });
+  t.after(app.close);
+  const request = () => fetch(`${app.baseUrl}/v1/forge/compile`, {
+    method: "POST",
+    headers: { Origin: "https://foundry.example", "X-Forwarded-For": "203.0.113.19", "Content-Type": "application/json" },
+    body: JSON.stringify(envelope())
+  });
+  assert.equal((await request()).status, 200);
+  const limited = await request();
+  assert.equal(limited.status, 429);
+  assert.equal(limited.headers.get("x-monthlylimit-remaining"), "0");
+  assert.equal((await limited.json()).error.code, "monthly_client_limit");
 });
 
 test("public free-tier mode enforces a global daily spend ceiling", async t => {

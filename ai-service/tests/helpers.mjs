@@ -11,6 +11,7 @@ function config(overrides = {}) {
     trustProxy: false,
     rateLimitPerMinute: 20,
     clientDailyLimit: 0,
+    clientMonthlyLimit: 0,
     globalDailyLimit: 0,
     quotaDatabasePath: ":memory:",
     quotaHashSecret: "test-quota-hash-secret-at-least-32-characters",

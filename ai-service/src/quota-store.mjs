@@ -5,6 +5,18 @@ import { DatabaseSync } from "node:sqlite";
 
 const DAY_MS = 86400000;
 
+function dailyPeriod(timestamp) {
+  const start = Math.floor(timestamp / DAY_MS) * DAY_MS;
+  return { start, end: start + DAY_MS };
+}
+
+function monthlyPeriod(timestamp) {
+  const date = new Date(timestamp);
+  const start = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1);
+  const end = Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 1);
+  return { start, end };
+}
+
 function databaseLocation(value) {
   const configured = String(value ?? "").trim();
   if (!configured || configured === ":memory:") return ":memory:";
@@ -56,17 +68,18 @@ function createDailyQuotaStore(options = {}) {
     SET request_count = request_count + 1, updated_at = ?
     WHERE bucket = ? AND period_start = ? AND subject_hash = ?
   `);
-  const removeExpired = database.prepare("DELETE FROM daily_quota_usage WHERE period_start < ?");
+  const removeExpired = database.prepare("DELETE FROM daily_quota_usage WHERE updated_at < ?");
   let checks = 0;
   let closed = false;
 
-  function consume(bucket, subject, limit) {
+  function consumePeriod(bucket, subject, limit, periodFor) {
     if (closed) throw new Error("Daily quota store is closed.");
     if (!Number.isInteger(limit) || limit < 1) throw new Error("Daily quota limit must be a positive integer.");
 
     const timestamp = now();
-    const periodStart = Math.floor(timestamp / DAY_MS) * DAY_MS;
-    const retryAfter = Math.max(1, Math.ceil((periodStart + DAY_MS - timestamp) / 1000));
+    const period = periodFor(timestamp);
+    const periodStart = period.start;
+    const retryAfter = Math.max(1, Math.ceil((period.end - timestamp) / 1000));
     const subjectHash = subjectDigest(hashSecret, String(bucket), String(subject));
 
     database.exec("BEGIN IMMEDIATE");
@@ -86,7 +99,7 @@ function createDailyQuotaStore(options = {}) {
       checks += 1;
       if (checks % 1024 === 0) {
         try {
-          removeExpired.run(periodStart - DAY_MS);
+          removeExpired.run(timestamp - (400 * DAY_MS));
         } catch {
           // Expiry cleanup must not reject an otherwise valid quota reservation.
         }
@@ -103,7 +116,8 @@ function createDailyQuotaStore(options = {}) {
   }
 
   return Object.freeze({
-    consume,
+    consume: (bucket, subject, limit) => consumePeriod(bucket, subject, limit, dailyPeriod),
+    consumeMonthly: (bucket, subject, limit) => consumePeriod(bucket, subject, limit, monthlyPeriod),
     status: () => ({ kind: "sqlite", durable: location !== ":memory:" }),
     close() {
       if (closed) return;
@@ -113,4 +127,4 @@ function createDailyQuotaStore(options = {}) {
   });
 }
 
-export { DAY_MS, createDailyQuotaStore, subjectDigest };
+export { DAY_MS, createDailyQuotaStore, dailyPeriod, monthlyPeriod, subjectDigest };

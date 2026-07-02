@@ -4,13 +4,13 @@ The current testing service can become the engine for a downloader-accessible fr
 
 ## Prepared Service Mode
 
-AI service `1.4.0` provides an explicit `DMF_PUBLIC_FREE_TIER=true` mode. It:
+AI service `1.5.0` provides an explicit `DMF_PUBLIC_FREE_TIER=true` mode. It:
 
 - keeps the OpenAI key only on the server;
 - accepts anonymous Forge requests without distributing a shared token;
 - permits Foundry installations from arbitrary origins;
-- enforces per-minute, per-client daily, and global daily limits;
-- persists daily client and global usage in a transactional SQLite ledger;
+- enforces per-minute, per-client calendar-month, and global daily limits;
+- persists monthly client and global daily usage in a transactional SQLite ledger;
 - stores keyed client digests rather than raw client IP addresses;
 - separates clients behind a trusted reverse proxy using `X-Forwarded-For`;
 - retains bounded concurrency, queueing, request size, batch size, caching, model allowlisting, and declarative-output validation;
@@ -33,7 +33,7 @@ Before starting the public listener, copy the template to `.env`, fill the serve
 
 ## Deployment Boundary
 
-Daily counters now survive process and host restarts when the SQLite database is stored on a persistent volume. The per-minute limiter and successful-result cache remain in memory because they are short-lived safeguards rather than spending ledgers.
+Monthly client and global daily counters survive process and host restarts when the SQLite database is stored on persistent local storage. The per-minute limiter and successful-result cache remain in memory because they are short-lived safeguards rather than spending ledgers.
 
 The SQLite ledger is intended for a single persistent host. Do not place it on an unreliable network filesystem or run independent hosts with separate copies; a horizontally scaled deployment needs a shared transactional database-backed quota adapter. Keep an independent OpenAI project spending ceiling as the final cost boundary.
 

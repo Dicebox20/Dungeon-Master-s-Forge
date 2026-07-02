@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { DAY_MS, createDailyQuotaStore, subjectDigest } from "../src/quota-store.mjs";
+import { DAY_MS, createDailyQuotaStore, monthlyPeriod, subjectDigest } from "../src/quota-store.mjs";
 
 const secret = "test-quota-hash-secret-at-least-32-characters";
 
@@ -31,6 +31,24 @@ test("daily quota resets at the UTC day boundary", () => {
   timestamp += 2000;
   assert.equal(store.consume("global", "global", 1).allowed, true);
   store.close();
+});
+
+test("monthly quota persists and resets at the UTC calendar-month boundary", t => {
+  const directory = mkdtempSync(join(tmpdir(), "dmf-monthly-quota-"));
+  const databasePath = join(directory, "quota.sqlite");
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  let timestamp = Date.UTC(2026, 6, 31, 23, 59, 59);
+
+  const first = createDailyQuotaStore({ databasePath, hashSecret: secret, now: () => timestamp });
+  assert.equal(first.consumeMonthly("client-month", "203.0.113.9", 1).allowed, true);
+  first.close();
+
+  const restarted = createDailyQuotaStore({ databasePath, hashSecret: secret, now: () => timestamp });
+  assert.equal(restarted.consumeMonthly("client-month", "203.0.113.9", 1).allowed, false);
+  timestamp += 2000;
+  assert.equal(restarted.consumeMonthly("client-month", "203.0.113.9", 1).allowed, true);
+  restarted.close();
+  assert.equal(monthlyPeriod(Date.UTC(2026, 6, 15)).start, Date.UTC(2026, 6, 1));
 });
 
 test("two store instances share one transactional ceiling", t => {

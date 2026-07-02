@@ -10,6 +10,7 @@ test("free-tier deployment report is useful and secret-free", () => {
     allowedOrigins: ["*"],
     trustProxy: true,
     clientDailyLimit: 3,
+    clientMonthlyLimit: 20,
     globalDailyLimit: 50,
     openaiApiKey: "must-not-appear",
     quotaHashSecret: "also-must-not-appear-and-is-long-enough"
@@ -18,6 +19,7 @@ test("free-tier deployment report is useful and secret-free", () => {
   assert.equal(report.access.wildcardOrigins, true);
   assert.equal(report.provider.serverKeyConfigured, true);
   assert.equal(report.quotas.globalPerDay, 50);
+  assert.equal(report.quotas.perClientMonth, 20);
   assert.equal(JSON.stringify(report).includes("must-not-appear"), false);
 });
 
