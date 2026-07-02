@@ -1,6 +1,6 @@
 # Dungeon Master's Forge Release Status
 
-Updated: 2026-07-01
+Updated: 2026-07-02
 
 ## Publish Candidate
 
@@ -30,22 +30,23 @@ Updated: 2026-07-01
 - Merged the Tailscale endpoint-support pull request into GitHub `main`.
 - Added AI service `1.3.0` public free-tier alpha controls and deployment documentation without enabling Hosted Forge prematurely.
 - Added AI service `1.4.0` durable SQLite daily quotas with HMAC-pseudonymized client identifiers and strict public-mode configuration checks.
+- Added AI service `1.5.0` calendar-month client quotas for the official 20-generation Free Forge allowance.
 - Added a disabled-by-default module activation seam for automatic Free Forge selection in private hosted builds without publishing a temporary endpoint.
 
 ## Current Technical State
 
 - The module includes the split-pane Description/Result workflow, Forge Settings, Local Rules, Bring Your Own API, and review-before-create validation.
 - Read-only native DND5e resolution now covers modern spell, equipment, actor, monster feature, and roll-table lookup without mutating compendium content.
-- The reference AI service supports private server-key, personal client-key, and bounded public free-tier deployments. Hosted Forge remains disabled until a public HTTPS endpoint and deployment smoke pass exist.
+- The reference AI service supports private server-key, personal client-key, and bounded public free-tier deployments. Service `1.5.0` is live on the official Droplet with a 20-generation calendar-month client allowance; Hosted Forge remains disabled in the public module until a project-owned hostname and final module smoke pass exist.
 - Cauldron of Plentiful Resources remains optional and deferred because its current release is incompatible with this Foundry version.
 - The launch-day project plan is now centered on a real free public tier plus a public release plan, with access control-gated hosting deferred.
 
 ## Validation
 
 - Workspace module tests pass.
-- Workspace AI service tests pass (81 tests).
+- Workspace AI service tests pass (83 tests).
 - Public export module tests pass after the filename-surface sync from `codex-item-forge.js` to `dungeon-masters-forge.js`.
-- Public export AI service tests pass (81 tests).
+- Public export AI service tests pass (83 tests).
 - The currently installed Foundry build on disk is `2.21.12`.
 - The installed module file count is `37`, matching the current workspace copy.
 - Foundry Check Connection succeeds against `http://localhost:8788/v1/forge/compile`, and the saved Bring Your Own API selection survives a cold page reload.
@@ -55,7 +56,8 @@ Updated: 2026-07-01
 - The service-side contract normalizer now accepts `pattern` as a live-model alias for Forge `kind`; that patch is covered by tests and still needs one successful in-Foundry live compile confirmation.
 - Tailscale HTTP endpoint acceptance is covered by module tests and merged; a second-machine Tailscale compile remains the next external verification.
 - The public manifest and `2.21.12` ZIP URLs both resolve successfully from GitHub raw content with HTTP 200.
-- A private `2.22.0-test.1` build with the owner's temporary Quick Tunnel endpoint passes all 15 module suites and is packaged for owned-computer testing; installation awaits external-write approval.
+- AI service `1.5.0` passes independent Droplet tests, restart verification, public HTTPS health, capabilities, and a live OpenAI compile with monthly quota response headers.
+- A private `2.22.0-test.2` build targeting the temporary staging hostname passes all 15 module suites and its Hosted Forge adapter completes live generation; the staging hostname is intentionally absent from the public release.
 
 ## Next Release Tasks
 

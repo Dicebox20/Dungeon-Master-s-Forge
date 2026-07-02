@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.5.0 - 2026-07-02
+
+- Added a persistent per-client calendar-month quota for the official Free Forge allowance.
+- Added `DMF_CLIENT_MONTHLY_LIMIT`, monthly health and preflight reporting, and stable monthly-limit response headers.
+- Kept per-minute and global daily safeguards independently configurable.
+- Added calendar rollover, restart persistence, and HTTP enforcement coverage for monthly quotas.
+
 ## 1.4.0 - 2026-07-01
 
 - Added a transactional SQLite ledger for durable per-client and global daily free-tier quotas.
