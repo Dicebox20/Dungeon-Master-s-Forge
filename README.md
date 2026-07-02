@@ -13,6 +13,7 @@ Dungeon Master's Forge is a Foundry VTT item-generation toolkit for the DND5e sy
 - `docs/FREE_TIER_DEPLOYMENT.md` - controlled public free-tier service deployment plan
 - `docs/SRD_PLAN.md` - system-native DND5e content-resolution plan
 - `releases/` - latest verified packaged build
+- `testing/` - temporary auto-connected Free Forge tester channel
 
 ## Current Release Candidate
 
@@ -41,15 +42,14 @@ Dungeon Master's Forge is for Foundry VTT game masters who want to describe an i
 - Read-only reuse of compatible DND5e system content without modifying locked compendiums
 - Private-network testing over LAN or Tailscale addresses
 
-## What Still Requires Self-Hosting
+## Stable Channel Hosting
 
-Live AI interpretation currently requires a reachable Forge-compatible service. The included reference service can run on the Foundry computer, another trusted LAN computer, or a Tailscale-connected computer. Public installers are not automatically connected to a shared free-tier meter yet.
+The stable `2.21.12` manifest still requires a reachable Forge-compatible service for live AI interpretation. The included reference service can run on the Foundry computer, another trusted LAN computer, or a Tailscale-connected computer.
 
 ## Not Yet Included
 
-- Automatic Hosted/Free Forge access
+- Automatic Hosted/Free Forge access in the stable release
 - project access control enforcement
-- Durable public quota accounting
 - Automatic item-icon image generation
 - Compatible ally-aura automation
 - Cauldron of Plentiful Resources integration for the current Foundry version
@@ -58,6 +58,15 @@ Live AI interpretation currently requires a reachable Forge-compatible service. 
 
 - Manifest URL: `https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/main/module/module.json`
 - Release ZIP: `https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/main/releases/dungeon-masters-forge-v2-2.21.12.zip`
+
+## Pre-Launch Tester Channel
+
+Invited testers can install `2.22.0-test.3`, which automatically connects to the hosted 20-request calendar-month Free Forge allowance:
+
+- Tester manifest: `https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/refs/heads/codex/launch-readiness-docs/testing/module.json`
+- Tester notes: [testing/README.md](./testing/README.md)
+
+The tester channel is temporary and is not the final public launch manifest.
 
 ## Using The Module
 
@@ -71,6 +80,6 @@ Open [ai-service/README.md](./ai-service/README.md) for the local service, mock 
 
 - This export is meant to be the cleaner GitHub-facing surface for the project.
 - The working development repo still contains older archives, experiments, regression macros, and extracted verification folders that are intentionally not mirrored here.
-- Hosted generation remains disabled. The supported live path is still the local or self-hosted Bring Your Own API workflow.
+- Hosted generation remains disabled in the stable channel. The temporary tester channel enables Free Forge automatically for invited testing.
 - project tier planning exists, but project access control enforcement is not yet active in the product.
 - The intended launch shape is a real free public tier plus a support-first early supporter tier. Higher hosted or access control-driven tiers remain future work.
