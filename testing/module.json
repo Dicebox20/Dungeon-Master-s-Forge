@@ -9,10 +9,10 @@
   ],
   "version": "2.22.0-test.5",
   "url": "https://github.com/Dicebox20/Dungeon-Master-s-Forge",
-  "manifest": "https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/refs/heads/codex/launch-readiness-docs/testing/module.json",
-  "download": "https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/refs/heads/codex/launch-readiness-docs/testing/releases/dungeon-masters-forge-v2-2.22.0-test.5.zip",
-  "readme": "https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/refs/heads/codex/launch-readiness-docs/testing/README.md",
-  "changelog": "https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/refs/heads/codex/launch-readiness-docs/testing/CHANGELOG.md",
+  "manifest": "https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/codex/launch-readiness-docs/testing/module.json",
+  "download": "https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/codex/launch-readiness-docs/testing/releases/dungeon-masters-forge-v2-2.22.0-test.5.zip",
+  "readme": "https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/codex/launch-readiness-docs/testing/README.md",
+  "changelog": "https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/codex/launch-readiness-docs/testing/CHANGELOG.md",
   "compatibility": {
     "minimum": "14",
     "verified": "14"
