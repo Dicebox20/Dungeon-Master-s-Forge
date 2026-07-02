@@ -13,11 +13,12 @@ Updated: 2026-07-02
 - The Tailscale endpoint-support pull request is merged into GitHub `main`.
 - A local true AI compile has succeeded end to end without creating a world document during the smoke proof.
 - The official Droplet service is deployed behind HTTPS, survives restart, and passes a live `gpt-4.1-mini` generation with the monthly quota headers present.
+- A separate `2.22.0-test.3` manifest automatically connects invited testers to Free Forge without changing the stable `2.21.12` manifest.
 - The public manifest and `2.21.12` release ZIP URLs both return HTTP 200 from GitHub raw content.
 
 ## Needed Before Wider Live Testing
 
-1. Install the module from the public manifest URL on a second machine.
+1. Install the module from the dedicated tester manifest URL on a second machine.
 2. Complete one Tailscale connection and live compile from that second machine.
 3. Complete one post-compile item creation and inspect the resulting activities and effects.
 4. Keep the local reference service launch instructions explicit for Windows testers:
@@ -50,7 +51,7 @@ Updated: 2026-07-02
 
 ## Still Deferred
 
-- Automatic Hosted/Free Forge module access until the project-owned hostname and final public-module smoke pass exist
+- Automatic Hosted/Free Forge access in the stable manifest until the project-owned hostname and final public-module smoke pass exist
 - project access control enforcement
 - Active ally auras without a compatible automation path
 - Cauldron of Plentiful Resources integration until a compatible release exists
