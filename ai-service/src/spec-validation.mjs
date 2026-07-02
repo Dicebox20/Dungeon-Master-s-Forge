@@ -209,7 +209,7 @@ const validators = {
     for (const [index, effect] of (spec.passiveEffects ?? []).entries()) validateEffect(spec, effect, `passiveEffects[${index}]`);
     for (const [index, activity] of (spec.saveActivities ?? []).entries()) {
       validateActivity(spec, activity, `saveActivities[${index}]`);
-      validateSave(spec, activity.save, `${field}[${index}].save`);
+      validateSave(spec, activity.save, `saveActivities[${index}].save`);
     }
     if (spec.toggleLight) {
       requireString(spec, spec.toggleLight.activityId, "toggleLight.activityId");
