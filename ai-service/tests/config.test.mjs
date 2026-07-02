@@ -28,6 +28,36 @@ test("configuration parses origin and model allowlists", () => {
   assert.deepEqual(result.allowedOrigins, ["http://10.0.0.26:30000", "http://localhost:30000"]);
 });
 
+test("public free-tier mode requires bounded anonymous server-key deployment", () => {
+  const result = loadConfig({
+    DMF_AI_MODE: "openai",
+    OPENAI_API_KEY: "server-secret",
+    DMF_PUBLIC_FREE_TIER: "true",
+    DMF_ALLOWED_ORIGINS: "*",
+    DMF_CLIENT_DAILY_LIMIT: "4",
+    DMF_GLOBAL_DAILY_LIMIT: "80",
+    DMF_TRUST_PROXY: "true"
+  });
+  assert.equal(result.publicFreeTier, true);
+  assert.equal(result.trustProxy, true);
+  assert.equal(result.clientDailyLimit, 4);
+  assert.equal(result.globalDailyLimit, 80);
+  assert.equal(result.allowClientApiKeyFallback, false);
+
+  assert.throws(() => loadConfig({
+    DMF_AI_MODE: "openai",
+    DMF_PUBLIC_FREE_TIER: "true",
+    DMF_ALLOWED_ORIGINS: "*"
+  }), /server-side OPENAI_API_KEY/);
+  assert.throws(() => loadConfig({
+    DMF_AI_MODE: "openai",
+    OPENAI_API_KEY: "server-secret",
+    DMF_PUBLIC_FREE_TIER: "true",
+    DMF_ALLOWED_ORIGINS: "*",
+    DMF_CLIENT_TOKEN: "shared-secret"
+  }), /must not require a shared DMF_CLIENT_TOKEN/);
+});
+
 test("result cache settings are bounded and can be disabled", () => {
   const disabled = loadConfig({ DMF_CACHE_TTL_MS: "0", DMF_CACHE_MAX_ENTRIES: "0" });
   assert.equal(disabled.cacheTtlMs, 0);

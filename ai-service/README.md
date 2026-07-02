@@ -89,7 +89,11 @@ Copy `.env.example` to `.env` and run `npm run start:env`, or set variables dire
 | `DMF_AI_MODE` | `mock` | `mock` or `openai`. |
 | `DMF_ALLOWED_ORIGINS` | localhost Foundry origins | Comma-separated exact Foundry origins. |
 | `DMF_CLIENT_TOKEN` | empty | Optional bearer token shared with the Foundry client in server-key mode. |
+| `DMF_PUBLIC_FREE_TIER` | `false` | Enables bounded anonymous downloader access; requires a server key, wildcard origins, and daily limits. |
+| `DMF_TRUST_PROXY` | `false` | Trust the first `X-Forwarded-For` address. Enable only behind a proxy that replaces untrusted forwarding headers. |
 | `DMF_RATE_LIMIT_PER_MINUTE` | `20` | Per-client in-memory limit. |
+| `DMF_CLIENT_DAILY_LIMIT` | `0` private / `5` free tier | Per-client in-memory daily request limit; `0` disables it outside free-tier mode. |
+| `DMF_GLOBAL_DAILY_LIMIT` | `0` private / `100` free tier | Global in-memory daily request limit; `0` disables it outside free-tier mode. |
 | `DMF_MAX_CONCURRENT_COMPILATIONS` | `2` | Maximum simultaneous compiler or model calls. |
 | `DMF_MAX_QUEUED_COMPILATIONS` | `20` | Waiting compilation limit; `0` rejects when all active slots are occupied. |
 | `DMF_CACHE_TTL_MS` | `300000` | Successful-result lifetime in milliseconds; `0` disables caching. |
@@ -134,4 +138,4 @@ For the current release candidate, a direct local smoke proof was verified succe
 
 ## Production Boundary
 
-This is a reference and personal-use service, not the future Hosted Forge. Its rate limiter and result cache are in memory, it has no project access control store, and it does not provide multi-tenant accounting or durable audit controls. Keep Hosted Forge disabled until those systems are implemented.
+Service `1.3.0` includes a bounded public free-tier alpha mode. See `docs/FREE_TIER_DEPLOYMENT.md` and `.env.free-tier.example`. Its rate limiters and result cache are still in memory, it has no project access control store, and it does not provide durable multi-tenant accounting. Keep the module's Hosted Forge provider disabled until a public HTTPS deployment, durable quotas, and launch smoke tests are complete.
