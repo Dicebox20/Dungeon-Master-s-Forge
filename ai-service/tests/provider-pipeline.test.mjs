@@ -174,6 +174,66 @@ test("artifact weapon hybrids may use activated powers without on-hit extra dama
   assert.equal(result.specs[0].saveActivities[0].activityId, "0000000000000001");
 });
 
+test("casual prompt-copy item names are replaced with concise names", async () => {
+  const prompt = "dagger that has additional fire damage and cast fireball";
+  const spec = {
+    kind: "artifactWeaponHybrid",
+    name: prompt,
+    description: `${prompt} description`,
+    weaponType: "simpleM",
+    baseItem: "dagger",
+    damage: {
+      base: { number: 1, denomination: 4, bonus: "@mod", types: ["piercing"] }
+    },
+    extraDamageParts: [{ number: 1, denomination: 6, bonus: "", types: ["fire"] }],
+    uses: { max: "1", recovery: [{ period: "day", type: "recoverAll", formula: "" }] },
+    saveActivities: [{
+      activityName: "Cast Fireball",
+      save: { ability: "dex", dc: 15 },
+      damageParts: [{ number: 8, denomination: 6, bonus: "", types: ["fire"] }],
+      target: { template: { type: "sphere", size: 20, units: "ft" } },
+      range: { value: 150, units: "ft" }
+    }]
+  };
+  const compile = createCompiler({
+    config: config({ mode: "openai" }),
+    fetchImpl: responsesFetch({ specs: [spec], assumptions: [], warnings: [], deferred: [] }),
+    makeId: ids()
+  });
+
+  const result = await compile(envelope({ request: prompt }));
+  assert.equal(result.specs[0].name, "Dagger of Fireball and Flame");
+  assert.equal(result.specs[0].description, `${prompt} description`);
+});
+
+test("explicit prompt-like item names are preserved", async () => {
+  const explicitName = "dagger that has additional fire damage and cast fireball";
+  const spec = {
+    kind: "artifactWeaponHybrid",
+    name: explicitName,
+    description: `${explicitName} description`,
+    weaponType: "simpleM",
+    baseItem: "dagger",
+    damage: {
+      base: { number: 1, denomination: 4, bonus: "@mod", types: ["piercing"] }
+    },
+    extraDamageParts: [{ number: 1, denomination: 6, bonus: "", types: ["fire"] }],
+    saveActivities: [{
+      activityName: "Cast Fireball",
+      save: { ability: "dex", dc: 15 },
+      damageParts: [{ number: 8, denomination: 6, bonus: "", types: ["fire"] }]
+    }]
+  };
+  const compile = createCompiler({
+    config: config({ mode: "openai" }),
+    fetchImpl: responsesFetch({ specs: [spec], assumptions: [], warnings: [], deferred: [] }),
+    makeId: ids()
+  });
+
+  const result = await compile(envelope({ request: `Item name: ${explicitName}` }));
+  assert.equal(result.specs[0].name, explicitName);
+});
+
 test("contract-invalid model output receives one bounded retry", async () => {
   let attempts = 0;
   const compile = createCompiler({
