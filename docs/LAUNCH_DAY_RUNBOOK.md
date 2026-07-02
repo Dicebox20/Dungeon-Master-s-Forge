@@ -7,8 +7,8 @@ This runbook promotes the verified Free Forge tester channel to the stable Found
 ## Current Baseline
 
 - Stable module: `2.21.12`
-- Tester module: `2.22.0-test.4`
-- AI service: `1.5.0`
+- Tester module: `2.22.0-test.5`
+- AI service: `1.6.0`
 - Free Forge allowance: 20 generation requests per client per calendar month
 - Stable manifest: `module/module.json`
 - Tester manifest: `testing/module.json`

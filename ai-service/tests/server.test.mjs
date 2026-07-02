@@ -51,7 +51,7 @@ test("capabilities endpoint is read-only and does not invoke compilation", async
   const response = await fetch(`${app.baseUrl}/v1/forge/capabilities`, { headers: { Origin: origin } });
   const body = await response.json();
   assert.equal(response.status, 200);
-  assert.equal(body.service.version, "1.5.0");
+  assert.equal(body.service.version, "1.6.0");
   assert.equal(body.forge.schemaVersion, "1.0");
   assert.equal(body.forge.supportedKinds.length, 14);
   assert.equal(body.features.hostedForge, false);

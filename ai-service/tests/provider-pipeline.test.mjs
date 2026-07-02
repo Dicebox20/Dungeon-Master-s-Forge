@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createCompiler } from "../src/compiler.mjs";
 import { PROMPT_VERSION } from "../src/constants.mjs";
+import { ServiceError } from "../src/errors.mjs";
 import { ids, validSpecs } from "./fixtures/valid-specs.mjs";
 import { config, envelope } from "./helpers.mjs";
 
@@ -83,4 +84,55 @@ test("common live-model aliases are normalized before validation", async () => {
   assert.equal(result.specs[0].damage.base.denomination, 4);
   assert.equal(result.specs[0].extraDamageParts[0].denomination, 4);
   assert.equal(result.specs[0].damage.base.bonus, "");
+});
+
+test("contract-invalid model output receives one bounded retry", async () => {
+  let attempts = 0;
+  const compile = createCompiler({
+    config: config({ mode: "openai" }),
+    openaiAdapter: async () => {
+      attempts += 1;
+      if (attempts === 1) throw new ServiceError(502, "invalid_model_output", "The first model output was incomplete.");
+      return { specs: [validSpecs[0]], assumptions: [], warnings: [], deferred: [] };
+    },
+    makeId: ids()
+  });
+
+  const result = await compile(envelope({ request: `Item name: ${validSpecs[0].name}` }));
+  assert.equal(attempts, 2);
+  assert.equal(result.specs[0].name, validSpecs[0].name);
+});
+
+test("upstream service errors are not retried", async () => {
+  let attempts = 0;
+  const compile = createCompiler({
+    config: config({ mode: "openai" }),
+    openaiAdapter: async () => {
+      attempts += 1;
+      throw new ServiceError(502, "openai_error", "OpenAI returned HTTP 500.");
+    }
+  });
+
+  await assert.rejects(
+    compile(envelope({ request: "Item name: Upstream Failure" })),
+    error => error.code === "openai_error"
+  );
+  assert.equal(attempts, 1);
+});
+
+test("retryable model output stops after the second failed attempt", async () => {
+  let attempts = 0;
+  const compile = createCompiler({
+    config: config({ mode: "openai" }),
+    openaiAdapter: async () => {
+      attempts += 1;
+      throw new ServiceError(502, "invalid_model_json", "The model returned invalid JSON.");
+    }
+  });
+
+  await assert.rejects(
+    compile(envelope({ request: "Item name: Repeated Invalid Output" })),
+    error => error.code === "invalid_model_json"
+  );
+  assert.equal(attempts, 2);
 });
