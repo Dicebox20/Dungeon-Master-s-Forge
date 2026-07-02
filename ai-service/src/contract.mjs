@@ -144,7 +144,7 @@ function validateForgeRequest(payload, limits = {}) {
 
 function ensureId(target, key, makeId) {
   if (!object(target)) return;
-  if (!target[key]) target[key] = makeId();
+  if (!target[key] || !ID_PATTERN.test(String(target[key]))) target[key] = makeId();
   if (!ID_PATTERN.test(String(target[key]))) {
     throw new ServiceError(502, "invalid_model_output", `Generated ${key} must be exactly 16 alphanumeric characters.`);
   }
@@ -259,29 +259,16 @@ function normalizeModelOutput(modelOutput, envelope, options = {}) {
     return spec;
   });
 
-  const unresolvedMechanics = specs.flatMap(spec => (spec.unresolvedMechanics ?? []).map(mechanic => ({ itemName: spec.name, ...mechanic })));
-  const warnings = stringArray(modelOutput.warnings, "warnings");
-  if (envelope.options.unresolvedPolicy === "block" && unresolvedMechanics.length) {
-    warnings.push("The request selected block policy and contains unresolved mechanics; Foundry creation will remain blocked until they are resolved.");
-  }
-
   return {
     schemaVersion: FORGE_SCHEMA_VERSION,
-    compilerVersion: `dmf-ai-service/${SERVICE_VERSION}`,
+    serviceVersion: SERVICE_VERSION,
     promptVersion: PROMPT_VERSION,
-    request: envelope.request,
     requestCount: specs.length,
     specs,
-    decisions: specs.map(spec => ({
-      name: spec.name,
-      pattern: spec.kind,
-      unresolvedCount: spec.unresolvedMechanics?.length ?? 0
-    })),
     assumptions: stringArray(modelOutput.assumptions, "assumptions"),
-    warnings,
-    deferred: stringArray(modelOutput.deferred, "deferred"),
-    unresolvedMechanics
+    warnings: stringArray(modelOutput.warnings, "warnings"),
+    deferred: stringArray(modelOutput.deferred, "deferred")
   };
 }
 
-export { ID_PATTERN, normalizeModelOutput, secureId, validateForgeRequest };
+export { normalizeModelOutput, validateForgeRequest };
