@@ -1,5 +1,5 @@
 const PRODUCT_TITLE = "Dungeon Master's Forge V2";
-const BUILD_VERSION = "2.21.11";
+const BUILD_VERSION = "2.21.12";
 
 function sourceLabelForVersion(version) {
   const normalized = String(version ?? "").trim();

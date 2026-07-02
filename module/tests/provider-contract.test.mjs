@@ -20,6 +20,11 @@ assert.equal(normalizeRemoteEndpoint("https://forge.example/api/compile"), "http
 assert.equal(normalizeRemoteEndpoint("http://localhost:8787/compile"), "http://localhost:8787/compile");
 assert.equal(normalizeRemoteEndpoint("http://10.0.0.26:8787/v1/forge/compile"), "http://10.0.0.26:8787/v1/forge/compile");
 assert.equal(normalizeRemoteEndpoint("http://192.168.1.40:8787/compile"), "http://192.168.1.40:8787/compile");
+assert.equal(normalizeRemoteEndpoint("http://100.91.178.55:8788/v1/forge/compile"), "http://100.91.178.55:8788/v1/forge/compile");
+assert.equal(normalizeRemoteEndpoint("http://100.64.0.1:8788/compile"), "http://100.64.0.1:8788/compile");
+assert.equal(normalizeRemoteEndpoint("http://100.127.255.254:8788/compile"), "http://100.127.255.254:8788/compile");
+assert.throws(() => normalizeRemoteEndpoint("http://100.63.255.255:8788/compile"), /must use HTTPS/);
+assert.throws(() => normalizeRemoteEndpoint("http://100.128.0.1:8788/compile"), /must use HTTPS/);
 assert.throws(() => normalizeRemoteEndpoint("http://forge.example/compile"), /must use HTTPS/);
 assert.throws(() => normalizeRemoteEndpoint("https://user:secret@forge.example/compile"), /credentials/);
 assert.throws(() => normalizeRemoteEndpoint("https://forge.example/compile#secret"), /fragment/);

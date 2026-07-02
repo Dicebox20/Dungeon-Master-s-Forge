@@ -4,12 +4,12 @@ Updated: 2026-07-01
 
 ## Publish Candidate
 
-- Public export candidate: `2.21.11`
+- Public export candidate: `2.21.12`
 - Module manifest target: `module/module.json`
-- Release ZIP: `releases/dungeon-masters-forge-v2-2.21.11.zip`
-- Release ZIP SHA-256: `74DA9C920CAB94C4140639845DB94CCDF10F8BA6E6AD13D714542F5A0E6A0F9F`
+- Release ZIP: `releases/dungeon-masters-forge-v2-2.21.12.zip`
+- Release ZIP SHA-256: `FC9FEBC4B7404541563965F6632614A3C41E175D92EC952942950942BFABC5C0`
 - Manifest URL target: `https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/main/module/module.json`
-- Download URL target: `https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/main/releases/dungeon-masters-forge-v2-2.21.11.zip`
+- Download URL target: `https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/main/releases/dungeon-masters-forge-v2-2.21.12.zip`
 
 ## Release-Prep Pass
 
@@ -26,6 +26,7 @@ Updated: 2026-07-01
 - Restored explicit settings persistence, corrected provider-form discovery, and added a standard Save Settings action.
 - Reworked the API fields into readable full-width rows and corrected the oversized Foundry notes spacing in `2.21.10`.
 - Removed the underlying standard-form flex collision and verified consistent 10 px field spacing plus full-width API controls in `2.21.11`.
+- Added Tailscale `100.64.0.0/10` endpoint support for private cross-network testing in `2.21.12`.
 - Added AI service `1.3.0` public free-tier alpha controls and deployment documentation without enabling Hosted Forge prematurely.
 
 ## Current Technical State
@@ -42,7 +43,7 @@ Updated: 2026-07-01
 - Workspace AI service tests pass (73 tests).
 - Public export module tests pass after the filename-surface sync from `codex-item-forge.js` to `dungeon-masters-forge.js`.
 - Public export AI service tests pass (73 tests).
-- The currently installed Foundry build on disk is `2.21.11`.
+- The currently installed Foundry build on disk is `2.21.12`.
 - The installed module file count is `37`, matching the current workspace copy.
 - Foundry Check Connection succeeds against `http://localhost:8788/v1/forge/compile`, and the saved Bring Your Own API selection survives a cold page reload.
 - A true remote compile succeeds in Foundry against service `1.3.0`: Live Ember Dagger returned as a validated `weaponExtraDamage` spec with the requested base and fire damage. No world document was created during the smoke test.
