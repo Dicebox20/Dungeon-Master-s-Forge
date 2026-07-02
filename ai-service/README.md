@@ -61,6 +61,23 @@ For server-key mode, enter the same `DMF_CLIENT_TOKEN` in Foundry's **API token*
 
 In Foundry V2.18 and newer, use **Check Connection** after the service starts. A healthy live setup should report `openai` mode; if it reports `mock`, the Forge is still using deterministic test output.
 
+## Current Recommended Local Launch Path
+
+For the current release candidate, the canonical local live-testing endpoint is:
+
+- `http://localhost:8788/v1/forge/compile`
+
+Recommended launch command on Windows:
+
+```powershell
+cd "C:\Users\rujie\Documents\Codex\2026-06-25\can\outputs\dungeon-masters-forge-ai-service"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\start-openai-service.ps1 -Port 8788
+```
+
+Leave that terminal window open while Foundry performs **Check Connection**, compile, validate, and create.
+
+This is especially useful on local Windows setups where a detached background launcher may not stay alive reliably during active testing.
+
 ## Environment
 
 Copy `.env.example` to `.env` and run `npm run start:env`, or set variables directly in the process environment. In client-key mode you may leave `OPENAI_API_KEY` blank and use the Foundry token field on a trusted computer instead.
@@ -72,7 +89,11 @@ Copy `.env.example` to `.env` and run `npm run start:env`, or set variables dire
 | `DMF_AI_MODE` | `mock` | `mock` or `openai`. |
 | `DMF_ALLOWED_ORIGINS` | localhost Foundry origins | Comma-separated exact Foundry origins. |
 | `DMF_CLIENT_TOKEN` | empty | Optional bearer token shared with the Foundry client in server-key mode. |
+| `DMF_PUBLIC_FREE_TIER` | `false` | Enables bounded anonymous downloader access; requires a server key, wildcard origins, and daily limits. |
+| `DMF_TRUST_PROXY` | `false` | Trust the first `X-Forwarded-For` address. Enable only behind a proxy that replaces untrusted forwarding headers. |
 | `DMF_RATE_LIMIT_PER_MINUTE` | `20` | Per-client in-memory limit. |
+| `DMF_CLIENT_DAILY_LIMIT` | `0` private / `5` free tier | Per-client in-memory daily request limit; `0` disables it outside free-tier mode. |
+| `DMF_GLOBAL_DAILY_LIMIT` | `0` private / `100` free tier | Global in-memory daily request limit; `0` disables it outside free-tier mode. |
 | `DMF_MAX_CONCURRENT_COMPILATIONS` | `2` | Maximum simultaneous compiler or model calls. |
 | `DMF_MAX_QUEUED_COMPILATIONS` | `20` | Waiting compilation limit; `0` rejects when all active slots are occupied. |
 | `DMF_CACHE_TTL_MS` | `300000` | Successful-result lifetime in milliseconds; `0` disables caching. |
@@ -98,6 +119,11 @@ npm run smoke:capabilities
 
 The smoke commands expect the service to already be running. They print only contract versions and generated item names, never credentials or full requests. The batch smoke proves two explicitly named items survive the complete request/response path. The automated suite drives all fourteen supported Forge families through a mocked OpenAI Responses call and the complete compiler pipeline, then rejects incomplete or unsafe weapons, effects, charged powers, enchantments, summons, suites, and hybrid artifacts before they can reach Foundry.
 
+For the current release candidate, a direct local smoke proof was verified successfully against:
+
+- `http://127.0.0.1:8788/v1/forge/compile`
+- `http://127.0.0.1:8788/v1/forge/capabilities`
+
 ## HTTP Contract
 
 - `GET /health` returns service version, prompt version, active mode, load, and request limits.
@@ -112,4 +138,4 @@ The smoke commands expect the service to already be running. They print only con
 
 ## Production Boundary
 
-This is a reference and personal-use service, not the future Hosted Forge. Its rate limiter and result cache are in memory, it has no project access control store, and it does not provide multi-tenant accounting or durable audit controls. Keep Hosted Forge disabled until those systems are implemented.
+Service `1.3.0` includes a bounded public free-tier alpha mode. See `docs/FREE_TIER_DEPLOYMENT.md` and `.env.free-tier.example`. Its rate limiters and result cache are still in memory, it has no project access control store, and it does not provide durable multi-tenant accounting. Keep the module's Hosted Forge provider disabled until a public HTTPS deployment, durable quotas, and launch smoke tests are complete.

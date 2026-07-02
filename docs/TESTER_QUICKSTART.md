@@ -66,6 +66,15 @@ For the current reference service, the intended live compile endpoint is:
 
 - `http://localhost:8788/v1/forge/compile`
 
+If you are running the reference service locally on Windows, the most reliable launch path during testing is:
+
+```powershell
+cd "C:\Users\rujie\Documents\Codex\2026-06-25\can\outputs\dungeon-masters-forge-ai-service"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\start-openai-service.ps1 -Port 8788
+```
+
+Leave that terminal window open while Foundry checks the connection and compiles requests.
+
 Depending on the service deployment:
 
 - in server-key mode, the Foundry **API token** should be the shared `DMF_CLIENT_TOKEN`
@@ -89,6 +98,7 @@ Then:
 
 - Hosted Forge is not live yet.
 - project access control enforcement is not live yet.
+- On some local Windows setups, the reference AI service is more reliable when left running in an open terminal window during testing.
 - Ally aura automation is still deferred.
 - Class-resource restoration automation is still deferred.
 - Cauldron of Plentiful Resources is currently incompatible with this Foundry version and should remain optional.

@@ -27,7 +27,8 @@ function serviceCapabilities(config) {
       reviewBeforeCreation: true,
       declarativeModelOutputOnly: true,
       executableModelOutput: false,
-      hostedForge: false
+      hostedForge: config.publicFreeTier === true,
+      publicFreeTier: config.publicFreeTier === true
     }
   };
 }

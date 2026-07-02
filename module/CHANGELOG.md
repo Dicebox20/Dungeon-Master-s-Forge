@@ -1,5 +1,27 @@
 # Changelog
 
+## 2.21.11 - 2026-07-01
+
+- Removed the structural collision between Foundry's standard-form notes rule and the Settings section introductions.
+- Replaced the legacy three-column provider container with a settings-specific stacked container so API fields remain full width even without custom styling.
+
+## 2.21.10 - 2026-07-01
+
+- Replaced the cramped three-column API configuration strip with full-width endpoint, model, and token rows.
+- Increased API input height so long endpoints and model names remain readable in the standard Settings window.
+
+## 2.21.9 - 2026-07-01
+
+- Fixed settings-form discovery when Foundry renders the form itself as the application root, covering provider drafts and explicit saves.
+- Fixed the oversized blank gaps caused by Foundry's global notes layout and tightened the Settings section, field, and footer spacing.
+- Bumped the module build so Foundry reloads the corrected Settings stylesheet instead of retaining its cached predecessor.
+
+## 2.21.8 - 2026-07-01
+
+- Restored a standard Save Settings action to Forge Settings after the cosmetic redesign removed the visible save controls.
+- A successful Bring Your Own API connection check now saves the verified provider, endpoint, model, and remembered-token preference before returning to the Forge.
+- Updated the local-service endpoint guidance to `http://localhost:8788/v1/forge/compile`.
+
 ## 2.21.7 - 2026-07-01
 
 - Added compact per-item review-note badges to the Result cards so the Description and Result panes stay focused on the item preview instead of long note blocks.
