@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.21.12 - 2026-07-01
+
+- Added HTTP endpoint support for Tailscale's private `100.64.0.0/10` address range.
+- Kept HTTPS mandatory for addresses immediately outside the Tailscale range and for public remote providers.
+
 ## 2.21.11 - 2026-07-01
 
 - Removed the structural collision between Foundry's standard-form notes rule and the Settings section introductions.
