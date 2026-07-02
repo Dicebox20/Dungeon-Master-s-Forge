@@ -9,7 +9,7 @@ Updated: 2026-07-01
 - Public tester quickstart and baseline GitHub issue templates are in place.
 - The public repo export has been locally advanced to the `2.21.12` candidate.
 - LAN-testing instructions exist for the reference AI service.
-- AI service `1.3.0` passes all 73 source tests, including personal client-key mode and bounded public free-tier alpha access.
+- AI service `1.4.0` passes all 79 source tests, including personal client-key mode, bounded public free-tier access, durable quota restart persistence through the HTTP service, UTC rollover, and client-address pseudonymization.
 - The Tailscale endpoint-support pull request is merged into GitHub `main`.
 - A local true AI compile has succeeded end to end without creating a world document during the smoke proof.
 - The public manifest and `2.21.12` release ZIP URLs both return HTTP 200 from GitHub raw content.
@@ -49,7 +49,7 @@ Updated: 2026-07-01
 
 ## Still Deferred
 
-- Automatic Hosted/Free Forge module access until a stable public HTTPS endpoint and durable quotas exist
+- Automatic Hosted/Free Forge module access until a stable public HTTPS endpoint and deployment smoke pass exist
 - Patreon entitlement enforcement
 - Active ally auras without a compatible automation path
 - Cauldron of Plentiful Resources integration until a compatible release exists

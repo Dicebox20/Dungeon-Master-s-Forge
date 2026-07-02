@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import { createForgeServer } from "../src/server.mjs";
 import { config, envelope } from "./helpers.mjs";
@@ -17,7 +20,10 @@ async function runningServer(overrides = {}, options = {}) {
   const address = server.address();
   return {
     baseUrl: `http://127.0.0.1:${address.port}`,
-    close: () => new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()))
+    close: () => new Promise((resolve, reject) => {
+      server.close(error => error ? reject(error) : resolve());
+      server.closeAllConnections?.();
+    })
   };
 }
 
@@ -33,6 +39,7 @@ test("health endpoint reports mock mode and allows configured Foundry origin", a
   assert.equal(health.mode, "mock");
   assert.equal(health.promptVersion, "1.0.0");
   assert.equal(health.access, "private");
+  assert.deepEqual(health.quotaStorage, { kind: "disabled", durable: false });
   assert.deepEqual(health.compilation, { active: 0, queued: 0, maxConcurrent: 2, maxQueued: 20 });
   assert.deepEqual(health.requestLimits, { maxCharacters: 20000, maxItems: 10, perMinute: 20, perClientDay: 0, globalPerDay: 0 });
 });
@@ -44,7 +51,7 @@ test("capabilities endpoint is read-only and does not invoke compilation", async
   const response = await fetch(`${app.baseUrl}/v1/forge/capabilities`, { headers: { Origin: origin } });
   const body = await response.json();
   assert.equal(response.status, 200);
-  assert.equal(body.service.version, "1.3.0");
+  assert.equal(body.service.version, "1.4.0");
   assert.equal(body.forge.schemaVersion, "1.0");
   assert.equal(body.forge.supportedKinds.length, 14);
   assert.equal(body.features.hostedForge, false);
@@ -294,6 +301,40 @@ test("public free-tier mode enforces a global daily spend ceiling", async t => {
   const limited = await request("203.0.113.11");
   assert.equal(limited.status, 429);
   assert.equal((await limited.json()).error.code, "daily_global_limit");
+});
+
+test("public free-tier HTTP quotas survive a service restart", async t => {
+  const directory = mkdtempSync(join(tmpdir(), "dmf-http-quota-"));
+  const databasePath = join(directory, "quota.sqlite");
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const overrides = {
+    mode: "openai",
+    publicFreeTier: true,
+    clientToken: "",
+    trustProxy: true,
+    clientDailyLimit: 1,
+    globalDailyLimit: 10,
+    allowedOrigins: ["*"],
+    quotaDatabasePath: databasePath
+  };
+  const options = { compile: async () => ({ schemaVersion: "1.0", compilerVersion: "test", requestCount: 1, specs: [] }) };
+  const request = baseUrl => fetch(`${baseUrl}/v1/forge/compile`, {
+    method: "POST",
+    headers: { Origin: "https://foundry.example", "X-Forwarded-For": "203.0.113.50", "Content-Type": "application/json", Connection: "close" },
+    body: JSON.stringify(envelope())
+  });
+
+  const first = await runningServer(overrides, options);
+  const health = await fetch(`${first.baseUrl}/health`, { headers: { Origin: "https://foundry.example", Connection: "close" } });
+  assert.deepEqual((await health.json()).quotaStorage, { kind: "sqlite", durable: true });
+  assert.equal((await request(first.baseUrl)).status, 200);
+  await first.close();
+
+  const restarted = await runningServer(overrides, options);
+  const limited = await request(restarted.baseUrl);
+  assert.equal(limited.status, 429);
+  assert.equal((await limited.json()).error.code, "daily_client_limit");
+  await restarted.close();
 });
 
 test("legacy API compile path remains compatible", async t => {
