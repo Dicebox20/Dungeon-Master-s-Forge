@@ -69,7 +69,7 @@ For the current reference service, the intended live compile endpoint is:
 If you are running the reference service locally on Windows, the most reliable launch path during testing is:
 
 ```powershell
-cd "C:\Users\rujie\Documents\Codex\2026-06-25\can\outputs\dungeon-masters-forge-ai-service"
+cd "<your Dungeon Master's Forge checkout>\ai-service"
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\start-openai-service.ps1 -Port 8788
 ```
 
@@ -79,6 +79,17 @@ Depending on the service deployment:
 
 - in server-key mode, the Foundry **API token** should be the shared `DMF_CLIENT_TOKEN`
 - in client-key mode, the Foundry **API token** should be the tester's own OpenAI API key
+
+### Testing From Another Network With Tailscale
+
+1. Install Tailscale on the service computer and the tester computer.
+2. Sign both computers into the same tailnet.
+3. Start the reference service with `DMF_HOST=0.0.0.0` and allow the tester's Foundry origin.
+4. In Foundry, use `http://<service-computer-tailscale-ip>:8788/v1/forge/compile` as the endpoint.
+5. Keep port `8788` private; ordinary internet router port forwarding is not required for Tailscale testing.
+6. Click **Check Connection** before attempting a live compile.
+
+The module accepts HTTP only for loopback and recognized private-network ranges, including Tailscale's `100.64.0.0/10` range. Public endpoints must use HTTPS.
 
 ## First Smoke Test
 
