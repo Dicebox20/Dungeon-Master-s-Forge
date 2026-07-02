@@ -7,6 +7,64 @@ import { validateSpecStructure } from "./spec-validation.mjs";
 
 const ID_PATTERN = /^[A-Za-z0-9]{16}$/;
 
+const BASE_ITEM_NAMES = Object.freeze([
+  "hand crossbow",
+  "heavy crossbow",
+  "light crossbow",
+  "greatsword",
+  "longsword",
+  "shortsword",
+  "scimitar",
+  "warhammer",
+  "battleaxe",
+  "quarterstaff",
+  "spear",
+  "dagger",
+  "mace",
+  "staff",
+  "wand",
+  "rod",
+  "bow",
+  "crossbow",
+  "shield",
+  "armor",
+  "ring",
+  "cloak",
+  "boots",
+  "helm",
+  "helmet",
+  "amulet",
+  "bracers",
+  "gloves",
+  "gauntlets",
+  "belt",
+  "potion",
+  "scroll",
+  "book",
+  "grimoire",
+  "key",
+  "lantern",
+  "orb",
+  "crystal"
+]);
+
+const FEATURE_NAMES = Object.freeze([
+  { pattern: /\bfireball\b/i, label: "Fireball" },
+  { pattern: /\b(flame|flaming|fire|burning|ember|inferno)\b/i, label: "Flame" },
+  { pattern: /\b(lightning|storm|thunder|thunderbolt)\b/i, label: "Storm" },
+  { pattern: /\b(cold|ice|frost|freezing)\b/i, label: "Frost" },
+  { pattern: /\b(necrotic|death|grave|shadow)\b/i, label: "Shadow" },
+  { pattern: /\b(psychic|mind|mental)\b/i, label: "Mind" },
+  { pattern: /\b(radiant|holy|divine|sun|solar)\b/i, label: "Radiance" },
+  { pattern: /\b(poison|venom|toxic)\b/i, label: "Venom" },
+  { pattern: /\b(acid|corrosive)\b/i, label: "Acid" },
+  { pattern: /\b(force|arcane|magic missile)\b/i, label: "Force" },
+  { pattern: /\b(healing|heal|restoration)\b/i, label: "Restoration" },
+  { pattern: /\b(summon|conjure|calling)\b/i, label: "Summoning" },
+  { pattern: /\b(light|glow|lantern|torch)\b/i, label: "Light" },
+  { pattern: /\b(flying|flight|wing|wings)\b/i, label: "Flight" }
+]);
+
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
 }
@@ -17,6 +75,83 @@ function object(value) {
 
 function secureId() {
   return randomBytes(8).toString("hex");
+}
+
+function compactText(value) {
+  return String(value ?? "").replace(/\s+/g, " ").trim();
+}
+
+function comparableText(value) {
+  return compactText(value).toLowerCase().replace(/[.,!?;:]+$/g, "");
+}
+
+function titleCase(value) {
+  return compactText(value)
+    .toLowerCase()
+    .split(/\s+/)
+    .map(word => word ? `${word[0].toUpperCase()}${word.slice(1)}` : "")
+    .join(" ");
+}
+
+function stripRequestBoilerplate(value) {
+  return compactText(value)
+    .replace(/^\s*item\s+name\s*:\s*.+?\s*(?:\n|$)/i, "")
+    .replace(/^\s*(create|make|generate|give me|build|forge)\s+(a|an|the)?\s*/i, "")
+    .replace(/^\s*(a|an|the)\s+/i, "")
+    .trim();
+}
+
+function wordPattern(text) {
+  return new RegExp(`\\b${text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+")}\\b`, "i");
+}
+
+function baseNameFromRequest(request) {
+  const text = stripRequestBoilerplate(request);
+  for (const base of BASE_ITEM_NAMES) {
+    if (wordPattern(base).test(text)) return titleCase(base === "helmet" ? "helm" : base);
+  }
+  return "Magic Item";
+}
+
+function featureNamesFromRequest(request) {
+  const text = stripRequestBoilerplate(request);
+  const features = [];
+  for (const feature of FEATURE_NAMES) {
+    if (feature.pattern.test(text) && !features.includes(feature.label)) features.push(feature.label);
+  }
+  return features.slice(0, 2);
+}
+
+function fallbackNameFromRequest(request, index = 0) {
+  const base = baseNameFromRequest(request);
+  const features = featureNamesFromRequest(request);
+  if (features.length === 1) return `${base} of ${features[0]}`;
+  if (features.length >= 2) return `${base} of ${features[0]} and ${features[1]}`;
+
+  const cleaned = stripRequestBoilerplate(request)
+    .replace(/\b(that|which|with|has|have|can|could|casts?|deals?|does|gives?|when|and)\b.*$/i, "")
+    .trim();
+  if (cleaned) return titleCase(cleaned).slice(0, 60).trim();
+  return index ? `Generated Item ${index + 1}` : "Generated Item";
+}
+
+function looksLikePromptCopy(name, request) {
+  const cleanName = compactText(name);
+  const cleanRequest = stripRequestBoilerplate(request);
+  if (!cleanName) return true;
+  if (comparableText(cleanName) === comparableText(cleanRequest)) return true;
+  if (comparableText(cleanName) === comparableText(request)) return true;
+  return cleanName.length > 48 && /\b(that|which|with|has|have|can|could|casts?|deals?|does|gives?|when|and)\b/i.test(cleanName);
+}
+
+function normalizeGeneratedName(rawName, intent, index) {
+  const name = compactText(rawName);
+  const explicitName = intent.explicitNames[index];
+  if (explicitName) return name;
+
+  const requestChunk = intent.chunks[index] ?? "";
+  if (!name || looksLikePromptCopy(name, requestChunk)) return fallbackNameFromRequest(requestChunk, index);
+  return name;
 }
 
 const PROPERTY_ALIASES = Object.freeze({
@@ -230,7 +365,8 @@ function normalizeModelOutput(modelOutput, envelope, options = {}) {
   const specs = modelOutput.specs.map((rawSpec, index) => {
     if (!object(rawSpec)) throw new ServiceError(502, "invalid_model_output", `Generated spec ${index + 1} is not an object.`);
     const remoteSpec = normalizeRemoteSpecAliases(rawSpec);
-    const name = String(remoteSpec.name ?? "").trim();
+    const rawName = String(remoteSpec.name ?? "").trim();
+    const name = normalizeGeneratedName(rawName, intent, index);
     const kind = String(remoteSpec.kind ?? "").trim();
     if (!name) throw new ServiceError(502, "invalid_model_output", `Generated spec ${index + 1} is missing a name.`);
     if (intent.hasCompleteExplicitNames && name.toLowerCase() !== intent.explicitNames[index].toLowerCase()) {
