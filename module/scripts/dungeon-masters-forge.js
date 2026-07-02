@@ -2,9 +2,11 @@ import { runCodexItemForge } from "./forge-engine.js";
 import { compileItemRequest } from "./request-compiler.js";
 import {
   DEFAULT_PROVIDER_ID,
+  HOSTED_PROVIDER_ID,
   compileWithProvider,
   getProvider,
   listProviders,
+  networkProviderConfiguration,
   partitionProviderConfiguration,
   providerReadiness,
   SUPPORTED_SPEC_KINDS
@@ -151,6 +153,13 @@ function registerSettings() {
     config: false,
     type: String,
     default: DEFAULT_PROVIDER_ID
+  });
+
+  game.settings.register(MODULE_ID, "hostedDefaultApplied", {
+    scope: "client",
+    config: false,
+    type: Boolean,
+    default: false
   });
 
   game.settings.register(MODULE_ID, "unresolvedPolicy", {
@@ -593,7 +602,8 @@ function providerConnectionDetailText(connection) {
 }
 
 async function checkProviderConnection(providerState) {
-  if (providerState?.id !== "bring-your-own") {
+  const provider = getProvider(providerState?.id ?? DEFAULT_PROVIDER_ID);
+  if (provider?.mode !== "network") {
     return {
       providerId: providerState?.id ?? DEFAULT_PROVIDER_ID,
       checkedAt: new Date().toISOString(),
@@ -602,9 +612,10 @@ async function checkProviderConnection(providerState) {
     };
   }
 
+  const connection = networkProviderConfiguration(providerState.id, providerState.configuration);
   const status = await requestRemoteServiceStatus({
-    endpoint: providerState.configuration.endpoint,
-    token: providerState.configuration.apiToken,
+    endpoint: connection.endpoint,
+    token: connection.apiToken,
     supportedKinds: SUPPORTED_SPEC_KINDS
   });
   return {
@@ -1151,7 +1162,7 @@ function syncSettingsProviderPanel(app) {
   if (icon) icon.className = `fa-solid ${snapshot.icon}`;
   if (label) label.textContent = snapshot.message;
   if (checkButton instanceof HTMLButtonElement) {
-    checkButton.disabled = provider.id === "bring-your-own" ? !snapshot.readiness.ready : false;
+    checkButton.disabled = provider.mode === "network" ? !snapshot.readiness.ready : false;
   }
 }
 
@@ -1291,7 +1302,7 @@ class ForgeSettingsApplication extends FormApplication {
     root.querySelector('[data-action="check-provider"]')?.addEventListener("click", async () => {
       try {
         const providerState = settingsFormProviderState(form);
-        if (providerState.id !== "bring-your-own") {
+        if (getProvider(providerState.id)?.mode !== "network") {
           clearProviderConnection(this);
           if (forgeDialog?.rendered) {
             clearProviderConnection(forgeDialog);
@@ -1470,7 +1481,7 @@ async function openForge() {
             const provider = activeProviderState({
               unresolvedPolicy: formControl(button.form, "unresolvedPolicy").value
             });
-            if (provider.id === "bring-your-own") {
+            if (getProvider(provider.id)?.mode === "network") {
               setStatus(dialog, "working", "Checking remote service status...");
               dialog._codexProviderConnection = await checkProviderConnection(provider);
               refreshForgeProviderSummary(dialog, button.form);
@@ -1683,9 +1694,18 @@ async function migrateV2Settings() {
   }
 }
 
+async function applyHostedDefaultProvider() {
+  const hostedProvider = getProvider(HOSTED_PROVIDER_ID);
+  if (!hostedProvider?.available) return;
+  if (game.settings.get(MODULE_ID, "hostedDefaultApplied") === true) return;
+  await game.settings.set(MODULE_ID, "providerId", HOSTED_PROVIDER_ID);
+  await game.settings.set(MODULE_ID, "hostedDefaultApplied", true);
+}
+
 Hooks.once("ready", async () => {
   const module = game.modules.get(MODULE_ID);
   await migrateV2Settings();
+  await applyHostedDefaultProvider();
   module.api = {
     open: openForge,
     openSettings: openForgeSettings,

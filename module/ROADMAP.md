@@ -54,6 +54,7 @@
 - Remote health checks and mock-vs-live connection verification. Implemented in V2.18.
 - Tier catalog scaffolding and stable feature ids for future Hosted Forge access control checks. Implemented in workspace.
 - Tier-aware offline request review notes keyed to a selected planning phase. Implemented in workspace.
+- Disabled-by-default Free Forge release configuration and automatic first-launch provider selection for private hosted builds. Implemented in workspace; public activation waits for a stable HTTPS hostname.
 - Hosted generation service with project access control checks.
 - Server-side secrets, usage limits, logging controls, and abuse protection.
 - Optional item-image generation after text generation is stable.
