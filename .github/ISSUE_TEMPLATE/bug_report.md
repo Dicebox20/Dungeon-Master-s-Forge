@@ -19,6 +19,7 @@ Describe the problem in one or two sentences.
 - Provider:
   - Local Rules
   - Bring Your Own API
+  - Free Forge
 - Companion modules enabled:
   - Midi-QOL
   - DAE
@@ -46,6 +47,7 @@ Describe what actually happened.
 Only fill this out if the issue involved live AI generation.
 
 - Endpoint shape used:
+  - automatic Free Forge tester service
   - `http://localhost:8788/v1/forge/compile`
   - other:
 - Check Connection result:

@@ -1,6 +1,6 @@
 # Dungeon Master's Forge Hosting Stages
 
-Updated: 2026-07-01
+Updated: 2026-07-02
 
 This file translates the hosting path into three practical stages so launch decisions stay grounded in what the product can actually support today.
 
@@ -28,8 +28,8 @@ Must be true:
 
 - the endpoint is reachable from another intended computer
 - CORS or origin handling allows the approved Foundry clients
-- a simple tester token or controlled access flow exists
-- basic rate limiting exists
+- anonymous access is bounded by durable monthly client quotas and a global daily ceiling
+- basic rate limiting and concurrency limits exist
 - logs are clear enough to troubleshoot failures
 - the manifest install works on a second machine
 - setup docs are understandable without direct hand-holding
@@ -44,9 +44,9 @@ This is the bar for offering hosted generation as a real public service.
 
 Must be true:
 
-- entitlement or account handling exists
-- tier-aware access rules exist
-- authentication is separated cleanly from private developer usage
+- the permanent project hostname and TLS certificate are active
+- the stable module manifest uses the production endpoint
+- Patreon messaging does not imply entitlement features that are not active
 - abuse protection and rate limiting are in place
 - uptime expectations are realistic
 - support burden is manageable
@@ -60,14 +60,15 @@ Plain-language test:
 
 Current project position:
 
-- **Local use:** mostly ready
-- **Invited tester hosting:** close, but still needs second-machine verification and cleaner public setup confirmation
-- **Public hosted Patreon access:** not ready yet
+- **Local use:** ready
+- **Invited tester hosting:** active through `2.22.0-test.4`; still needs second-machine creation results
+- **Public free hosting:** technically live, pending the permanent hostname and stable-manifest promotion gate
+- **Patreon entitlement hosting:** intentionally deferred; Founding Patron is support-only at launch
 
 ## Recommended Launch Sequence
 
 1. Launch the module publicly.
-2. Support the current Bring Your Own API workflow.
-3. Use the free public tier as the real product access tier.
+2. Promote the verified Free Forge tester path to the stable manifest.
+3. Keep Bring Your Own API as an optional independent workflow.
 4. Use Founding Patron as a support-first thank-you tier.
 5. Add hosted access and entitlement logic later when Stage 3 is genuinely ready.

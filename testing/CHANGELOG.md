@@ -2,8 +2,8 @@
 
 ## Unreleased
 
-- Added the `2.22.0-test.3` tester channel with automatic Free Forge service selection.
-- Connected tester installations to the hosted 20-request calendar-month allowance without requiring endpoint or API-token entry.
+- Added the `2.22.0-test.4` tester build with automatic Free Forge selection.
+- Removed the obsolete user-facing Patreon planning tier and its review warnings; launch-day Founding Patron support does not gate product features.
 - Added a disabled-by-default Free Forge release configuration for a baked HTTPS endpoint.
 - Enabled private release builds to select Free Forge automatically on first launch without endpoint or token entry.
 - Unified remote connection checks and compilation across Bring Your Own API and Free Forge providers.

@@ -1,6 +1,6 @@
 # Dungeon Master's Forge Patreon Launch Checklist
 
-Updated: 2026-07-01
+Updated: 2026-07-02
 
 This file is the launch-facing checklist for releasing Dungeon Master's Forge as a Patreon-supported project.
 
@@ -14,9 +14,9 @@ Ship a Patreon-ready release where a supporter can:
 
 1. understand what Dungeon Master's Forge is
 2. install the Foundry module from a public manifest
-3. understand the supported Bring Your Own API workflow
+3. use the hosted Free Forge allowance without entering an API key
 4. understand what each Patreon tier is meant to unlock
-5. use the current release without depending on unfinished Hosted Forge features
+5. understand that Founding Patron is support-only and Patreon entitlements are not active
 
 ## Must Be True Before Patreon Launch
 
@@ -26,9 +26,10 @@ Ship a Patreon-ready release where a supporter can:
 - public README clearly separates:
   - the Foundry module
   - the reference AI service
-  - future Hosted Forge plans
-- public docs explain that Hosted Forge and entitlement enforcement are not live yet
-- public docs explain that the current supported live lane is local or self-hosted Bring Your Own API
+  - the hosted Free Forge service and its limits
+- public docs distinguish the stable release from the temporary Free Forge tester channel
+- public docs explain that Patreon entitlement enforcement is not live
+- public docs explain the 20-request calendar-month hosted allowance and optional Bring Your Own API path
 
 ### Installability
 
@@ -52,20 +53,16 @@ Ship a Patreon-ready release where a supporter can:
 - tiers emphasize complexity and automation limits rather than creativity limits
 - launch messaging clearly states that the free public tier is the real product access tier
 - Founding Patron is framed as a support-first thank-you tier, not a required gameplay unlock
-- launch page copy does not imply Hosted Forge is already live
-- if public free AI generation is advertised, the HTTPS service, durable quotas, and global spending ceiling are live and verified first
+- launch page copy distinguishes the active tester service from the pending stable-channel promotion
+- public free AI generation is advertised only while HTTPS, durable quotas, and the global spending ceiling remain live and verified
 
 ### Support readiness
 
 - users have a single place to find install steps
 - users have a single place to find AI service setup steps
 - known limitations are listed honestly
-- deferred integrations are listed honestly:
-  - Hosted Forge
-  - Patreon entitlement enforcement
-- compatible Active Aura path
-- Cauldron of Plentiful Resources integration
-- automatic Free Forge access until the public service requirements are complete
+- deferred integrations are listed honestly, including Patreon entitlement enforcement, compatible ally-aura automation, and Cauldron of Plentiful Resources
+- stable-channel Free Forge promotion remains blocked until the permanent hostname and final smoke pass are complete
 
 ## Recommended Before Public Promotion
 
@@ -107,12 +104,15 @@ These can ship later without preventing the first Patreon launch.
 
 ## Current Highest-Priority Open Tasks
 
-1. Install from the public manifest on another machine.
-2. Complete one Tailscale connection, live compile, and item-creation pass from that machine.
+1. Install from the tester manifest on another machine.
+2. Complete one Free Forge connection, live compile, and item-creation pass from that machine.
 3. Capture clean screenshots of the Forge workflow and a generated Foundry item.
-4. Decide whether launch is Bring Your Own API only or waits for the separate public free-tier deployment gate.
+4. Point a permanent project hostname at the Droplet and repeat the hosted smoke pass.
+5. Promote the verified tester package to the stable manifest using the launch-day runbook.
 
 ## Suggested Launch Sequence
+
+Use [LAUNCH_DAY_RUNBOOK.md](./LAUNCH_DAY_RUNBOOK.md) for the exact promotion, verification, and rollback procedure.
 
 ### Phase 1: Technical readiness
 
@@ -131,13 +131,13 @@ These can ship later without preventing the first Patreon launch.
 
 1. finalize tier copy
 2. choose screenshots
-3. write "current release" language that does not overpromise Hosted Forge
+3. write "current release" language that does not overpromise Patreon entitlement features
 4. publish support links back to GitHub docs
 
 ### Phase 4: Quiet launch
 
 1. publish the repo
-2. publish the manifest
+2. publish the promoted stable manifest
 3. test installs from a second machine
 4. soft-launch Patreon
 5. gather first bug reports before wider promotion

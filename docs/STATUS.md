@@ -32,7 +32,7 @@ Updated: 2026-07-02
 - Added AI service `1.4.0` durable SQLite daily quotas with HMAC-pseudonymized client identifiers and strict public-mode configuration checks.
 - Added AI service `1.5.0` calendar-month client quotas for the official 20-generation Free Forge allowance.
 - Added a disabled-by-default module activation seam for automatic Free Forge selection in private hosted builds without publishing a temporary endpoint.
-- Added a separate `2.22.0-test.3` tester channel that enables Free Forge automatically while leaving the stable manifest unchanged.
+- Added a separate `2.22.0-test.4` tester channel that enables Free Forge automatically while leaving the stable manifest unchanged and removing obsolete user-facing Patreon planning gates.
 
 ## Current Technical State
 
@@ -58,7 +58,7 @@ Updated: 2026-07-02
 - Tailscale HTTP endpoint acceptance is covered by module tests and merged; a second-machine Tailscale compile remains the next external verification.
 - The public manifest and `2.21.12` ZIP URLs both resolve successfully from GitHub raw content with HTTP 200.
 - AI service `1.5.0` passes independent Droplet tests, restart verification, public HTTPS health, capabilities, and a live OpenAI compile with monthly quota response headers.
-- The independently extracted `2.22.0-test.3` tester package passes all 14 packaged test files, and its Hosted Forge adapter completes capabilities negotiation and live generation.
+- The independently extracted `2.22.0-test.4` tester package passes all 14 packaged test files. Its Hosted Forge adapter retains the live capabilities and generation path verified in `test.3`; provider code and service configuration are unchanged.
 - The temporary staging hostname is present only in the tester channel; the stable release remains endpoint-free.
 
 ## Next Release Tasks

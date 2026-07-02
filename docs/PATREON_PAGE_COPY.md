@@ -1,10 +1,10 @@
 # Dungeon Master's Forge Patreon Page Copy
 
-Updated: 2026-07-01
+Updated: 2026-07-02
 
 This file is draft marketing and support copy for the Patreon launch page.
 
-It is meant to stay honest to the current release. It should not promise Hosted Forge or cloud entitlement features before they exist.
+It is meant to stay honest to the current release. It should not promise Patreon entitlement features before they exist.
 
 ## Short Headline
 
@@ -28,7 +28,8 @@ It helps turn natural-language item requests into DND5e item specifications you 
 - weapons, armor, wondrous items, consumables, staffs, and more
 - charges, recharge, SRD spell-linked items, summoning, enchantment, and multi-activity items
 - Foundry-aware advanced support for DAE, Item Macro, and Midi-QOL-compatible output where supported
-- Bring Your Own API workflow for live AI interpretation
+- hosted Free Forge generation with 20 requests per calendar month
+- optional Bring Your Own API workflow for private or independent usage
 
 ## What This Is Best For
 
@@ -39,9 +40,7 @@ It helps turn natural-language item requests into DND5e item specifications you 
 
 ## Important Current Limitation
 
-Dungeon Master's Forge does not yet include the future Hosted Forge cloud service.
-
-Right now, live AI interpretation uses the self-hosted or local Bring Your Own API workflow. Patreon support is for development, higher complexity tiers, future Hosted Forge work, and premium feature planning, not for a finished hosted entitlement system today.
+Free Forge is live for invited testing, but the stable public manifest and permanent project hostname have not completed their final promotion gate. Patreon accounts are not connected to the module, and the Founding Patron tier does not unlock additional product features at launch.
 
 ## Recommended Launch Tier Shape
 
@@ -56,7 +55,6 @@ This keeps the launch honest. People can install and use the module for free, wh
 
 Not live yet:
 
-- Hosted Forge cloud generation
 - Patreon entitlement enforcement inside the product
 - managed user accounts
 - full realm-linked scene package delivery
@@ -70,8 +68,8 @@ If you want a wild cursed relic, a joke item, a legendary artifact, or a dramati
 
 ## Suggested Public Tier Summary
 
-- **Apprentice (Free):** install the module, use the current Foundry workflow, and bring your own API or self-hosted service for live AI interpretation
-- **Founding Patron:** support the project, receive Founding Patron recognition, and help fund continued development, testing, and future hosted or premium features
+- **Apprentice (Free):** install the module, use 20 hosted Free Forge generation requests per calendar month, or connect a compatible private service
+- **Founding Patron:** **Thank you for your support.** This tier helps fund continued development without gating launch-day features
 
 For launch-day messaging, keep the deeper multi-tier automation ladder as future planning rather than a public promise.
 
@@ -79,11 +77,7 @@ For launch-day messaging, keep the deeper multi-tier automation ladder as future
 
 Suggested plain-language description:
 
-> Founding Patron is a support tier for people who want to help Dungeon Master's Forge grow early. It does not gate the core module. It is a thank-you tier that helps fund development, testing, documentation, and future premium features.
-
-Optional future-facing add-on language:
-
-> Founding Patrons may receive early updates, recognition, and priority feedback consideration as premium hosted features evolve.
+> Thank you for your support. Founding Patron helps Dungeon Master's Forge grow, but it does not gate the core module or promise additional launch-day features.
 
 ## Call To Action
 

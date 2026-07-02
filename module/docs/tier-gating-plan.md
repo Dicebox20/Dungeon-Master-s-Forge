@@ -5,8 +5,9 @@ This file turns the Patreon tier notes into implementation-facing scaffolding.
 ## Current State
 
 - The public product vision for tiers lives in `docs/patreon-tiers.md`.
-- Hosted Forge remains disabled.
+- Free Forge is enabled only in the temporary tester channel.
 - No billing, entitlement verification, or remote tier enforcement is active.
+- Founding Patron does not gate features or usage at launch.
 
 ## New Catalog
 

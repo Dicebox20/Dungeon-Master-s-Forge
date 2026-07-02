@@ -20,28 +20,24 @@ The deeper automation ladder below remains useful as planning, but it should not
 ## Apprentice
 
 - Price: Free
-- Suggested volume: 30 items per month
+- Hosted allowance: 20 generation requests per calendar month
 - Focus: basic Foundry-ready DMG-style items
 
 Includes:
 
-- item name, type, rarity, attunement, description, flavor, activation, targets, saves, damage, uses, recharge
-- preview before import
-- weapons, armor, equipment, consumables, and wondrous items
-- flat bonuses to AC, saves, attacks, damage, and checks
-- simple `+1`, `+2`, `+3` style bonuses
-- bonus damage dice
-- simple resistances
-- up to 2 SRD spells
+- the complete set of item patterns available in the current shipping module
+- item name, type, rarity, attunement, description, flavor, activation, targets, saves, damage, uses, and recharge
+- preview and explicit approval before creation
+- automatic Free Forge access without an endpoint or personal API key
+- Local Rules and Bring Your Own API alternatives
+- weapons, armor, equipment, consumables, wondrous items, effects, multi-activity items, enchantments, and summons where supported
 
-Limits:
+Launch boundaries:
 
-- no custom conditional effects
-- no advanced Active Effects
-- no Midi-QOL or Activity Macro automation
-- no summoning automation
-- no realm-transfer effects
-- no item-linked scene packages
+- no Patreon account or entitlement integration
+- no automatic item-icon image generation
+- no realm-transfer or item-linked scene packages
+- no ally-aura automation without a compatible supported path
 
 ## Adept
 
@@ -114,7 +110,6 @@ Limits:
 - no Realmforged scene packages
 - no premade item-linked map or scene integration
 - no Monk's Active Tile Triggers scene automation
-- no Founding Patron credits
 
 ## Founding Patron
 
@@ -123,18 +118,12 @@ Limits:
 
 Adds:
 
-- supports continued development
-- Founding Patron recognition and thanks
-- priority feedback consideration
-- project credits as a Founding Patron
-- helps fund Realmforged Items
-- helps fund Spellforged Realm Variants
-- helps fund optional bespoke item-icon image generation for generated items
-- helps fund optional Monk's Active Tile Triggers integration for supported item-linked scenes
+- **Thank you for your support.**
+- helps fund continued development, testing, documentation, and future features
 
 Launch-day note:
 
-Founding Patron should be described honestly as a support tier. It does not need to gate the core module at launch, and it should not imply that Hosted Forge entitlement automation is already finished.
+Founding Patron is a support tier. It does not gate module features or increase the hosted allowance at launch, and it should not imply that Patreon entitlement automation is already finished.
 
 ## Realmforged Items
 
@@ -150,7 +139,7 @@ Dungeon Master's Forge is not a battle map generator. Realmforged scenes are pre
 
 ## Spellforged Realm Variants
 
-Good candidates for Founding Patron realm-linked spell variants include:
+Good candidates for future realm-linked spell variants include:
 
 - Banishment variants
 - Maze variants
@@ -161,7 +150,9 @@ Good candidates for Founding Patron realm-linked spell variants include:
 
 The generator should clone the original spell and create a new variant rather than overwrite system content.
 
-## Clean Tier Summary
+## Long-Term Planning Summary
+
+Only Apprentice and Founding Patron are launch-day tiers. Adept, Journeyman, and Master remain internal planning and must not be advertised as active entitlements.
 
 | Tier | Price | Main Unlock |
 |---|---:|---|
@@ -169,4 +160,4 @@ The generator should clone the original spell and create a new variant rather th
 | Adept | $4.99 | Custom effects |
 | Journeyman | $9.99 | Advanced item building |
 | Master | $19.99 | Automation and macros |
-| Founding Patron | $49.99 | Realmforged item packages, premade integrated scenes, Monk's support, credits |
+| Founding Patron | $49.99 | Thank you for your support |

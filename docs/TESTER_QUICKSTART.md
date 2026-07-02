@@ -2,17 +2,15 @@
 
 This is the shortest path for a trusted tester to install the current module build and try item generation without digging through the full project docs.
 
-Updated: 2026-07-01
+Updated: 2026-07-02
 
 ## What You Need
 
 - Foundry VTT v14
 - DND5e system 5.3.3
-- The Dungeon Master's Forge module manifest:
-  - `https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/main/module/module.json`
-- For live AI generation:
-  - a reachable Forge-compatible service endpoint
-  - either a shared service token or a personal OpenAI API key, depending on how the service owner set it up
+- The Dungeon Master's Forge tester manifest:
+  - `https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/refs/heads/codex/launch-readiness-docs/testing/module.json`
+- An internet connection for hosted Free Forge generation
 
 ## Recommended Companion Modules
 
@@ -28,8 +26,8 @@ The Forge can still run its local deterministic workflow without every companion
 
 1. In Foundry, open **Add-on Modules**.
 2. Click **Install Module**.
-3. Paste the manifest URL:
-   - `https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/main/module/module.json`
+3. Paste the tester manifest URL:
+   - `https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/refs/heads/codex/launch-readiness-docs/testing/module.json`
 4. Install **Dungeon Master's Forge V2**.
 5. Open your world and enable the module in **Manage Modules**.
 
@@ -53,14 +51,18 @@ This path does not require any external AI service.
 
 ## If You Want Live AI Testing
 
+The tester build selects **Free Forge** automatically. No endpoint, model, API token, or personal OpenAI key is required.
+
 1. Open **Forge Settings**.
-2. Set the provider to **Bring Your Own API**.
-3. Enter:
-   - the Forge compile endpoint
-   - the model name allowed by that service
-   - the API token field value required by that service
-4. Click **Check Connection**.
-5. Confirm the status reports a healthy connection before compiling requests.
+2. Confirm the provider is **Free Forge**.
+3. Click **Check Connection**.
+4. Confirm the status reports a healthy connection before compiling requests.
+
+The hosted testing allowance is 20 generation requests per client per calendar month. Temporary per-minute and global daily safeguards also apply. Failed generation attempts may count against the allowance because they can still consume upstream service capacity.
+
+### Optional Bring Your Own API Testing
+
+Bring Your Own API remains available for testers who need a private service or their own usage pool. Select it in **Forge Settings**, then enter the compatible endpoint, model, and token required by that service.
 
 For the current reference service, the intended live compile endpoint is:
 
@@ -107,7 +109,7 @@ Then:
 
 ## Current Known Limits
 
-- Hosted Forge is not live yet.
+- Free Forge is a temporary tester service and still uses a staging hostname.
 - Patreon entitlement enforcement is not live yet.
 - On some local Windows setups, the reference AI service is more reliable when left running in an open terminal window during testing.
 - Ally aura automation is still deferred.

@@ -41,8 +41,6 @@ import {
   serializeProviderProfile
 } from "./provider-profile.js";
 import { buildReviewSummaries } from "./review-summary.js";
-import { getTier, listTiers } from "./tier-catalog.js";
-import { reviewTierFit } from "./tier-review.js";
 
 const MODULE_ID = "codex-item-forge";
 const MODULE_TITLE = PRODUCT_TITLE;
@@ -197,14 +195,6 @@ function registerSettings() {
     default: ""
   });
 
-  game.settings.register(MODULE_ID, "planningTier", {
-    name: "Planning tier",
-    hint: "Adds offline review notes for mechanics that are planned for higher Patreon tiers.",
-    scope: "client",
-    config: false,
-    type: String,
-    default: "master"
-  });
 }
 
 function currentProviderId() {
@@ -215,11 +205,6 @@ function currentProviderId() {
 function currentUnresolvedPolicy() {
   const storedUnresolvedPolicy = game.settings.get(MODULE_ID, "unresolvedPolicy") || "review";
   return ["review", "block"].includes(storedUnresolvedPolicy) ? storedUnresolvedPolicy : "review";
-}
-
-function currentPlanningTier() {
-  const storedPlanningTier = game.settings.get(MODULE_ID, "planningTier") || "master";
-  return getTier(storedPlanningTier)?.id ?? "master";
 }
 
 function currentProviderToken({ rememberProviderToken } = {}) {
@@ -307,8 +292,7 @@ async function validateSpecs(input) {
   return {
     ...validation,
     warnings: dependencyWarnings(specs),
-    specs,
-    tierReview: reviewTierFit(specs, currentPlanningTier())
+    specs
   };
 }
 
@@ -351,13 +335,6 @@ function unresolvedPolicyOptionsHTML(selectedPolicy) {
   }).join("");
 }
 
-function planningTierOptionsHTML(selectedTierId) {
-  return listTiers().map(tier => {
-    const selected = tier.id === selectedTierId ? " selected" : "";
-    return `<option value="${escapeHTML(tier.id)}"${selected}>${escapeHTML(tier.label)}</option>`;
-  }).join("");
-}
-
 function providerStatusSnapshot(providerId, configuration, connection = null) {
   const provider = getProvider(providerId);
   const readiness = providerReadiness(providerId, configuration);
@@ -383,7 +360,6 @@ function providerStatusSnapshot(providerId, configuration, connection = null) {
 function forgeProviderSummaryHTML(unresolvedPolicy) {
   const configuredProvider = configuredProviderState({ unresolvedPolicy });
   const snapshot = providerStatusSnapshot(configuredProvider.id, configuredProvider.configuration);
-  const planningTier = getTier(currentPlanningTier());
   return `
     <section class="codex-forge-provider-summary">
       <div class="codex-forge-provider-summary-copy">
@@ -392,7 +368,6 @@ function forgeProviderSummaryHTML(unresolvedPolicy) {
           <i class="fa-solid ${escapeHTML(snapshot.icon)}"></i>
         <span data-forge-provider-summary-text>${escapeHTML(snapshot.message)}</span>
       </span>
-      <small class="codex-forge-provider-summary-tier" data-forge-planning-tier-text>Planning tier: ${escapeHTML(planningTier?.label ?? "Master")}</small>
     </div>
     </section>
   `;
@@ -635,14 +610,12 @@ function refreshForgeProviderSummary(dialog, form) {
   const label = summary?.querySelector("strong");
   const text = summary?.querySelector("[data-forge-provider-summary-text]");
   const icon = summary?.querySelector(".codex-forge-provider-summary-meta i");
-  const planningTier = summary?.querySelector("[data-forge-planning-tier-text]");
   const compileButton = dialog.element?.querySelector('button[data-action="compile"]');
 
   if (summary) summary.dataset.state = snapshot.state;
   if (label) label.textContent = snapshot.provider?.label ?? "Provider";
   if (text) text.textContent = snapshot.message;
   if (icon) icon.className = `fa-solid ${snapshot.icon}`;
-  if (planningTier) planningTier.textContent = `Planning tier: ${getTier(currentPlanningTier())?.label ?? "Master"}`;
   if (compileButton instanceof HTMLButtonElement) compileButton.disabled = !snapshot.readiness.ready;
 }
 
@@ -1002,7 +975,7 @@ async function renderPreview(dialog, validation) {
   if (!preview) return;
 
   const enrichedSpecs = await enrichSpecsWithSystemReferences(validation.specs);
-  const summaries = buildReviewSummaries(enrichedSpecs, dialog._codexCompilation, validation.tierReview);
+  const summaries = buildReviewSummaries(enrichedSpecs, dialog._codexCompilation);
   setReviewValidated(dialog, true);
   preview.hidden = false;
   preview.innerHTML = `
@@ -1225,7 +1198,6 @@ class ForgeSettingsApplication extends FormApplication {
     const provider = activeProviderState();
     const snapshot = providerStatusSnapshot(provider.id, provider.configuration, this._codexProviderConnection);
     const rememberProviderToken = provider.rememberApiToken === true;
-    const planningTier = currentPlanningTier();
 
     return {
       isBringYourOwn: provider.id === "bring-your-own",
@@ -1234,8 +1206,6 @@ class ForgeSettingsApplication extends FormApplication {
       providerModel: provider.configuration.model,
       providerToken: provider.configuration.apiToken,
       rememberProviderToken,
-      planningTier,
-      planningTierOptions: planningTierOptionsHTML(planningTier),
       providerStatusIcon: snapshot.icon,
       providerStatusState: snapshot.state,
       providerStatusMessage: snapshot.message
@@ -1256,7 +1226,6 @@ class ForgeSettingsApplication extends FormApplication {
       formControl(form, "providerApiToken"),
       formControl(form, "rememberProviderApiToken")
     ];
-    const planningTier = formControl(form, "planningTier");
 
     providerSelect.addEventListener("change", () => {
       clearProviderConnection(this);
@@ -1282,18 +1251,6 @@ class ForgeSettingsApplication extends FormApplication {
           : "";
         setSettingsStatus(this, "success", `Connection settings saved.${tokenText}`);
         syncSettingsProviderPanel(this);
-      } catch (error) {
-        reportError(this, error);
-      }
-    });
-
-    root.querySelector('[data-action="save-planning"]')?.addEventListener("click", async () => {
-      try {
-        await game.settings.set(MODULE_ID, "planningTier", planningTier.value);
-        if (forgeDialog?.rendered) {
-          refreshForgeProviderSummary(forgeDialog, forgeDialog.element?.querySelector("form"));
-        }
-        setSettingsStatus(this, "success", `Planning tier saved as ${getTier(planningTier.value)?.label ?? planningTier.value}.`);
       } catch (error) {
         reportError(this, error);
       }
@@ -1370,7 +1327,6 @@ class ForgeSettingsApplication extends FormApplication {
     if (!(form instanceof HTMLFormElement)) return;
     const providerState = settingsFormProviderState(form);
     await persistProviderState(providerState);
-    await game.settings.set(MODULE_ID, "planningTier", formControl(form, "planningTier").value);
     if (forgeDialog?.rendered) {
       refreshForgeProviderSummary(forgeDialog, forgeDialog.element?.querySelector("form"));
     }
@@ -1522,8 +1478,7 @@ async function openForge() {
             showDialogView(button.form, "review");
             const noteCount = compilation.assumptions.length
               + compilation.warnings.length
-              + compilation.deferred.length
-              + (validation.tierReview?.noteCount ?? 0);
+              + compilation.deferred.length;
             const itemCount = compilation.specs.length;
             const draftLabel = `${itemCount} item${itemCount === 1 ? "" : "s"}`;
             setStatus(dialog, noteCount ? "warning" : "success", noteCount
@@ -1559,16 +1514,13 @@ async function openForge() {
             await game.settings.set(MODULE_ID, "lastSpecs", rawSpecs);
             await renderPreview(dialog, validation);
             const warning = validation.warnings.length ? ` ${validation.warnings.join(" ")}` : "";
-            const tierNotes = validation.tierReview?.noteCount
-              ? ` ${validation.tierReview.noteCount} tier-planning note${validation.tierReview.noteCount === 1 ? "" : "s"} require review.`
-              : "";
             const unresolved = validation.unresolvedMechanicCount
               ? ` ${validation.unresolvedMechanicCount} unresolved mechanic${validation.unresolvedMechanicCount === 1 ? "" : "s"} require review.`
               : "";
             setStatus(
               dialog,
-              validation.warnings.length || validation.unresolvedMechanicCount || validation.tierReview?.noteCount ? "warning" : "success",
-              `Specs are valid.${warning}${tierNotes}${unresolved}`
+              validation.warnings.length || validation.unresolvedMechanicCount ? "warning" : "success",
+              `Specs are valid.${warning}${unresolved}`
             );
           } catch (error) {
             reportError(dialog, error);
