@@ -6,7 +6,7 @@ This channel is for invited pre-launch testers. It installs alongside the normal
 
 Paste this URL into Foundry VTT's **Install Module** manifest field:
 
-`https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/refs/heads/codex/launch-readiness-docs/testing/module.json`
+`https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/codex/launch-readiness-docs/testing/module.json`
 
 Enable **Dungeon Master's Forge V2** in a Foundry v14 world using DND5e 5.3.3 or newer. Free Forge does not require an endpoint, API token, or personal OpenAI key.
 
