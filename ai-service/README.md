@@ -115,12 +115,13 @@ Copy `.env.example` to `.env` and run `npm run start:env`, or set variables dire
 ```powershell
 npm run check
 npm test
+npm run preflight:free-tier
 npm run smoke
 npm run smoke:batch
 npm run smoke:capabilities
 ```
 
-The smoke commands expect the service to already be running. They print only contract versions and generated item names, never credentials or full requests. The batch smoke proves two explicitly named items survive the complete request/response path. The automated suite drives all fourteen supported Forge families through a mocked OpenAI Responses call and the complete compiler pipeline, then rejects incomplete or unsafe weapons, effects, charged powers, enchantments, summons, suites, and hybrid artifacts before they can reach Foundry.
+`preflight:free-tier` validates `.env`, opens the configured SQLite quota ledger, and prints a redacted deployment report without calling a model. The smoke commands expect the service to already be running. They print only contract versions and generated item names, never credentials or full requests. The batch smoke proves two explicitly named items survive the complete request/response path. The automated suite drives all fourteen supported Forge families through a mocked OpenAI Responses call and the complete compiler pipeline, then rejects incomplete or unsafe weapons, effects, charged powers, enchantments, summons, suites, and hybrid artifacts before they can reach Foundry.
 
 For the current release candidate, a direct local smoke proof was verified successfully against:
 
