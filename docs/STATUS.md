@@ -42,9 +42,9 @@ Updated: 2026-07-01
 ## Validation
 
 - Workspace module tests pass.
-- Workspace AI service tests pass (79 tests).
+- Workspace AI service tests pass (81 tests).
 - Public export module tests pass after the filename-surface sync from `codex-item-forge.js` to `dungeon-masters-forge.js`.
-- Public export AI service tests pass (79 tests).
+- Public export AI service tests pass (81 tests).
 - The currently installed Foundry build on disk is `2.21.12`.
 - The installed module file count is `37`, matching the current workspace copy.
 - Foundry Check Connection succeeds against `http://localhost:8788/v1/forge/compile`, and the saved Bring Your Own API selection survives a cold page reload.
