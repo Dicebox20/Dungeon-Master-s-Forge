@@ -27,6 +27,7 @@ Updated: 2026-07-01
 - Reworked the API fields into readable full-width rows and corrected the oversized Foundry notes spacing in `2.21.10`.
 - Removed the underlying standard-form flex collision and verified consistent 10 px field spacing plus full-width API controls in `2.21.11`.
 - Added Tailscale `100.64.0.0/10` endpoint support for private cross-network testing in `2.21.12`.
+- Merged the Tailscale endpoint-support pull request into GitHub `main`.
 - Added AI service `1.3.0` public free-tier alpha controls and deployment documentation without enabling Hosted Forge prematurely.
 
 ## Current Technical State
@@ -50,6 +51,8 @@ Updated: 2026-07-01
 - The local service and Foundry model setting are aligned to the configured `gpt-4.1-mini` allowlist.
 - A direct shell smoke proof now succeeds against the canonical `8788` service for both `/v1/forge/capabilities` and `/v1/forge/compile`.
 - The service-side contract normalizer now accepts `pattern` as a live-model alias for Forge `kind`; that patch is covered by tests and still needs one successful in-Foundry live compile confirmation.
+- Tailscale HTTP endpoint acceptance is covered by module tests and merged; a second-machine Tailscale compile remains the next external verification.
+- The public manifest and `2.21.12` ZIP URLs both resolve successfully from GitHub raw content with HTTP 200.
 
 ## Next Release Tasks
 
