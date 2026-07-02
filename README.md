@@ -28,6 +28,32 @@ The current release candidate includes:
 - dedicated Forge Settings window
 - read-only native DND5e spell, equipment, actor, monster feature, and roll-table resolution
 
+## Who This Is For
+
+Dungeon Master's Forge is for Foundry VTT game masters who want to describe an item in ordinary language, review the resulting DND5e mechanics, and create the item only after approving it. The current build is best suited to GMs who are comfortable enabling a module and, for unrestricted AI interpretation, running or connecting to a small companion service.
+
+## What Works Right Now
+
+- Offline generation for the Forge's confirmed Local Rules patterns
+- Live AI interpretation through a Forge-compatible Bring Your Own API endpoint
+- Review and validation before any item is created
+- Weapons, equipment, consumables, effects, charges, attacks, saves, healing, enchantments, summons, conditions, and scripted utility patterns
+- Read-only reuse of compatible DND5e system content without modifying locked compendiums
+- Private-network testing over LAN or Tailscale addresses
+
+## What Still Requires Self-Hosting
+
+Live AI interpretation currently requires a reachable Forge-compatible service. The included reference service can run on the Foundry computer, another trusted LAN computer, or a Tailscale-connected computer. Public installers are not automatically connected to a shared free-tier meter yet.
+
+## Not Yet Included
+
+- Automatic Hosted/Free Forge access
+- Patreon entitlement enforcement
+- Durable public quota accounting
+- Automatic item-icon image generation
+- Compatible ally-aura automation
+- Cauldron of Plentiful Resources integration for the current Foundry version
+
 ## Manifest Install
 
 - Manifest URL: `https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/main/module/module.json`

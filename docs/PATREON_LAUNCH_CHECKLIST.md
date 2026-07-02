@@ -107,11 +107,10 @@ These can ship later without preventing the first Patreon launch.
 
 ## Current Highest-Priority Open Tasks
 
-1. Complete one successful live AI compile-and-create pass against the `8788` reference service.
-2. Push the current public export to GitHub `main`.
-3. Verify the raw manifest and ZIP URLs publicly.
-4. Install from the public manifest on another machine.
-5. Tighten launch-facing README language so it matches the current state exactly.
+1. Install from the public manifest on another machine.
+2. Complete one Tailscale connection, live compile, and item-creation pass from that machine.
+3. Capture clean screenshots of the Forge workflow and a generated Foundry item.
+4. Decide whether launch is Bring Your Own API only or waits for the separate public free-tier deployment gate.
 
 ## Suggested Launch Sequence
 
