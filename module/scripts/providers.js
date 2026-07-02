@@ -1,7 +1,11 @@
 import { compileItemRequest } from "./request-compiler.js";
 import { requestRemoteCapabilities, requestRemoteCompilation } from "./provider-contract.js";
+import { HOSTED_FORGE_RELEASE_CONFIG, normalizeHostedReleaseConfig } from "./hosted-release-config.js";
 
-const DEFAULT_PROVIDER_ID = "local-rules";
+const LOCAL_PROVIDER_ID = "local-rules";
+const HOSTED_PROVIDER_ID = "hosted-forge";
+const HOSTED_RELEASE = normalizeHostedReleaseConfig(HOSTED_FORGE_RELEASE_CONFIG);
+const DEFAULT_PROVIDER_ID = HOSTED_RELEASE.enabled ? HOSTED_PROVIDER_ID : LOCAL_PROVIDER_ID;
 const SUPPORTED_SPEC_KINDS = Object.freeze([
   "artifactWeaponHybrid",
   "casterUtilityEquipment",
@@ -21,7 +25,7 @@ const SUPPORTED_SPEC_KINDS = Object.freeze([
 
 const PROVIDERS = Object.freeze([
   Object.freeze({
-    id: DEFAULT_PROVIDER_ID,
+    id: LOCAL_PROVIDER_ID,
     label: "Local Rules",
     mode: "offline",
     available: true,
@@ -89,11 +93,25 @@ const PROVIDERS = Object.freeze([
     ])
   }),
   Object.freeze({
-    id: "hosted-forge",
-    label: "Hosted Forge",
+    id: HOSTED_PROVIDER_ID,
+    label: HOSTED_RELEASE.label,
     mode: "network",
-    available: false,
-    configuration: Object.freeze([])
+    available: HOSTED_RELEASE.enabled,
+    connection: Object.freeze({ endpoint: HOSTED_RELEASE.endpoint, model: HOSTED_RELEASE.model, apiToken: "" }),
+    configuration: Object.freeze([
+      Object.freeze({
+        id: "unresolvedPolicy",
+        label: "Unresolved mechanics",
+        type: "select",
+        default: "review",
+        persistence: "client",
+        secret: false,
+        options: Object.freeze([
+          Object.freeze({ value: "review", label: "Allow after review" }),
+          Object.freeze({ value: "block", label: "Block item creation" })
+        ])
+      })
+    ])
   })
 ]);
 
@@ -168,6 +186,20 @@ function providerReadiness(providerId, configuration = {}) {
   };
 }
 
+function networkProviderConfiguration(providerId, configuration = {}) {
+  const provider = getProvider(providerId);
+  if (!provider) throw new Error(`Unknown Forge provider "${providerId}".`);
+  if (provider.mode !== "network") throw new Error(`${provider.label} is not a network provider.`);
+  const normalized = normalizeProviderConfiguration(providerId, configuration);
+  if (provider.id === "bring-your-own") return normalized;
+  return {
+    endpoint: provider.connection?.endpoint ?? "",
+    model: provider.connection?.model ?? "",
+    apiToken: provider.connection?.apiToken ?? "",
+    unresolvedPolicy: normalized.unresolvedPolicy
+  };
+}
+
 async function compileWithProvider(request, options = {}) {
   const providerId = options.providerId ?? DEFAULT_PROVIDER_ID;
   const provider = getProvider(providerId);
@@ -181,23 +213,24 @@ async function compileWithProvider(request, options = {}) {
     throw new Error(`${provider.label} requires: ${missing.join(", ")}.`);
   }
 
-  if (provider.id === "bring-your-own") {
+  if (provider.mode === "network") {
     const partitioned = partitionProviderConfiguration(provider.id, configuration);
+    const connection = networkProviderConfiguration(provider.id, configuration);
     const requestedKinds = options.context?.supportedKinds ?? SUPPORTED_SPEC_KINDS;
     const capabilities = options.preflightCapabilities
       ? await requestRemoteCapabilities({
-        endpoint: configuration.endpoint,
-        token: configuration.apiToken,
+        endpoint: connection.endpoint,
+        token: connection.apiToken,
         supportedKinds: requestedKinds,
         fetchImpl: options.fetchImpl,
         timeoutMs: options.timeoutMs
       })
       : null;
     const result = await requestRemoteCompilation({
-      endpoint: configuration.endpoint,
-      model: configuration.model,
-      token: configuration.apiToken,
-      unresolvedPolicy: configuration.unresolvedPolicy,
+      endpoint: connection.endpoint,
+      model: connection.model,
+      token: connection.apiToken,
+      unresolvedPolicy: connection.unresolvedPolicy,
       request,
       context: {
         ...options.context,
@@ -210,11 +243,14 @@ async function compileWithProvider(request, options = {}) {
     return {
       ...result,
       providerCapabilities: capabilities,
-      providerConfiguration: partitioned.diagnostics
+      providerConfiguration: {
+        ...partitioned.diagnostics,
+        ...(provider.id === HOSTED_PROVIDER_ID ? { endpoint: connection.endpoint, model: connection.model } : {})
+      }
     };
   }
 
-  if (provider.id !== DEFAULT_PROVIDER_ID) {
+  if (provider.id !== LOCAL_PROVIDER_ID) {
     throw new Error(`${provider.label} does not have a compiler adapter.`);
   }
 
@@ -229,9 +265,12 @@ async function compileWithProvider(request, options = {}) {
 
 export {
   DEFAULT_PROVIDER_ID,
+  HOSTED_PROVIDER_ID,
+  LOCAL_PROVIDER_ID,
   compileWithProvider,
   getProvider,
   listProviders,
+  networkProviderConfiguration,
   normalizeProviderConfiguration,
   partitionProviderConfiguration,
   providerReadiness,

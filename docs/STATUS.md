@@ -30,6 +30,7 @@ Updated: 2026-07-01
 - Merged the Tailscale endpoint-support pull request into GitHub `main`.
 - Added AI service `1.3.0` public free-tier alpha controls and deployment documentation without enabling Hosted Forge prematurely.
 - Added AI service `1.4.0` durable SQLite daily quotas with HMAC-pseudonymized client identifiers and strict public-mode configuration checks.
+- Added a disabled-by-default module activation seam for automatic Free Forge selection in private hosted builds without publishing a temporary endpoint.
 
 ## Current Technical State
 
@@ -54,6 +55,7 @@ Updated: 2026-07-01
 - The service-side contract normalizer now accepts `pattern` as a live-model alias for Forge `kind`; that patch is covered by tests and still needs one successful in-Foundry live compile confirmation.
 - Tailscale HTTP endpoint acceptance is covered by module tests and merged; a second-machine Tailscale compile remains the next external verification.
 - The public manifest and `2.21.12` ZIP URLs both resolve successfully from GitHub raw content with HTTP 200.
+- A private `2.22.0-test.1` build with the owner's temporary Quick Tunnel endpoint passes all 15 module suites and is packaged for owned-computer testing; installation awaits external-write approval.
 
 ## Next Release Tasks
 

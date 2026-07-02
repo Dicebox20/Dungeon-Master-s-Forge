@@ -7,6 +7,7 @@
 - Required durable storage and a 32-character quota hash secret before public free-tier mode can start.
 - Added restart persistence, UTC rollover, privacy, and storage-mode regression coverage.
 - Raised the standalone service runtime requirement to Node.js 22.13 or newer for built-in SQLite support.
+- Updated the Windows launcher to recognize anonymous public free-tier mode without requesting a shared client token.
 
 ## 1.3.0 - 2026-07-01
 
