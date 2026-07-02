@@ -9,6 +9,7 @@ Dungeon Master's Forge is a Foundry VTT item-generation toolkit for the DND5e sy
 - `docs/STATUS.md` - current verified project snapshot
 - `docs/TESTER_QUICKSTART.md` - shortest path for trusted testers and second-machine setup
 - `docs/PROJECT_LAUNCH_CHECKLIST.md` - launch-facing readiness checklist
+- `docs/LAUNCH_DAY_RUNBOOK.md` - tester-to-stable promotion and rollback procedure
 - `docs/PROJECT_PAGE_COPY.md` - draft project copy that matches the current release state
 - `docs/FREE_TIER_DEPLOYMENT.md` - controlled public free-tier service deployment plan
 - `docs/SRD_PLAN.md` - system-native DND5e content-resolution plan
@@ -61,7 +62,7 @@ The stable `2.21.12` manifest still requires a reachable Forge-compatible servic
 
 ## Pre-Launch Tester Channel
 
-Invited testers can install `2.22.0-test.3`, which automatically connects to the hosted 20-request calendar-month Free Forge allowance:
+Invited testers can install `2.22.0-test.4`, which automatically connects to the hosted 20-request calendar-month Free Forge allowance:
 
 - Tester manifest: `https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/refs/heads/codex/launch-readiness-docs/testing/module.json`
 - Tester notes: [testing/README.md](./testing/README.md)

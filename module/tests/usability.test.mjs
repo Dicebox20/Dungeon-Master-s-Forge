@@ -62,5 +62,8 @@ assert.match(settingsTemplate, /Use only on a trusted computer/);
 assert.match(script, /this\._codexProviderConnection = await checkProviderConnection\(providerState\);\s*await persistProviderState\(providerState\);/);
 assert.match(script, /function applyHostedDefaultProvider\(\)/);
 assert.match(script, /networkProviderConfiguration/);
+assert.doesNotMatch(script, /planningTier/);
+assert.doesNotMatch(script, /tierReview/);
+assert.doesNotMatch(settingsTemplate, /Planning phase/);
 
-export const testedUsabilityContractCount = 58;
+export const testedUsabilityContractCount = 61;
