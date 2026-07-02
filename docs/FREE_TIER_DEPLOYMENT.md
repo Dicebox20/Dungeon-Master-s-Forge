@@ -18,6 +18,8 @@ AI service `1.4.0` provides an explicit `DMF_PUBLIC_FREE_TIER=true` mode. It:
 
 Use `ai-service/.env.free-tier.example` as the deployment template. Do not place a real key in the repository.
 
+Before starting the public listener, copy the template to `.env`, fill the server-side values, and run `npm run preflight:free-tier`. The command does not call a model or print either secret. A ready report confirms public mode, wildcard origins, proxy trust, bounded quotas, an OpenAI server key, and durable SQLite storage.
+
 ## Required Before Activation
 
 1. Deploy the service to a persistent host with Node.js 22.13 or newer and a stable public HTTPS URL.

@@ -9,7 +9,7 @@ Updated: 2026-07-01
 - Public tester quickstart and baseline GitHub issue templates are in place.
 - The public repo export has been locally advanced to the `2.21.12` candidate.
 - LAN-testing instructions exist for the reference AI service.
-- AI service `1.4.0` passes all 79 source tests, including personal client-key mode, bounded public free-tier access, durable quota restart persistence through the HTTP service, UTC rollover, and client-address pseudonymization.
+- AI service `1.4.0` passes all 81 source tests, including personal client-key mode, bounded public free-tier access, durable quota restart persistence through the HTTP service, UTC rollover, client-address pseudonymization, and redacted deployment preflight reporting.
 - The Tailscale endpoint-support pull request is merged into GitHub `main`.
 - A local true AI compile has succeeded end to end without creating a world document during the smoke proof.
 - The public manifest and `2.21.12` release ZIP URLs both return HTTP 200 from GitHub raw content.
