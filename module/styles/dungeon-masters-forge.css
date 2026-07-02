@@ -216,20 +216,20 @@
   width: 100%;
 }
 
-.codex-forge-provider-configuration {
+.codex-forge-provider-settings {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px 12px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
   padding: 10px;
   border-left: 3px solid #5aa9d6;
   background: rgb(20 24 28 / 45%);
 }
 
-.codex-forge-provider-configuration[hidden] {
+.codex-forge-provider-settings[hidden] {
   display: none;
 }
 
-.codex-forge-provider-configuration label {
+.codex-forge-provider-settings label {
   display: flex;
   flex-direction: column;
   gap: 5px;
@@ -237,11 +237,12 @@
   font-weight: 600;
 }
 
-.codex-forge-provider-configuration input {
+.codex-forge-provider-settings input {
   width: 100%;
+  min-height: 32px;
 }
 
-.codex-forge-provider-configuration .codex-forge-token-storage {
+.codex-forge-provider-settings .codex-forge-token-storage {
   grid-column: 1 / -1;
   display: grid;
   grid-template-columns: auto 1fr;
@@ -1108,7 +1109,10 @@
 .codex-forge-settings-shell {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .codex-forge-settings-shell .form-header {
@@ -1117,13 +1121,21 @@
   text-shadow: 0 1px 0 rgb(0 0 0 / 45%);
 }
 
-.codex-forge-settings-intro {
+.codex-forge-settings-intro-block {
+  flex: 0 0 auto !important;
+  height: auto !important;
+  min-height: 0;
+}
+
+.codex-forge-settings-intro-block > .codex-forge-settings-intro {
   margin: -4px 0 4px;
   color: #d7c8bc;
+  line-height: 1.35;
 }
 
 .codex-forge-settings-shell .form-group {
   margin: 0;
+  padding: 2px 0;
 }
 
 .codex-forge-settings-shell .form-group > label {
@@ -1175,6 +1187,19 @@
 
 .codex-forge-settings-shell .form-fields.codex-forge-settings-actions {
   justify-content: flex-start;
+}
+
+.codex-forge-settings-shell > .form-footer {
+  flex: 0 0 auto;
+  justify-content: flex-end;
+  margin-top: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--color-border-light-primary);
+}
+
+.codex-forge-settings-shell > .form-footer button {
+  flex: 0 0 auto;
+  min-width: 150px;
 }
 
 .codex-forge-settings-provider-status {
@@ -1238,7 +1263,7 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .codex-forge-provider-configuration {
+  .codex-forge-provider-settings {
     grid-template-columns: minmax(0, 1fr);
   }
 

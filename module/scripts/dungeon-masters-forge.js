@@ -1111,7 +1111,7 @@ async function saveDialogState(rawSpecs, config, provider) {
 
 function settingsFormElement() {
   const root = forgeSettingsApp?.element?.[0] ?? forgeSettingsApp?.element;
-  const form = root?.querySelector?.("form");
+  const form = root instanceof HTMLFormElement ? root : root?.querySelector?.("form");
   return form instanceof HTMLFormElement ? form : null;
 }
 
@@ -1304,6 +1304,7 @@ class ForgeSettingsApplication extends FormApplication {
 
         setSettingsStatus(this, "working", "Checking the remote provider...");
         this._codexProviderConnection = await checkProviderConnection(providerState);
+        await persistProviderState(providerState);
         if (forgeDialog?.rendered) {
           forgeDialog._codexProviderConnection = this._codexProviderConnection;
           refreshForgeProviderSummary(forgeDialog, forgeDialog.element?.querySelector("form"));
@@ -1354,7 +1355,7 @@ class ForgeSettingsApplication extends FormApplication {
 
   async _updateObject(_event, _formData) {
     const root = this.element?.[0] ?? this.element;
-    const form = root?.querySelector?.("form");
+    const form = root instanceof HTMLFormElement ? root : root?.querySelector?.("form");
     if (!(form instanceof HTMLFormElement)) return;
     const providerState = settingsFormProviderState(form);
     await persistProviderState(providerState);
@@ -1362,6 +1363,8 @@ class ForgeSettingsApplication extends FormApplication {
     if (forgeDialog?.rendered) {
       refreshForgeProviderSummary(forgeDialog, forgeDialog.element?.querySelector("form"));
     }
+    setSettingsStatus(this, "success", "Forge settings saved.");
+    syncSettingsProviderPanel(this);
   }
 
   async close(options) {

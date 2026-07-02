@@ -8,7 +8,7 @@ test("capabilities describe the stable Forge compatibility boundary", () => {
   const result = serviceCapabilities(config());
   assert.deepEqual(result.service, {
     name: "Dungeon Master's Forge AI Service",
-    version: "1.2.0"
+    version: "1.3.0"
   });
   assert.equal(result.forge.schemaVersion, "1.0");
   assert.equal(result.forge.promptVersion, "1.0.0");
@@ -26,4 +26,11 @@ test("capabilities keep executable and Hosted Forge providers disabled", () => {
   assert.equal(features.declarativeModelOutputOnly, true);
   assert.equal(features.executableModelOutput, false);
   assert.equal(features.hostedForge, false);
+  assert.equal(features.publicFreeTier, false);
+});
+
+test("capabilities advertise an explicitly enabled public free tier", () => {
+  const features = serviceCapabilities(config({ publicFreeTier: true })).features;
+  assert.equal(features.hostedForge, true);
+  assert.equal(features.publicFreeTier, true);
 });

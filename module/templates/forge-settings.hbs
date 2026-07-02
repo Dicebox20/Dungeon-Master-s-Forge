@@ -1,6 +1,8 @@
 <form class="codex-forge-settings-shell standard-form" autocomplete="off">
   <h3 class="form-header">Connection</h3>
-  <p class="notes codex-forge-settings-intro">Choose the generation provider and manage Bring Your Own API details outside the main Forge workflow.</p>
+  <div class="codex-forge-settings-intro-block">
+    <p class="notes codex-forge-settings-intro">Choose the generation provider and manage Bring Your Own API details outside the main Forge workflow.</p>
+  </div>
 
   <div class="form-group">
     <label>Generation provider</label>
@@ -12,7 +14,7 @@
     <p class="notes">Local Rules stays entirely inside Foundry. Bring Your Own API checks a user-configured Forge-compatible endpoint.</p>
   </div>
 
-  <div class="codex-forge-provider-configuration" data-provider-configuration="bring-your-own" {{#unless isBringYourOwn}}hidden{{/unless}}>
+  <div class="codex-forge-provider-settings" data-provider-configuration="bring-your-own" {{#unless isBringYourOwn}}hidden{{/unless}}>
     <div class="form-group">
       <label>Endpoint</label>
       <div class="form-fields">
@@ -67,7 +69,9 @@
   </div>
 
   <h3 class="form-header">Utilities</h3>
-  <p class="notes codex-forge-settings-intro">Keep examples and diagnostics nearby without crowding the Forge window.</p>
+  <div class="codex-forge-settings-intro-block">
+    <p class="notes codex-forge-settings-intro">Keep examples and diagnostics nearby without crowding the Forge window.</p>
+  </div>
 
   <div class="form-group">
     <label>Utility actions</label>
@@ -82,7 +86,9 @@
   <div class="codex-forge-diagnostics" data-forge-settings-diagnostics hidden></div>
 
   <h3 class="form-header">Planning</h3>
-  <p class="notes codex-forge-settings-intro">Review generated items against a future Patreon tier without changing Local Rules creation behavior.</p>
+  <div class="codex-forge-settings-intro-block">
+    <p class="notes codex-forge-settings-intro">Review generated items against a future Patreon tier without changing Local Rules creation behavior.</p>
+  </div>
 
   <div class="form-group">
     <label>Planning tier</label>
@@ -95,4 +101,11 @@
   </div>
 
   <output class="codex-forge-settings-status" data-forge-settings-status data-state="idle" aria-live="polite">Connection and utilities are ready.</output>
+
+  <footer class="form-footer">
+    <button type="submit" data-action="save-settings">
+      <i class="fa-solid fa-floppy-disk"></i>
+      Save Settings
+    </button>
+  </footer>
 </form>

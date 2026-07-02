@@ -14,6 +14,11 @@ function integer(value, fallback, { min = 1, max = Number.MAX_SAFE_INTEGER } = {
   return Number.isInteger(parsed) && parsed >= min && parsed <= max ? parsed : fallback;
 }
 
+function flag(value, fallback = false) {
+  if (value == null || String(value).trim() === "") return fallback;
+  return ["1", "true", "yes", "on"].includes(String(value).trim().toLowerCase());
+}
+
 function baseUrl(value) {
   const normalized = String(value ?? "https://api.openai.com/v1").trim().replace(/\/+$/, "");
   let url;
@@ -38,13 +43,18 @@ function loadConfig(env = process.env) {
   const allowedModels = list(env.DMF_ALLOWED_MODELS, [defaultModel]);
   if (!allowedModels.includes(defaultModel)) allowedModels.unshift(defaultModel);
 
+  const publicFreeTier = flag(env.DMF_PUBLIC_FREE_TIER, false);
   const config = {
     host: String(env.DMF_HOST ?? "127.0.0.1").trim(),
     port: integer(env.DMF_PORT, 8787, { min: 0, max: 65535 }),
     mode,
     allowedOrigins: list(env.DMF_ALLOWED_ORIGINS, ["http://localhost:30000", "http://127.0.0.1:30000"]),
     clientToken: String(env.DMF_CLIENT_TOKEN ?? ""),
+    publicFreeTier,
+    trustProxy: flag(env.DMF_TRUST_PROXY, false),
     rateLimitPerMinute: integer(env.DMF_RATE_LIMIT_PER_MINUTE, 20, { min: 1, max: 10000 }),
+    clientDailyLimit: integer(env.DMF_CLIENT_DAILY_LIMIT, publicFreeTier ? 5 : 0, { min: 0, max: 100000 }),
+    globalDailyLimit: integer(env.DMF_GLOBAL_DAILY_LIMIT, publicFreeTier ? 100 : 0, { min: 0, max: 1000000 }),
     maxConcurrentCompilations: integer(env.DMF_MAX_CONCURRENT_COMPILATIONS, 2, { min: 1, max: 100 }),
     maxQueuedCompilations: integer(env.DMF_MAX_QUEUED_COMPILATIONS, 20, { min: 0, max: 1000 }),
     cacheTtlMs: integer(env.DMF_CACHE_TTL_MS, 300000, { min: 0, max: 86400000 }),
@@ -61,6 +71,20 @@ function loadConfig(env = process.env) {
   };
 
   config.allowClientApiKeyFallback = mode === "openai" && !config.openaiApiKey;
+  if (config.publicFreeTier) {
+    if (config.mode !== "openai" || !config.openaiApiKey) {
+      throw new ServiceError(500, "invalid_configuration", "Public free-tier mode requires OpenAI mode and a server-side OPENAI_API_KEY.");
+    }
+    if (config.clientToken) {
+      throw new ServiceError(500, "invalid_configuration", "Public free-tier mode must not require a shared DMF_CLIENT_TOKEN.");
+    }
+    if (!config.allowedOrigins.includes("*")) {
+      throw new ServiceError(500, "invalid_configuration", "Public free-tier mode requires DMF_ALLOWED_ORIGINS=* so downloaded Foundry installations can connect.");
+    }
+    if (config.clientDailyLimit < 1 || config.globalDailyLimit < 1) {
+      throw new ServiceError(500, "invalid_configuration", "Public free-tier mode requires positive client and global daily limits.");
+    }
+  }
   return config;
 }
 
