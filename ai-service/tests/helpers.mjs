@@ -12,6 +12,8 @@ function config(overrides = {}) {
     rateLimitPerMinute: 20,
     clientDailyLimit: 0,
     globalDailyLimit: 0,
+    quotaDatabasePath: ":memory:",
+    quotaHashSecret: "test-quota-hash-secret-at-least-32-characters",
     maxConcurrentCompilations: 2,
     maxQueuedCompilations: 20,
     cacheTtlMs: 300000,
