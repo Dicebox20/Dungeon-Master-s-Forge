@@ -1,11 +1,11 @@
 # Dungeon Master's Forge
 
-Dungeon Master's Forge is a Foundry VTT item-generation toolkit for the DND5e system. This public export keeps the reusable source, the reference AI service, the latest verified archive, and the planning docs while leaving older private test artifacts out of view.
+Dungeon Master's Forge is a Foundry VTT item-generation toolkit for the DND5e system. It lets a Game Master describe magic items in natural language, review generated mechanics, and create Foundry items only after explicit approval.
 
-## Repository Layout
+## Repository Guide
 
-- `module/` - active Foundry module source
-- `ai-service/` - reference local AI compilation service
+- `module/` - Foundry VTT module source and stable release manifest
+- `ai-service/` - reference Forge-compatible AI compilation service
 - `docs/STATUS.md` - current verified project snapshot
 - `docs/TESTER_QUICKSTART.md` - shortest path for trusted testers and second-machine setup
 - `docs/PROJECT_LAUNCH_CHECKLIST.md` - launch-facing readiness checklist
@@ -24,9 +24,9 @@ Dungeon Master's Forge is a Foundry VTT item-generation toolkit for the DND5e sy
 
 The current release candidate includes:
 
-- split-pane **Description** and **Result** workflow
-- review-before-create item generation
-- Local Rules and Bring Your Own API provider support
+- Local Rules generation for proven item families
+- Bring Your Own API provider support for a Forge-compatible remote service
+- review-before-create validation
 - dedicated Forge Settings window
 - read-only native DND5e spell, equipment, actor, monster feature, and roll-table resolution
 
@@ -64,7 +64,7 @@ The stable `2.21.12` manifest still requires a reachable Forge-compatible servic
 
 Invited testers can install `2.22.0-test.5`, which automatically connects to the hosted 20-request calendar-month Free Forge allowance:
 
-- Tester manifest: `https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/refs/heads/codex/launch-readiness-docs/testing/module.json`
+- Tester manifest: `https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/codex/launch-readiness-docs/testing/module.json`
 - Tester notes: [testing/README.md](./testing/README.md)
 
 The tester channel is temporary and is not the final public launch manifest.
@@ -73,11 +73,11 @@ The tester channel is temporary and is not the final public launch manifest.
 
 Open [module/README.md](./module/README.md) for installation, usage, and testing notes.
 
-## Using The Reference AI Service
+## AI Service
 
-Open [ai-service/README.md](./ai-service/README.md) for the local service, mock mode, and Bring Your Own API endpoint details.
+Open [ai-service/README.md](./ai-service/README.md) for the local service, mock mode, server-key mode, and Bring Your Own API setup.
 
-## Notes
+## Public Boundary
 
 - This export is meant to be the cleaner GitHub-facing surface for the project.
 - The working development repo still contains older archives, experiments, regression macros, and extracted verification folders that are intentionally not mirrored here.
