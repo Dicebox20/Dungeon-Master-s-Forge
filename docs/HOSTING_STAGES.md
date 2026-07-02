@@ -61,7 +61,7 @@ Plain-language test:
 Current project position:
 
 - **Local use:** ready
-- **Invited tester hosting:** active through `2.22.0-test.4`; still needs second-machine creation results
+- **Invited tester hosting:** active through `2.22.0-test.5`; still needs a successful post-fix second-machine creation result
 - **Public free hosting:** technically live, pending the permanent hostname and stable-manifest promotion gate
 - **Patreon entitlement hosting:** intentionally deferred; Founding Patron is support-only at launch
 

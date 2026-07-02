@@ -9,11 +9,11 @@ Updated: 2026-07-02
 - Public tester quickstart and baseline GitHub issue templates are in place.
 - The public repo export has been locally advanced to the `2.21.12` candidate.
 - LAN-testing instructions exist for the reference AI service.
-- AI service `1.5.0` passes all 83 source tests, including personal client-key mode, the 20-request calendar-month Free Forge allowance, durable quota restart persistence, UTC rollover, client-address pseudonymization, and redacted deployment preflight reporting.
+- AI service `1.6.0` passes all 86 source tests, including the 20-request calendar-month allowance, durable quota persistence, client pseudonymization, bounded invalid-output retry, and safe failure-code logging.
 - The Tailscale endpoint-support pull request is merged into GitHub `main`.
 - A local true AI compile has succeeded end to end without creating a world document during the smoke proof.
-- The official Droplet service is deployed behind HTTPS, survives restart, and passes a live `gpt-4.1-mini` generation with the monthly quota headers present.
-- A separate `2.22.0-test.4` manifest automatically connects invited testers to Free Forge without changing the stable `2.21.12` manifest or exposing obsolete Patreon planning gates.
+- The official Droplet service runs `1.6.0` behind HTTPS with bounded model-output retry and preserved rollback backups.
+- A separate `2.22.0-test.5` manifest automatically connects invited testers to Free Forge, removes obsolete Patreon planning gates, and displays structured service failures.
 - The public manifest and `2.21.12` release ZIP URLs both return HTTP 200 from GitHub raw content.
 
 ## Needed Before Wider Live Testing

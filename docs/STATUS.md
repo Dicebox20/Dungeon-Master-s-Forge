@@ -31,23 +31,24 @@ Updated: 2026-07-02
 - Added AI service `1.3.0` public free-tier alpha controls and deployment documentation without enabling Hosted Forge prematurely.
 - Added AI service `1.4.0` durable SQLite daily quotas with HMAC-pseudonymized client identifiers and strict public-mode configuration checks.
 - Added AI service `1.5.0` calendar-month client quotas for the official 20-generation Free Forge allowance.
+- Added AI service `1.6.0` bounded model-output retry and safe request-id error logging after an invited tester exposed an opaque `502` failure.
 - Added a disabled-by-default module activation seam for automatic Free Forge selection in private hosted builds without publishing a temporary endpoint.
-- Added a separate `2.22.0-test.4` tester channel that enables Free Forge automatically while leaving the stable manifest unchanged and removing obsolete user-facing Patreon planning gates.
+- Added a separate `2.22.0-test.5` tester channel that enables Free Forge automatically, removes obsolete Patreon planning gates, and displays safe structured remote errors.
 
 ## Current Technical State
 
 - The module includes the split-pane Description/Result workflow, Forge Settings, Local Rules, Bring Your Own API, and review-before-create validation.
 - Read-only native DND5e resolution now covers modern spell, equipment, actor, monster feature, and roll-table lookup without mutating compendium content.
-- The reference AI service supports private server-key, personal client-key, and bounded public free-tier deployments. Service `1.5.0` is live on the official Droplet with a 20-generation calendar-month client allowance; Hosted Forge remains disabled in the public module until a project-owned hostname and final module smoke pass exist.
+- The reference AI service supports private server-key, personal client-key, and bounded public free-tier deployments. Service `1.6.0` is live on the official Droplet with a 20-generation calendar-month client allowance and one bounded invalid-output retry; Hosted Forge remains disabled in the stable public module until a project-owned hostname and final module smoke pass exist.
 - Cauldron of Plentiful Resources remains optional and deferred because its current release is incompatible with this Foundry version.
 - The launch-day Patreon plan is now centered on a real free public tier plus a support-first Founding Patron tier, with entitlement-gated hosting deferred.
 
 ## Validation
 
 - Workspace module tests pass.
-- Workspace AI service tests pass (83 tests).
+- Workspace AI service tests pass (86 tests).
 - Public export module tests pass after the filename-surface sync from `codex-item-forge.js` to `dungeon-masters-forge.js`.
-- Public export AI service tests pass (83 tests).
+- Public export AI service tests pass (86 tests).
 - The currently installed Foundry build on disk is `2.21.12`.
 - The installed module file count is `37`, matching the current workspace copy.
 - Foundry Check Connection succeeds against `http://localhost:8788/v1/forge/compile`, and the saved Bring Your Own API selection survives a cold page reload.
@@ -57,8 +58,8 @@ Updated: 2026-07-02
 - The service-side contract normalizer now accepts `pattern` as a live-model alias for Forge `kind`; that patch is covered by tests and still needs one successful in-Foundry live compile confirmation.
 - Tailscale HTTP endpoint acceptance is covered by module tests and merged; a second-machine Tailscale compile remains the next external verification.
 - The public manifest and `2.21.12` ZIP URLs both resolve successfully from GitHub raw content with HTTP 200.
-- AI service `1.5.0` passes independent Droplet tests, restart verification, public HTTPS health, capabilities, and a live OpenAI compile with monthly quota response headers.
-- The independently extracted `2.22.0-test.4` tester package passes all 14 packaged test files. Its Hosted Forge adapter retains the live capabilities and generation path verified in `test.3`; provider code and service configuration are unchanged.
+- AI service `1.6.0` passes all 86 tests independently on the Droplet and is live with the existing quota ledger intact.
+- The independently extracted `2.22.0-test.5` tester package passes all 14 packaged test files and is paired with live service `1.6.0`.
 - The temporary staging hostname is present only in the tester channel; the stable release remains endpoint-free.
 
 ## Next Release Tasks

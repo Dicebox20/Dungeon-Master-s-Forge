@@ -236,6 +236,7 @@ function createForgeServer(options) {
     } catch (error) {
       if (response.destroyed) return;
       const safe = publicError(error);
+      logger.warn?.(`${request.method ?? "UNKNOWN"} ${request.url ?? "/"} failed ${safe.code} ${requestId}`);
       if (safe.code === "service_busy") response.setHeader("Retry-After", "5");
       sendJson(response, safe.status, {
         error: { code: safe.code, message: safe.message, requestId }
