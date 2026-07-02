@@ -4,6 +4,7 @@
 
 - Added one bounded retry for malformed, unsafe, or contract-invalid model output.
 - Replaced malformed model-generated activity, effect, profile, and unresolved-mechanic IDs with trusted service-generated IDs before validation.
+- Allowed artifact weapon hybrids to use separate activated powers without requiring an on-hit extra-damage rider.
 - Kept authentication, quota, network, timeout, and generic upstream failures non-retryable.
 - Added safe service error-code and request-id logging without request text or credentials.
 
