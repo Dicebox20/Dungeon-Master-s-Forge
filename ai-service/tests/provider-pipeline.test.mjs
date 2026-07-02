@@ -143,6 +143,37 @@ test("malformed nested generated IDs are replaced with service IDs", async () =>
   assert.equal(result.specs[0].summonActivity.activityId, "0000000000000004");
 });
 
+test("artifact weapon hybrids may use activated powers without on-hit extra damage", async () => {
+  const spec = {
+    kind: "artifactWeaponHybrid",
+    name: "Dagger that can cast fireball",
+    description: "Dagger that can cast fireball description",
+    weaponType: "simpleM",
+    baseItem: "dagger",
+    damage: {
+      base: { number: 1, denomination: 4, bonus: "@mod", types: ["piercing"] }
+    },
+    uses: { max: "1", recovery: [{ period: "day", type: "recoverAll", formula: "" }] },
+    saveActivities: [{
+      activityName: "Cast Fireball",
+      save: { ability: "dex", dc: 15 },
+      damageParts: [{ number: 8, denomination: 6, bonus: "", types: ["fire"] }],
+      target: { template: { type: "sphere", size: 20, units: "ft" } },
+      range: { value: 150, units: "ft" }
+    }]
+  };
+  const compile = createCompiler({
+    config: config({ mode: "openai" }),
+    fetchImpl: responsesFetch({ specs: [spec], assumptions: [], warnings: [], deferred: [] }),
+    makeId: ids()
+  });
+
+  const result = await compile(envelope({ request: `Item name: ${spec.name}` }));
+  assert.equal(result.specs[0].kind, "artifactWeaponHybrid");
+  assert.deepEqual(result.specs[0].extraDamageParts, undefined);
+  assert.equal(result.specs[0].saveActivities[0].activityId, "0000000000000001");
+});
+
 test("contract-invalid model output receives one bounded retry", async () => {
   let attempts = 0;
   const compile = createCompiler({
