@@ -1,6 +1,6 @@
 # Dungeon Master's Forge Release Tasks
 
-Updated: 2026-07-01
+Updated: 2026-07-02
 
 ## Ready Now
 
@@ -9,9 +9,10 @@ Updated: 2026-07-01
 - Public tester quickstart and baseline GitHub issue templates are in place.
 - The public repo export has been locally advanced to the `2.21.12` candidate.
 - LAN-testing instructions exist for the reference AI service.
-- AI service `1.4.0` passes all 81 source tests, including personal client-key mode, bounded public free-tier access, durable quota restart persistence through the HTTP service, UTC rollover, client-address pseudonymization, and redacted deployment preflight reporting.
+- AI service `1.5.0` passes all 83 source tests, including personal client-key mode, the 20-request calendar-month Free Forge allowance, durable quota restart persistence, UTC rollover, client-address pseudonymization, and redacted deployment preflight reporting.
 - The Tailscale endpoint-support pull request is merged into GitHub `main`.
 - A local true AI compile has succeeded end to end without creating a world document during the smoke proof.
+- The official Droplet service is deployed behind HTTPS, survives restart, and passes a live `gpt-4.1-mini` generation with the monthly quota headers present.
 - The public manifest and `2.21.12` release ZIP URLs both return HTTP 200 from GitHub raw content.
 
 ## Needed Before Wider Live Testing
@@ -32,8 +33,8 @@ Updated: 2026-07-01
    - the split Description/Result workflow
    - a successful generated item in Foundry
 5. Confirm the public repo is the clean surface you want people to see first.
-6. Launch with Bring Your Own API unless the prepared free-tier alpha service completes its separate deployment gate.
-7. If enabling the free-tier service, complete every requirement in [FREE_TIER_DEPLOYMENT.md](./FREE_TIER_DEPLOYMENT.md) before enabling Hosted Forge in the module.
+6. Point a permanent project-owned hostname at the official Droplet and repeat the public smoke test through that hostname.
+7. Complete every remaining requirement in [FREE_TIER_DEPLOYMENT.md](./FREE_TIER_DEPLOYMENT.md) before enabling Hosted Forge in the public module.
 
 ## Needed Before Multi-Computer AI Testing
 
@@ -49,7 +50,7 @@ Updated: 2026-07-01
 
 ## Still Deferred
 
-- Automatic Hosted/Free Forge module access until a stable public HTTPS endpoint and deployment smoke pass exist
+- Automatic Hosted/Free Forge module access until the project-owned hostname and final public-module smoke pass exist
 - Patreon entitlement enforcement
 - Active ally auras without a compatible automation path
 - Cauldron of Plentiful Resources integration until a compatible release exists

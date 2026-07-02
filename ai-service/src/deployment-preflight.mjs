@@ -17,6 +17,7 @@ function buildFreeTierDeploymentReport(config, quotaStorage) {
     quotas: {
       perMinute: config.rateLimitPerMinute,
       perClientDay: config.clientDailyLimit,
+      perClientMonth: config.clientMonthlyLimit,
       globalPerDay: config.globalDailyLimit,
       storage: quotaStorage
     },

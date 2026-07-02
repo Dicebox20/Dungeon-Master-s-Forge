@@ -123,7 +123,7 @@ function createForgeServer(options) {
   });
   const logger = options.logger ?? console;
   const rateLimit = createRateLimiter(config.rateLimitPerMinute, options.now);
-  const usesDailyQuota = config.clientDailyLimit > 0 || config.globalDailyLimit > 0;
+  const usesDailyQuota = config.clientDailyLimit > 0 || config.clientMonthlyLimit > 0 || config.globalDailyLimit > 0;
   const dailyQuotaStore = usesDailyQuota
     ? (options.dailyQuotaStore ?? createDailyQuotaStore({
         databasePath: config.quotaDatabasePath,
@@ -163,6 +163,7 @@ function createForgeServer(options) {
             maxItems: config.maxItemsPerRequest,
             perMinute: config.rateLimitPerMinute,
             perClientDay: config.clientDailyLimit,
+            perClientMonth: config.clientMonthlyLimit,
             globalPerDay: config.globalDailyLimit
           }
         });
@@ -197,6 +198,15 @@ function createForgeServer(options) {
         throw new ServiceError(429, "rate_limited", "Forge AI request limit exceeded. Try again shortly.");
       }
 
+      if (dailyQuotaStore && config.clientMonthlyLimit > 0) {
+        const monthly = dailyQuotaStore.consumeMonthly("client-month", client, config.clientMonthlyLimit);
+        response.setHeader("X-MonthlyLimit-Limit", String(config.clientMonthlyLimit));
+        response.setHeader("X-MonthlyLimit-Remaining", String(monthly.remaining));
+        if (!monthly.allowed) {
+          response.setHeader("Retry-After", String(monthly.retryAfter));
+          throw new ServiceError(429, "monthly_client_limit", "This free-tier client has reached its monthly Forge AI limit.");
+        }
+      }
       if (dailyQuotaStore && config.clientDailyLimit > 0) {
         const daily = dailyQuotaStore.consume("client", client, config.clientDailyLimit);
         response.setHeader("X-DailyLimit-Limit", String(config.clientDailyLimit));
