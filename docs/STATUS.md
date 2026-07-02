@@ -29,21 +29,22 @@ Updated: 2026-07-01
 - Added Tailscale `100.64.0.0/10` endpoint support for private cross-network testing in `2.21.12`.
 - Merged the Tailscale endpoint-support pull request into GitHub `main`.
 - Added AI service `1.3.0` public free-tier alpha controls and deployment documentation without enabling Hosted Forge prematurely.
+- Added AI service `1.4.0` durable SQLite daily quotas with HMAC-pseudonymized client identifiers and strict public-mode configuration checks.
 
 ## Current Technical State
 
 - The module includes the split-pane Description/Result workflow, Forge Settings, Local Rules, Bring Your Own API, and review-before-create validation.
 - Read-only native DND5e resolution now covers modern spell, equipment, actor, monster feature, and roll-table lookup without mutating compendium content.
-- The reference AI service supports private server-key, personal client-key, and bounded public free-tier alpha deployments. Hosted Forge remains disabled until a public HTTPS endpoint and durable accounting exist.
+- The reference AI service supports private server-key, personal client-key, and bounded public free-tier deployments. Hosted Forge remains disabled until a public HTTPS endpoint and deployment smoke pass exist.
 - Cauldron of Plentiful Resources remains optional and deferred because its current release is incompatible with this Foundry version.
 - The launch-day project plan is now centered on a real free public tier plus a public release plan, with access control-gated hosting deferred.
 
 ## Validation
 
 - Workspace module tests pass.
-- Workspace AI service tests pass (73 tests).
+- Workspace AI service tests pass (79 tests).
 - Public export module tests pass after the filename-surface sync from `codex-item-forge.js` to `dungeon-masters-forge.js`.
-- Public export AI service tests pass (73 tests).
+- Public export AI service tests pass (79 tests).
 - The currently installed Foundry build on disk is `2.21.12`.
 - The installed module file count is `37`, matching the current workspace copy.
 - Foundry Check Connection succeeds against `http://localhost:8788/v1/forge/compile`, and the saved Bring Your Own API selection survives a cold page reload.

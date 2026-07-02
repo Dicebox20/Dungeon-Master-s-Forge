@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.4.0 - 2026-07-01
+
+- Added a transactional SQLite ledger for durable per-client and global daily free-tier quotas.
+- Pseudonymized stored client identifiers with a server-held HMAC secret instead of retaining raw IP addresses.
+- Required durable storage and a 32-character quota hash secret before public free-tier mode can start.
+- Added restart persistence, UTC rollover, privacy, and storage-mode regression coverage.
+- Raised the standalone service runtime requirement to Node.js 22.13 or newer for built-in SQLite support.
+
+## 1.3.0 - 2026-07-01
+
+- Added bounded anonymous public free-tier mode with origin, proxy, concurrency, request, and daily-limit safeguards.
+- Added public deployment guidance and a conservative free-tier environment template.
+
 ## 1.2.0 - 2026-06-30
 
 - Added personal client-key OpenAI mode so a trusted Foundry browser can supply its own upstream API key through the Forge token field.
