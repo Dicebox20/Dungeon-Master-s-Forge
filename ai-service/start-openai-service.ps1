@@ -13,15 +13,21 @@ if (-not (Test-Path $envFile)) {
 $envContent = Get-Content $envFile -Raw
 $apiKeyLine = ($envContent -split "`r?`n" | Where-Object { $_ -match '^OPENAI_API_KEY=' } | Select-Object -First 1)
 $tokenLine = ($envContent -split "`r?`n" | Where-Object { $_ -match '^DMF_CLIENT_TOKEN=' } | Select-Object -First 1)
+$publicFreeTierLine = ($envContent -split "`r?`n" | Where-Object { $_ -match '^DMF_PUBLIC_FREE_TIER=' } | Select-Object -First 1)
 
 $apiKey = if ($apiKeyLine) { $apiKeyLine.Substring("OPENAI_API_KEY=".Length).Trim() } else { "" }
 $clientToken = if ($tokenLine) { $tokenLine.Substring("DMF_CLIENT_TOKEN=".Length).Trim() } else { "" }
+$publicFreeTier = if ($publicFreeTierLine) { $publicFreeTierLine.Substring("DMF_PUBLIC_FREE_TIER=".Length).Trim().ToLowerInvariant() -in @("1", "true", "yes", "on") } else { $false }
 
-if (-not $apiKey) {
+if ($publicFreeTier -and -not $apiKey) {
+  Write-Error "Public free-tier mode requires OPENAI_API_KEY in $envFile."
+  exit 1
+}
+elseif (-not $apiKey) {
   Write-Warning "OPENAI_API_KEY is blank in $envFile. The service will start in client-key mode and expect a personal OpenAI key in Foundry's API token field."
 }
 
-if ($apiKey -and (-not $clientToken -or $clientToken -eq "replace-with-a-long-random-service-token")) {
+if ($apiKey -and -not $publicFreeTier -and (-not $clientToken -or $clientToken -eq "replace-with-a-long-random-service-token")) {
   Write-Warning "DMF_CLIENT_TOKEN is still a placeholder. Set a real shared token in .env and use the same value in Foundry's API token field."
 }
 

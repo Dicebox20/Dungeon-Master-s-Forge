@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Added a disabled-by-default Free Forge release configuration for a baked HTTPS endpoint.
+- Enabled private release builds to select Free Forge automatically on first launch without endpoint or token entry.
+- Unified remote connection checks and compilation across Bring Your Own API and Free Forge providers.
+- Kept the public source configuration disabled until a stable hosted endpoint completes launch verification.
+
 ## 2.21.12 - 2026-07-01
 
 - Added HTTP endpoint support for Tailscale's private `100.64.0.0/10` address range.

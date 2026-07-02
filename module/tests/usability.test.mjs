@@ -60,5 +60,7 @@ assert.match(script, /mock mode/);
 assert.match(script, /game\.settings\.set\(MODULE_ID, "providerApiToken", rememberApiToken \? partitioned\.session\.apiToken : ""\)/);
 assert.match(settingsTemplate, /Use only on a trusted computer/);
 assert.match(script, /this\._codexProviderConnection = await checkProviderConnection\(providerState\);\s*await persistProviderState\(providerState\);/);
+assert.match(script, /function applyHostedDefaultProvider\(\)/);
+assert.match(script, /networkProviderConfiguration/);
 
-export const testedUsabilityContractCount = 56;
+export const testedUsabilityContractCount = 58;
