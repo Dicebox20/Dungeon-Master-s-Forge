@@ -1,6 +1,6 @@
 # Remote Provider Contract
 
-Dungeon Master's Forge remote providers use schema version `1.0`. Bring Your Own API uses this contract for live compilation against a user-configured endpoint. Free Forge uses the same contract with a credential-free HTTPS endpoint embedded in an explicitly enabled release. The stable `2.21.12` source configuration remains disabled, while the temporary tester channel enables it for hosted testing. The contract is also available through `forge.providerContract` for local development and mocked integration tests.
+Dungeon Master's Forge remote providers use schema version `1.0`. Bring Your Own API uses this contract for live compilation against a user-configured endpoint. Free Forge uses the same contract with a credential-free HTTPS endpoint embedded in an explicitly enabled release. The stable `2.21.12` source configuration remains disabled, while the temporary `2.23.0-test.1` migration channel enables it for hosted testing. The contract is also available through `forge.providerContract` for local development and mocked integration tests.
 
 ## Endpoint Rules
 
@@ -91,7 +91,7 @@ The module validates the envelope before returning it to the Forge. Item specs s
 ## Module API
 
 ```js
-const forge = game.modules.get("codex-item-forge").api;
+const forge = game.modules.get("dungeon-masters-forge").api;
 const endpoint = forge.providerContract.normalizeEndpoint("https://example.test/compile");
 const body = forge.providerContract.buildRequest("Create a rare fire dagger", options);
 const status = await forge.providerContract.requestServiceStatus({

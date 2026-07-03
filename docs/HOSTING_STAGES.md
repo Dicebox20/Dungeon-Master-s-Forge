@@ -61,7 +61,7 @@ Plain-language test:
 Current project position:
 
 - **Local use:** ready
-- **Invited tester hosting:** active through `2.22.0-test.5`; still needs a successful post-fix second-machine creation result
+- **Invited tester hosting:** active through the `2.23.0-test.1` package-identity migration candidate; still needs a successful post-migration creation result
 - **Public free hosting:** technically live, pending the permanent hostname and stable-manifest promotion gate
 - **project access control hosting:** intentionally deferred; early supporter is support-only at launch
 

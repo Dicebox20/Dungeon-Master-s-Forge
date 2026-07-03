@@ -1,4 +1,4 @@
-.codex-item-forge .window-content {
+.dungeon-masters-forge .window-content {
   padding: 0;
   min-height: 0;
   overflow: hidden;
@@ -7,18 +7,18 @@
     linear-gradient(180deg, rgb(11 13 16 / 98%), rgb(16 19 23 / 96%));
 }
 
-.codex-item-forge .dialog-form {
+.dungeon-masters-forge .dialog-form {
   height: 100%;
   min-height: 0;
 }
 
-.codex-item-forge .dialog-content {
+.dungeon-masters-forge .dialog-content {
   flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
 }
 
-.codex-item-forge .form-footer {
+.dungeon-masters-forge .form-footer {
   flex: 0 0 auto;
   justify-content: flex-start;
   flex-wrap: wrap;
@@ -28,27 +28,27 @@
   background: rgb(12 15 18 / 92%);
 }
 
-.codex-item-forge .form-footer button {
+.dungeon-masters-forge .form-footer button {
   flex: 0 0 auto;
   min-width: 112px;
 }
 
-.codex-item-forge .form-footer [data-action="create"] {
+.dungeon-masters-forge .form-footer [data-action="create"] {
   margin-left: auto;
 }
 
-.codex-item-forge .form-footer [data-action="settings"] {
+.dungeon-masters-forge .form-footer [data-action="settings"] {
   min-width: 40px;
   width: 40px;
   padding-inline: 0;
 }
 
-.codex-item-forge .form-footer [data-action="settings"] .button-label,
-.codex-item-forge .form-footer [data-action="settings"] span:last-child {
+.dungeon-masters-forge .form-footer [data-action="settings"] .button-label,
+.dungeon-masters-forge .form-footer [data-action="settings"] span:last-child {
   display: none;
 }
 
-.codex-item-forge-shell {
+.dungeon-masters-forge-shell {
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -178,9 +178,9 @@
   line-height: 1.4;
 }
 
-.codex-item-forge label > span:first-child,
-.codex-item-forge summary span,
-.codex-item-forge .codex-forge-request-hint > span {
+.dungeon-masters-forge label > span:first-child,
+.dungeon-masters-forge summary span,
+.dungeon-masters-forge .codex-forge-request-hint > span {
   color: #d8c8ba;
   font-size: var(--font-size-11);
   font-weight: 700;
@@ -277,11 +277,11 @@
   color: #e5a15d;
 }
 
-.codex-item-forge input[type="text"],
-.codex-item-forge input[type="url"],
-.codex-item-forge input[type="password"],
-.codex-item-forge textarea,
-.codex-item-forge select {
+.dungeon-masters-forge input[type="text"],
+.dungeon-masters-forge input[type="url"],
+.dungeon-masters-forge input[type="password"],
+.dungeon-masters-forge textarea,
+.dungeon-masters-forge select {
   border: 1px solid rgb(208 180 129 / 18%);
   border-radius: 6px;
   background: linear-gradient(180deg, rgb(17 18 22 / 94%), rgb(26 29 35 / 96%));
@@ -291,50 +291,50 @@
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 4%);
 }
 
-.codex-item-forge input,
-.codex-item-forge textarea,
-.codex-item-forge select,
-.codex-item-forge option,
-.codex-item-forge .codex-forge-settings-card input,
-.codex-item-forge .codex-forge-settings-card select,
-.codex-item-forge .codex-forge-options input,
-.codex-item-forge .codex-forge-request textarea,
-.codex-item-forge .codex-forge-specs textarea,
-.codex-item-forge-settings input,
-.codex-item-forge-settings textarea,
-.codex-item-forge-settings select,
-.codex-item-forge-settings option,
-.codex-item-forge-settings .codex-forge-settings-card input,
-.codex-item-forge-settings .codex-forge-settings-card select,
-.codex-item-forge-settings .codex-forge-settings-status,
-.codex-item-forge-settings .codex-forge-settings-provider-status {
+.dungeon-masters-forge input,
+.dungeon-masters-forge textarea,
+.dungeon-masters-forge select,
+.dungeon-masters-forge option,
+.dungeon-masters-forge .codex-forge-settings-card input,
+.dungeon-masters-forge .codex-forge-settings-card select,
+.dungeon-masters-forge .codex-forge-options input,
+.dungeon-masters-forge .codex-forge-request textarea,
+.dungeon-masters-forge .codex-forge-specs textarea,
+.dungeon-masters-forge-settings input,
+.dungeon-masters-forge-settings textarea,
+.dungeon-masters-forge-settings select,
+.dungeon-masters-forge-settings option,
+.dungeon-masters-forge-settings .codex-forge-settings-card input,
+.dungeon-masters-forge-settings .codex-forge-settings-card select,
+.dungeon-masters-forge-settings .codex-forge-settings-status,
+.dungeon-masters-forge-settings .codex-forge-settings-provider-status {
   color: #f0ece5 !important;
   -webkit-text-fill-color: #f0ece5 !important;
 }
 
-.codex-item-forge option,
-.codex-item-forge-settings option {
+.dungeon-masters-forge option,
+.dungeon-masters-forge-settings option {
   background: #1a1d23;
 }
 
-.codex-item-forge input:-webkit-autofill,
-.codex-item-forge input:-webkit-autofill:hover,
-.codex-item-forge input:-webkit-autofill:focus,
-.codex-item-forge textarea:-webkit-autofill,
-.codex-item-forge textarea:-webkit-autofill:hover,
-.codex-item-forge textarea:-webkit-autofill:focus,
-.codex-item-forge select:-webkit-autofill,
-.codex-item-forge select:-webkit-autofill:hover,
-.codex-item-forge select:-webkit-autofill:focus,
-.codex-item-forge-settings input:-webkit-autofill,
-.codex-item-forge-settings input:-webkit-autofill:hover,
-.codex-item-forge-settings input:-webkit-autofill:focus,
-.codex-item-forge-settings textarea:-webkit-autofill,
-.codex-item-forge-settings textarea:-webkit-autofill:hover,
-.codex-item-forge-settings textarea:-webkit-autofill:focus,
-.codex-item-forge-settings select:-webkit-autofill,
-.codex-item-forge-settings select:-webkit-autofill:hover,
-.codex-item-forge-settings select:-webkit-autofill:focus {
+.dungeon-masters-forge input:-webkit-autofill,
+.dungeon-masters-forge input:-webkit-autofill:hover,
+.dungeon-masters-forge input:-webkit-autofill:focus,
+.dungeon-masters-forge textarea:-webkit-autofill,
+.dungeon-masters-forge textarea:-webkit-autofill:hover,
+.dungeon-masters-forge textarea:-webkit-autofill:focus,
+.dungeon-masters-forge select:-webkit-autofill,
+.dungeon-masters-forge select:-webkit-autofill:hover,
+.dungeon-masters-forge select:-webkit-autofill:focus,
+.dungeon-masters-forge-settings input:-webkit-autofill,
+.dungeon-masters-forge-settings input:-webkit-autofill:hover,
+.dungeon-masters-forge-settings input:-webkit-autofill:focus,
+.dungeon-masters-forge-settings textarea:-webkit-autofill,
+.dungeon-masters-forge-settings textarea:-webkit-autofill:hover,
+.dungeon-masters-forge-settings textarea:-webkit-autofill:focus,
+.dungeon-masters-forge-settings select:-webkit-autofill,
+.dungeon-masters-forge-settings select:-webkit-autofill:hover,
+.dungeon-masters-forge-settings select:-webkit-autofill:focus {
   -webkit-text-fill-color: #f0ece5 !important;
   transition: background-color 99999s ease-out 0s;
   box-shadow:
@@ -342,18 +342,18 @@
     0 0 0 1000px #1a1d23 inset !important;
 }
 
-.codex-item-forge input[type="text"]::placeholder,
-.codex-item-forge input[type="url"]::placeholder,
-.codex-item-forge input[type="password"]::placeholder,
-.codex-item-forge textarea::placeholder {
+.dungeon-masters-forge input[type="text"]::placeholder,
+.dungeon-masters-forge input[type="url"]::placeholder,
+.dungeon-masters-forge input[type="password"]::placeholder,
+.dungeon-masters-forge textarea::placeholder {
   color: rgb(214 208 200 / 45%);
 }
 
-.codex-item-forge input[type="text"]:focus,
-.codex-item-forge input[type="url"]:focus,
-.codex-item-forge input[type="password"]:focus,
-.codex-item-forge textarea:focus,
-.codex-item-forge select:focus {
+.dungeon-masters-forge input[type="text"]:focus,
+.dungeon-masters-forge input[type="url"]:focus,
+.dungeon-masters-forge input[type="password"]:focus,
+.dungeon-masters-forge textarea:focus,
+.dungeon-masters-forge select:focus {
   border-color: rgb(229 161 93 / 72%);
   outline: 2px solid rgb(229 161 93 / 16%);
   outline-offset: 0;
@@ -1048,21 +1048,21 @@
   border-left-color: #d66a6a;
 }
 
-.codex-item-forge button.codex-forge-create {
+.dungeon-masters-forge button.codex-forge-create {
   border-color: #e07832;
 }
 
-.codex-item-forge button.codex-forge-create:disabled {
+.dungeon-masters-forge button.codex-forge-create:disabled {
   border-color: var(--color-border-light-primary);
   opacity: 0.5;
 }
 
-.codex-item-forge button.codex-forge-compile {
+.dungeon-masters-forge button.codex-forge-compile {
   border-color: #c17fc4;
 }
 
-.app.window-app.codex-item-forge-settings,
-.codex-item-forge-settings.window-app {
+.app.window-app.dungeon-masters-forge-settings,
+.dungeon-masters-forge-settings.window-app {
   color: #f0ece5;
   border: 1px solid rgb(180 42 51 / 38%);
   background:
@@ -1073,36 +1073,36 @@
     inset 0 1px 0 rgb(255 255 255 / 4%);
 }
 
-.codex-item-forge-settings .window-header {
+.dungeon-masters-forge-settings .window-header {
   color: #f6ebe2;
   border-bottom: 1px solid rgb(180 42 51 / 28%);
   background: linear-gradient(180deg, rgb(43 17 22 / 96%), rgb(24 20 24 / 92%));
 }
 
-.codex-item-forge-settings .window-header .window-title,
-.codex-item-forge-settings .window-header .header-button,
-.codex-item-forge-settings .window-header button,
-.codex-item-forge-settings .window-header a {
+.dungeon-masters-forge-settings .window-header .window-title,
+.dungeon-masters-forge-settings .window-header .header-button,
+.dungeon-masters-forge-settings .window-header button,
+.dungeon-masters-forge-settings .window-header a {
   color: #f6ebe2;
   text-shadow: 0 1px 0 rgb(0 0 0 / 45%);
 }
 
-.codex-item-forge-settings .window-content {
+.dungeon-masters-forge-settings .window-content {
   padding: 12px 16px 16px;
   color: #f0ece5;
   background:
     linear-gradient(180deg, rgb(19 22 27 / 98%), rgb(13 16 20 / 98%)) !important;
 }
 
-.codex-item-forge-settings .standard-form,
-.codex-item-forge-settings .standard-form .form-group,
-.codex-item-forge-settings .standard-form label,
-.codex-item-forge-settings .standard-form p,
-.codex-item-forge-settings .standard-form output,
-.codex-item-forge-settings .standard-form h1,
-.codex-item-forge-settings .standard-form h2,
-.codex-item-forge-settings .standard-form h3,
-.codex-item-forge-settings .standard-form h4 {
+.dungeon-masters-forge-settings .standard-form,
+.dungeon-masters-forge-settings .standard-form .form-group,
+.dungeon-masters-forge-settings .standard-form label,
+.dungeon-masters-forge-settings .standard-form p,
+.dungeon-masters-forge-settings .standard-form output,
+.dungeon-masters-forge-settings .standard-form h1,
+.dungeon-masters-forge-settings .standard-form h2,
+.dungeon-masters-forge-settings .standard-form h3,
+.dungeon-masters-forge-settings .standard-form h4 {
   color: #f0ece5;
 }
 
@@ -1177,11 +1177,11 @@
   background: linear-gradient(180deg, rgb(74 34 28 / 96%), rgb(43 24 26 / 98%));
 }
 
-.codex-item-forge-settings .notes {
+.dungeon-masters-forge-settings .notes {
   color: #cdbfb4;
 }
 
-.codex-item-forge-settings .form-fields .checkbox {
+.dungeon-masters-forge-settings .form-fields .checkbox {
   color: #f0ece5;
 }
 
@@ -1255,7 +1255,7 @@
 }
 
 @media (max-width: 620px) {
-  .codex-item-forge .form-footer [data-action="create"] {
+  .dungeon-masters-forge .form-footer [data-action="create"] {
     margin-left: 0;
   }
 

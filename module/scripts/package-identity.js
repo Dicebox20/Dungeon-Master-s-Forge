@@ -1,0 +1,61 @@
+const MODULE_ID = "dungeon-masters-forge";
+const LEGACY_MODULE_ID = "codex-item-forge";
+
+const SETTING_SCOPES = Object.freeze({
+  itemFolderName: "world",
+  actorFolderName: "world",
+  sourceLabel: "world",
+  replaceExisting: "world",
+  lastSpecs: "client",
+  lastRequest: "client",
+  providerId: "client",
+  hostedDefaultApplied: "client",
+  unresolvedPolicy: "client",
+  providerEndpoint: "client",
+  providerModel: "client",
+  rememberProviderApiToken: "client",
+  providerApiToken: "client"
+});
+
+function isObject(value) {
+  return value && typeof value === "object" && !Array.isArray(value);
+}
+
+function readForgeFlags(flags = {}) {
+  const legacy = isObject(flags?.[LEGACY_MODULE_ID]) ? flags[LEGACY_MODULE_ID] : {};
+  const current = isObject(flags?.[MODULE_ID]) ? flags[MODULE_ID] : {};
+  return { ...legacy, ...current };
+}
+
+function hasStoredSetting(settings, scope, id) {
+  const storage = settings.storage.get(scope);
+  if (!storage) return false;
+  if (scope === "client") return storage.getItem(id) !== null;
+  return Boolean(storage.getSetting(id, null));
+}
+
+async function migrateLegacySettings({ settings = game.settings, isGM = game.user?.isGM } = {}) {
+  const migrated = [];
+
+  for (const [key, scope] of Object.entries(SETTING_SCOPES)) {
+    if (scope === "world" && !isGM) continue;
+
+    const currentId = `${MODULE_ID}.${key}`;
+    const legacyId = `${LEGACY_MODULE_ID}.${key}`;
+    if (hasStoredSetting(settings, scope, currentId)) continue;
+    if (!hasStoredSetting(settings, scope, legacyId)) continue;
+
+    await settings.set(MODULE_ID, key, settings.get(LEGACY_MODULE_ID, key));
+    migrated.push(key);
+  }
+
+  return migrated;
+}
+
+export {
+  LEGACY_MODULE_ID,
+  MODULE_ID,
+  SETTING_SCOPES,
+  migrateLegacySettings,
+  readForgeFlags
+};
