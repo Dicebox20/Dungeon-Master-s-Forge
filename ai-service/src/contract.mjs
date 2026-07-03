@@ -395,16 +395,29 @@ function normalizeModelOutput(modelOutput, envelope, options = {}) {
     return spec;
   });
 
+  const unresolvedMechanics = specs.flatMap(spec => (spec.unresolvedMechanics ?? []).map(mechanic => ({ itemName: spec.name, ...mechanic })));
+  const warnings = stringArray(modelOutput.warnings, "warnings");
+  if (envelope.options.unresolvedPolicy === "block" && unresolvedMechanics.length) {
+    warnings.push("The request selected block policy and contains unresolved mechanics; Foundry creation will remain blocked until they are resolved.");
+  }
+
   return {
     schemaVersion: FORGE_SCHEMA_VERSION,
-    serviceVersion: SERVICE_VERSION,
+    compilerVersion: `dmf-ai-service/${SERVICE_VERSION}`,
     promptVersion: PROMPT_VERSION,
+    request: envelope.request,
     requestCount: specs.length,
     specs,
+    decisions: specs.map(spec => ({
+      name: spec.name,
+      pattern: spec.kind,
+      unresolvedCount: spec.unresolvedMechanics?.length ?? 0
+    })),
     assumptions: stringArray(modelOutput.assumptions, "assumptions"),
-    warnings: stringArray(modelOutput.warnings, "warnings"),
-    deferred: stringArray(modelOutput.deferred, "deferred")
+    warnings,
+    deferred: stringArray(modelOutput.deferred, "deferred"),
+    unresolvedMechanics
   };
 }
 
-export { normalizeModelOutput, validateForgeRequest };
+export { ID_PATTERN, normalizeModelOutput, secureId, validateForgeRequest };
