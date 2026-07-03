@@ -65,7 +65,20 @@ function rootEndpointFor(endpoint) {
   return url.toString();
 }
 
-function remoteHttpError(response, subject) {
+function remoteErrorDetail(payload) {
+  const error = payload?.error;
+  if (!error || typeof error !== "object" || Array.isArray(error)) return null;
+  const clean = value => String(value ?? "")
+    .replace(/[\u0000-\u001f\u007f<>]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const message = clean(error.message).slice(0, 500);
+  const code = clean(error.code).slice(0, 80);
+  const requestId = clean(error.requestId).slice(0, 100);
+  return message ? { message, code, requestId } : null;
+}
+
+function remoteHttpError(response, subject, payload = null) {
   const status = Number(response?.status ?? 0);
   const retryAfter = String(response?.headers?.get?.("retry-after") ?? "").trim();
   if (status === 429) {
@@ -79,6 +92,11 @@ function remoteHttpError(response, subject) {
   }
   if (status === 404) {
     return new Error(`${subject} route was not found (HTTP 404). Check the endpoint path.`);
+  }
+  const detail = remoteErrorDetail(payload);
+  if (detail) {
+    const context = [detail.code, detail.requestId ? `request ${detail.requestId}` : ""].filter(Boolean).join(", ");
+    return new Error(`${subject}: ${detail.message}${context ? ` [${context}]` : ""} (HTTP ${status}).`);
   }
   return new Error(`${subject} returned HTTP ${status}.`);
 }
@@ -440,7 +458,13 @@ async function requestRemoteCompilation(options) {
   }
 
   if (!response?.ok) {
-    throw remoteHttpError(response, "Remote provider");
+    let errorPayload = null;
+    try {
+      errorPayload = await response.json();
+    } catch {
+      // Providers that do not return the Forge error envelope keep the generic HTTP message.
+    }
+    throw remoteHttpError(response, "Remote provider", errorPayload);
   }
 
   let payload;
@@ -464,6 +488,7 @@ export {
   normalizeRemoteCapabilities,
   normalizeRemoteHealth,
   normalizeRemoteProviderResponse,
+  remoteErrorDetail,
   remoteHttpError,
   redactProviderConfiguration,
   requestRemoteHealth,

@@ -2,9 +2,11 @@ import { runCodexItemForge } from "./forge-engine.js";
 import { compileItemRequest } from "./request-compiler.js";
 import {
   DEFAULT_PROVIDER_ID,
+  HOSTED_PROVIDER_ID,
   compileWithProvider,
   getProvider,
   listProviders,
+  networkProviderConfiguration,
   partitionProviderConfiguration,
   providerReadiness,
   SUPPORTED_SPEC_KINDS
@@ -39,10 +41,12 @@ import {
   serializeProviderProfile
 } from "./provider-profile.js";
 import { buildReviewSummaries } from "./review-summary.js";
-import { getTier, listTiers } from "./tier-catalog.js";
-import { reviewTierFit } from "./planning-review.js";
+import {
+  LEGACY_MODULE_ID,
+  MODULE_ID,
+  migrateLegacySettings
+} from "./package-identity.js";
 
-const MODULE_ID = "codex-item-forge";
 const MODULE_TITLE = PRODUCT_TITLE;
 const MIN_DND5E_VERSION = "5.3.3";
 const SETTINGS_TEMPLATE_PATH = `modules/${MODULE_ID}/templates/forge-settings.hbs`;
@@ -86,6 +90,15 @@ function escapeHTML(value) {
     .replaceAll("'", "&#039;");
 }
 
+function registerSetting(key, data) {
+  game.settings.register(MODULE_ID, key, { ...data });
+  const { name: _name, hint: _hint, ...legacyData } = data;
+  game.settings.register(LEGACY_MODULE_ID, key, {
+    ...legacyData,
+    config: false
+  });
+}
+
 function registerSettings() {
   game.settings.registerMenu(MODULE_ID, "forgeSettings", {
     name: "Forge settings",
@@ -96,7 +109,7 @@ function registerSettings() {
     restricted: true
   });
 
-  game.settings.register(MODULE_ID, "itemFolderName", {
+  registerSetting("itemFolderName", {
     name: "Item folder",
     hint: "World folder used for generated items.",
     scope: "world",
@@ -105,7 +118,7 @@ function registerSettings() {
     default: "Dungeon Master's Forge V2"
   });
 
-  game.settings.register(MODULE_ID, "actorFolderName", {
+  registerSetting("actorFolderName", {
     name: "Summon actor folder",
     hint: "World folder used for generated summon actors.",
     scope: "world",
@@ -114,7 +127,7 @@ function registerSettings() {
     default: "Dungeon Master's Forge V2 Summons"
   });
 
-  game.settings.register(MODULE_ID, "sourceLabel", {
+  registerSetting("sourceLabel", {
     name: "Source label",
     hint: "Source text written to generated items.",
     scope: "world",
@@ -123,7 +136,7 @@ function registerSettings() {
     default: sourceLabelForVersion(BUILD_VERSION)
   });
 
-  game.settings.register(MODULE_ID, "replaceExisting", {
+  registerSetting("replaceExisting", {
     name: "Replace matching world documents",
     hint: "Delete world items and summon actors with the same name before creating replacements.",
     scope: "world",
@@ -132,70 +145,69 @@ function registerSettings() {
     default: true
   });
 
-  game.settings.register(MODULE_ID, "lastSpecs", {
+  registerSetting("lastSpecs", {
     scope: "client",
     config: false,
     type: String,
     default: JSON.stringify(EXAMPLE_SPECS, null, 2)
   });
 
-  game.settings.register(MODULE_ID, "lastRequest", {
+  registerSetting("lastRequest", {
     scope: "client",
     config: false,
     type: String,
     default: ""
   });
 
-  game.settings.register(MODULE_ID, "providerId", {
+  registerSetting("providerId", {
     scope: "client",
     config: false,
     type: String,
     default: DEFAULT_PROVIDER_ID
   });
 
-  game.settings.register(MODULE_ID, "unresolvedPolicy", {
-    scope: "client",
-    config: false,
-    type: String,
-    default: "review"
-  });
-
-  game.settings.register(MODULE_ID, "providerEndpoint", {
-    scope: "client",
-    config: false,
-    type: String,
-    default: ""
-  });
-
-  game.settings.register(MODULE_ID, "providerModel", {
-    scope: "client",
-    config: false,
-    type: String,
-    default: ""
-  });
-
-  game.settings.register(MODULE_ID, "rememberProviderApiToken", {
+  registerSetting("hostedDefaultApplied", {
     scope: "client",
     config: false,
     type: Boolean,
     default: false
   });
 
-  game.settings.register(MODULE_ID, "providerApiToken", {
+  registerSetting("unresolvedPolicy", {
+    scope: "client",
+    config: false,
+    type: String,
+    default: "review"
+  });
+
+  registerSetting("providerEndpoint", {
     scope: "client",
     config: false,
     type: String,
     default: ""
   });
 
-  game.settings.register(MODULE_ID, "planningTier", {
-    name: "Planning phase",
-    hint: "Adds offline review notes for mechanics that are planned for higher project tiers.",
+  registerSetting("providerModel", {
     scope: "client",
     config: false,
     type: String,
-    default: "master"
+    default: ""
   });
+
+  registerSetting("rememberProviderApiToken", {
+    scope: "client",
+    config: false,
+    type: Boolean,
+    default: false
+  });
+
+  registerSetting("providerApiToken", {
+    scope: "client",
+    config: false,
+    type: String,
+    default: ""
+  });
+
 }
 
 function currentProviderId() {
@@ -206,11 +218,6 @@ function currentProviderId() {
 function currentUnresolvedPolicy() {
   const storedUnresolvedPolicy = game.settings.get(MODULE_ID, "unresolvedPolicy") || "review";
   return ["review", "block"].includes(storedUnresolvedPolicy) ? storedUnresolvedPolicy : "review";
-}
-
-function currentPlanningTier() {
-  const storedPlanningTier = game.settings.get(MODULE_ID, "planningTier") || "master";
-  return getTier(storedPlanningTier)?.id ?? "master";
 }
 
 function currentProviderToken({ rememberProviderToken } = {}) {
@@ -298,8 +305,7 @@ async function validateSpecs(input) {
   return {
     ...validation,
     warnings: dependencyWarnings(specs),
-    specs,
-    tierReview: reviewTierFit(specs, currentPlanningTier())
+    specs
   };
 }
 
@@ -342,13 +348,6 @@ function unresolvedPolicyOptionsHTML(selectedPolicy) {
   }).join("");
 }
 
-function planningTierOptionsHTML(selectedTierId) {
-  return listTiers().map(tier => {
-    const selected = tier.id === selectedTierId ? " selected" : "";
-    return `<option value="${escapeHTML(tier.id)}"${selected}>${escapeHTML(tier.label)}</option>`;
-  }).join("");
-}
-
 function providerStatusSnapshot(providerId, configuration, connection = null) {
   const provider = getProvider(providerId);
   const readiness = providerReadiness(providerId, configuration);
@@ -374,7 +373,6 @@ function providerStatusSnapshot(providerId, configuration, connection = null) {
 function forgeProviderSummaryHTML(unresolvedPolicy) {
   const configuredProvider = configuredProviderState({ unresolvedPolicy });
   const snapshot = providerStatusSnapshot(configuredProvider.id, configuredProvider.configuration);
-  const planningTier = getTier(currentPlanningTier());
   return `
     <section class="codex-forge-provider-summary">
       <div class="codex-forge-provider-summary-copy">
@@ -383,7 +381,6 @@ function forgeProviderSummaryHTML(unresolvedPolicy) {
           <i class="fa-solid ${escapeHTML(snapshot.icon)}"></i>
         <span data-forge-provider-summary-text>${escapeHTML(snapshot.message)}</span>
       </span>
-      <small class="codex-forge-provider-summary-tier" data-forge-planning-text>Planning phase: ${escapeHTML(planningTier?.label ?? "Master")}</small>
     </div>
     </section>
   `;
@@ -398,7 +395,7 @@ function forgeContent() {
   const unresolvedPolicy = currentUnresolvedPolicy();
 
   return `
-    <section class="codex-item-forge-shell">
+    <section class="dungeon-masters-forge-shell">
       <div class="codex-forge-statusbar" aria-label="System status">
         ${moduleStatusHTML()}
       </div>
@@ -593,7 +590,8 @@ function providerConnectionDetailText(connection) {
 }
 
 async function checkProviderConnection(providerState) {
-  if (providerState?.id !== "bring-your-own") {
+  const provider = getProvider(providerState?.id ?? DEFAULT_PROVIDER_ID);
+  if (provider?.mode !== "network") {
     return {
       providerId: providerState?.id ?? DEFAULT_PROVIDER_ID,
       checkedAt: new Date().toISOString(),
@@ -602,9 +600,10 @@ async function checkProviderConnection(providerState) {
     };
   }
 
+  const connection = networkProviderConfiguration(providerState.id, providerState.configuration);
   const status = await requestRemoteServiceStatus({
-    endpoint: providerState.configuration.endpoint,
-    token: providerState.configuration.apiToken,
+    endpoint: connection.endpoint,
+    token: connection.apiToken,
     supportedKinds: SUPPORTED_SPEC_KINDS
   });
   return {
@@ -624,14 +623,12 @@ function refreshForgeProviderSummary(dialog, form) {
   const label = summary?.querySelector("strong");
   const text = summary?.querySelector("[data-forge-provider-summary-text]");
   const icon = summary?.querySelector(".codex-forge-provider-summary-meta i");
-  const planningTier = summary?.querySelector("[data-forge-planning-text]");
   const compileButton = dialog.element?.querySelector('button[data-action="compile"]');
 
   if (summary) summary.dataset.state = snapshot.state;
   if (label) label.textContent = snapshot.provider?.label ?? "Provider";
   if (text) text.textContent = snapshot.message;
   if (icon) icon.className = `fa-solid ${snapshot.icon}`;
-  if (planningTier) planningTier.textContent = `Planning phase: ${getTier(currentPlanningTier())?.label ?? "Master"}`;
   if (compileButton instanceof HTMLButtonElement) compileButton.disabled = !snapshot.readiness.ready;
 }
 
@@ -991,7 +988,7 @@ async function renderPreview(dialog, validation) {
   if (!preview) return;
 
   const enrichedSpecs = await enrichSpecsWithSystemReferences(validation.specs);
-  const summaries = buildReviewSummaries(enrichedSpecs, dialog._codexCompilation, validation.tierReview);
+  const summaries = buildReviewSummaries(enrichedSpecs, dialog._codexCompilation);
   setReviewValidated(dialog, true);
   preview.hidden = false;
   preview.innerHTML = `
@@ -1151,7 +1148,7 @@ function syncSettingsProviderPanel(app) {
   if (icon) icon.className = `fa-solid ${snapshot.icon}`;
   if (label) label.textContent = snapshot.message;
   if (checkButton instanceof HTMLButtonElement) {
-    checkButton.disabled = provider.id === "bring-your-own" ? !snapshot.readiness.ready : false;
+    checkButton.disabled = provider.mode === "network" ? !snapshot.readiness.ready : false;
   }
 }
 
@@ -1198,7 +1195,7 @@ class ForgeSettingsApplication extends FormApplication {
   static get defaultOptions() {
     return foundry.utils.mergeObject(super.defaultOptions, {
       id: `${MODULE_ID}-settings`,
-      classes: ["codex-item-forge-settings"],
+      classes: ["dungeon-masters-forge-settings"],
       template: SETTINGS_TEMPLATE_PATH,
       title: `${MODULE_TITLE} Settings`,
       width: 760,
@@ -1214,7 +1211,6 @@ class ForgeSettingsApplication extends FormApplication {
     const provider = activeProviderState();
     const snapshot = providerStatusSnapshot(provider.id, provider.configuration, this._codexProviderConnection);
     const rememberProviderToken = provider.rememberApiToken === true;
-    const planningTier = currentPlanningTier();
 
     return {
       isBringYourOwn: provider.id === "bring-your-own",
@@ -1223,8 +1219,6 @@ class ForgeSettingsApplication extends FormApplication {
       providerModel: provider.configuration.model,
       providerToken: provider.configuration.apiToken,
       rememberProviderToken,
-      planningTier,
-      planningTierOptions: planningTierOptionsHTML(planningTier),
       providerStatusIcon: snapshot.icon,
       providerStatusState: snapshot.state,
       providerStatusMessage: snapshot.message
@@ -1245,7 +1239,6 @@ class ForgeSettingsApplication extends FormApplication {
       formControl(form, "providerApiToken"),
       formControl(form, "rememberProviderApiToken")
     ];
-    const planningTier = formControl(form, "planningTier");
 
     providerSelect.addEventListener("change", () => {
       clearProviderConnection(this);
@@ -1276,22 +1269,10 @@ class ForgeSettingsApplication extends FormApplication {
       }
     });
 
-    root.querySelector('[data-action="save-planning"]')?.addEventListener("click", async () => {
-      try {
-        await game.settings.set(MODULE_ID, "planningTier", planningTier.value);
-        if (forgeDialog?.rendered) {
-          refreshForgeProviderSummary(forgeDialog, forgeDialog.element?.querySelector("form"));
-        }
-        setSettingsStatus(this, "success", `Planning phase saved as ${getTier(planningTier.value)?.label ?? planningTier.value}.`);
-      } catch (error) {
-        reportError(this, error);
-      }
-    });
-
     root.querySelector('[data-action="check-provider"]')?.addEventListener("click", async () => {
       try {
         const providerState = settingsFormProviderState(form);
-        if (providerState.id !== "bring-your-own") {
+        if (getProvider(providerState.id)?.mode !== "network") {
           clearProviderConnection(this);
           if (forgeDialog?.rendered) {
             clearProviderConnection(forgeDialog);
@@ -1359,7 +1340,6 @@ class ForgeSettingsApplication extends FormApplication {
     if (!(form instanceof HTMLFormElement)) return;
     const providerState = settingsFormProviderState(form);
     await persistProviderState(providerState);
-    await game.settings.set(MODULE_ID, "planningTier", formControl(form, "planningTier").value);
     if (forgeDialog?.rendered) {
       refreshForgeProviderSummary(forgeDialog, forgeDialog.element?.querySelector("form"));
     }
@@ -1443,7 +1423,7 @@ async function openForge() {
   }
 
   forgeDialog = new foundry.applications.api.DialogV2({
-    classes: ["codex-item-forge"],
+    classes: ["dungeon-masters-forge"],
     window: {
       title: MODULE_TITLE,
       icon: "fa-solid fa-hammer",
@@ -1470,7 +1450,7 @@ async function openForge() {
             const provider = activeProviderState({
               unresolvedPolicy: formControl(button.form, "unresolvedPolicy").value
             });
-            if (provider.id === "bring-your-own") {
+            if (getProvider(provider.id)?.mode === "network") {
               setStatus(dialog, "working", "Checking remote service status...");
               dialog._codexProviderConnection = await checkProviderConnection(provider);
               refreshForgeProviderSummary(dialog, button.form);
@@ -1511,8 +1491,7 @@ async function openForge() {
             showDialogView(button.form, "review");
             const noteCount = compilation.assumptions.length
               + compilation.warnings.length
-              + compilation.deferred.length
-              + (validation.tierReview?.noteCount ?? 0);
+              + compilation.deferred.length;
             const itemCount = compilation.specs.length;
             const draftLabel = `${itemCount} item${itemCount === 1 ? "" : "s"}`;
             setStatus(dialog, noteCount ? "warning" : "success", noteCount
@@ -1548,16 +1527,13 @@ async function openForge() {
             await game.settings.set(MODULE_ID, "lastSpecs", rawSpecs);
             await renderPreview(dialog, validation);
             const warning = validation.warnings.length ? ` ${validation.warnings.join(" ")}` : "";
-            const tierNotes = validation.tierReview?.noteCount
-              ? ` ${validation.tierReview.noteCount} tier-planning note${validation.tierReview.noteCount === 1 ? "" : "s"} require review.`
-              : "";
             const unresolved = validation.unresolvedMechanicCount
               ? ` ${validation.unresolvedMechanicCount} unresolved mechanic${validation.unresolvedMechanicCount === 1 ? "" : "s"} require review.`
               : "";
             setStatus(
               dialog,
-              validation.warnings.length || validation.unresolvedMechanicCount || validation.tierReview?.noteCount ? "warning" : "success",
-              `Specs are valid.${warning}${tierNotes}${unresolved}`
+              validation.warnings.length || validation.unresolvedMechanicCount ? "warning" : "success",
+              `Specs are valid.${warning}${unresolved}`
             );
           } catch (error) {
             reportError(dialog, error);
@@ -1683,9 +1659,19 @@ async function migrateV2Settings() {
   }
 }
 
+async function applyHostedDefaultProvider() {
+  const hostedProvider = getProvider(HOSTED_PROVIDER_ID);
+  if (!hostedProvider?.available) return;
+  if (game.settings.get(MODULE_ID, "hostedDefaultApplied") === true) return;
+  await game.settings.set(MODULE_ID, "providerId", HOSTED_PROVIDER_ID);
+  await game.settings.set(MODULE_ID, "hostedDefaultApplied", true);
+}
+
 Hooks.once("ready", async () => {
   const module = game.modules.get(MODULE_ID);
+  await migrateLegacySettings();
   await migrateV2Settings();
+  await applyHostedDefaultProvider();
   module.api = {
     open: openForge,
     openSettings: openForgeSettings,

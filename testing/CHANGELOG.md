@@ -2,9 +2,9 @@
 
 ## Unreleased
 
-- Migrated the Foundry package ID to `dungeon-masters-forge` so install and update notifications use the public product identity.
-- Added first-launch migration for legacy world and client settings without overwriting settings already stored under the new package ID.
-- Kept legacy generated-item flags readable while writing all new document flags under `dungeon-masters-forge`.
+- Added the `2.23.0-test.1` package-identity migration build.
+- Changed the install identity to `dungeon-masters-forge`, migrated legacy settings, and retained read compatibility for legacy generated-item flags.
+- Added the `2.22.0-test.5` tester build for service `1.6.0`.
 - Displayed safe structured remote error messages, error codes, and request IDs instead of reducing service failures to a bare HTTP status.
 - Removed the obsolete user-facing project planning phase and planning-review warnings; launch-day release plans do not gate module features.
 - Added a disabled-by-default Free Forge release configuration for a baked HTTPS endpoint.

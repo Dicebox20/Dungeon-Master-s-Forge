@@ -2,17 +2,15 @@
 
 This is the shortest path for a trusted tester to install the current module build and try item generation without digging through the full project docs.
 
-Updated: 2026-07-01
+Updated: 2026-07-02
 
 ## What You Need
 
 - Foundry VTT v14
 - DND5e system 5.3.3
-- The Dungeon Master's Forge module manifest:
-  - `https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/main/module/module.json`
-- For live AI generation:
-  - a reachable Forge-compatible service endpoint
-  - either a shared service token or a personal OpenAI API key, depending on how the service owner set it up
+- The Dungeon Master's Forge tester manifest:
+  - `https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/refs/heads/codex/package-id-migration/testing/module.json`
+- An internet connection for hosted Free Forge generation
 
 ## Recommended Companion Modules
 
@@ -28,10 +26,11 @@ The Forge can still run its local deterministic workflow without every companion
 
 1. In Foundry, open **Add-on Modules**.
 2. Click **Install Module**.
-3. Paste the manifest URL:
-   - `https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/main/module/module.json`
+3. Paste the tester manifest URL:
+   - `https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/refs/heads/codex/package-id-migration/testing/module.json`
 4. Install **Dungeon Master's Forge V2**.
-5. Open your world and enable the module in **Manage Modules**.
+5. If the legacy package is installed, disable it and enable the new **Dungeon Master's Forge V2** package.
+6. Keep the legacy package installed through this first launch so its saved settings can migrate.
 
 ## Open The Forge
 
@@ -53,14 +52,18 @@ This path does not require any external AI service.
 
 ## If You Want Live AI Testing
 
+The tester build selects **Free Forge** automatically. No endpoint, model, API token, or personal OpenAI key is required.
+
 1. Open **Forge Settings**.
-2. Set the provider to **Bring Your Own API**.
-3. Enter:
-   - the Forge compile endpoint
-   - the model name allowed by that service
-   - the API token field value required by that service
-4. Click **Check Connection**.
-5. Confirm the status reports a healthy connection before compiling requests.
+2. Confirm the provider is **Free Forge**.
+3. Click **Check Connection**.
+4. Confirm the status reports a healthy connection before compiling requests.
+
+The hosted testing allowance is 20 generation requests per client per calendar month. Temporary per-minute and global daily safeguards also apply. Failed generation attempts may count against the allowance because they can still consume upstream service capacity.
+
+### Optional Bring Your Own API Testing
+
+Bring Your Own API remains available for testers who need a private service or their own usage pool. Select it in **Forge Settings**, then enter the compatible endpoint, model, and token required by that service.
 
 For the current reference service, the intended live compile endpoint is:
 
@@ -69,7 +72,7 @@ For the current reference service, the intended live compile endpoint is:
 If you are running the reference service locally on Windows, the most reliable launch path during testing is:
 
 ```powershell
-cd "C:\Users\rujie\Documents\Codex\2026-06-25\can\outputs\dungeon-masters-forge-ai-service"
+cd "<your Dungeon Master's Forge checkout>\ai-service"
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\start-openai-service.ps1 -Port 8788
 ```
 
@@ -79,6 +82,17 @@ Depending on the service deployment:
 
 - in server-key mode, the Foundry **API token** should be the shared `DMF_CLIENT_TOKEN`
 - in client-key mode, the Foundry **API token** should be the tester's own OpenAI API key
+
+### Testing From Another Network With Tailscale
+
+1. Install Tailscale on the service computer and the tester computer.
+2. Sign both computers into the same tailnet.
+3. Start the reference service with `DMF_HOST=0.0.0.0` and allow the tester's Foundry origin.
+4. In Foundry, use `http://<service-computer-tailscale-ip>:8788/v1/forge/compile` as the endpoint.
+5. Keep port `8788` private; ordinary internet router port forwarding is not required for Tailscale testing.
+6. Click **Check Connection** before attempting a live compile.
+
+The module accepts HTTP only for loopback and recognized private-network ranges, including Tailscale's `100.64.0.0/10` range. Public endpoints must use HTTPS.
 
 ## First Smoke Test
 
@@ -96,7 +110,7 @@ Then:
 
 ## Current Known Limits
 
-- Hosted Forge is not live yet.
+- Free Forge is a temporary tester service and still uses a staging hostname.
 - project access control enforcement is not live yet.
 - On some local Windows setups, the reference AI service is more reliable when left running in an open terminal window during testing.
 - Ally aura automation is still deferred.

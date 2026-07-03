@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createCompiler } from "../src/compiler.mjs";
 import { PROMPT_VERSION } from "../src/constants.mjs";
-import { ids, validSpecs } from "./fixtures/valid-specs.mjs";
+import { ServiceError } from "../src/errors.mjs";
+import { actor, damage, ids, validSpecs } from "./fixtures/valid-specs.mjs";
 import { config, envelope } from "./helpers.mjs";
 
 function responsesFetch(output, captures = []) {
@@ -83,4 +84,203 @@ test("common live-model aliases are normalized before validation", async () => {
   assert.equal(result.specs[0].damage.base.denomination, 4);
   assert.equal(result.specs[0].extraDamageParts[0].denomination, 4);
   assert.equal(result.specs[0].damage.base.bonus, "");
+});
+
+test("malformed top-level generated IDs are replaced with service IDs", async () => {
+  const spec = {
+    ...validSpecs[7],
+    activityId: "not-a-valid-activity-id",
+    effectId: "bad-effect-id"
+  };
+  const compile = createCompiler({
+    config: config({ mode: "openai" }),
+    fetchImpl: responsesFetch({ specs: [spec], assumptions: [], warnings: [], deferred: [] }),
+    makeId: ids()
+  });
+
+  const result = await compile(envelope({ request: `Item name: ${spec.name}` }));
+  assert.equal(result.specs[0].activityId, "0000000000000001");
+  assert.equal(result.specs[0].effectId, "0000000000000002");
+});
+
+test("malformed nested generated IDs are replaced with service IDs", async () => {
+  const spec = {
+    kind: "equipmentPowerSuite",
+    name: "Nested ID Suite",
+    description: "Nested ID Suite description",
+    effects: [{
+      name: "Nested Ward",
+      effectId: "effect-with-hyphen",
+      changes: [{ key: "system.attributes.ac.bonus", mode: "ADD", value: "1" }]
+    }],
+    attackActivities: [{
+      activityId: "attack with spaces",
+      activityName: "Mind Lance",
+      damageParts: [damage("psychic")]
+    }],
+    utilityActivities: [],
+    saveActivities: [],
+    summonActivity: {
+      activityId: "summon-activity-id",
+      activityName: "Summon Ally"
+    },
+    summonProfiles: [{
+      profileId: "profile-id-too-long",
+      profileName: "Wolf Ally",
+      actor: actor("Wolf Ally")
+    }]
+  };
+  const compile = createCompiler({
+    config: config({ mode: "openai" }),
+    fetchImpl: responsesFetch({ specs: [spec], assumptions: [], warnings: [], deferred: [] }),
+    makeId: ids()
+  });
+
+  const result = await compile(envelope({ request: `Item name: ${spec.name}` }));
+  assert.equal(result.specs[0].attackActivities[0].activityId, "0000000000000001");
+  assert.equal(result.specs[0].effects[0].effectId, "0000000000000002");
+  assert.equal(result.specs[0].summonProfiles[0].profileId, "0000000000000003");
+  assert.equal(result.specs[0].summonActivity.activityId, "0000000000000004");
+});
+
+test("artifact weapon hybrids may use activated powers without on-hit extra damage", async () => {
+  const spec = {
+    kind: "artifactWeaponHybrid",
+    name: "Dagger that can cast fireball",
+    description: "Dagger that can cast fireball description",
+    weaponType: "simpleM",
+    baseItem: "dagger",
+    damage: {
+      base: { number: 1, denomination: 4, bonus: "@mod", types: ["piercing"] }
+    },
+    uses: { max: "1", recovery: [{ period: "day", type: "recoverAll", formula: "" }] },
+    saveActivities: [{
+      activityName: "Cast Fireball",
+      save: { ability: "dex", dc: 15 },
+      damageParts: [{ number: 8, denomination: 6, bonus: "", types: ["fire"] }],
+      target: { template: { type: "sphere", size: 20, units: "ft" } },
+      range: { value: 150, units: "ft" }
+    }]
+  };
+  const compile = createCompiler({
+    config: config({ mode: "openai" }),
+    fetchImpl: responsesFetch({ specs: [spec], assumptions: [], warnings: [], deferred: [] }),
+    makeId: ids()
+  });
+
+  const result = await compile(envelope({ request: `Item name: ${spec.name}` }));
+  assert.equal(result.specs[0].kind, "artifactWeaponHybrid");
+  assert.deepEqual(result.specs[0].extraDamageParts, undefined);
+  assert.equal(result.specs[0].saveActivities[0].activityId, "0000000000000001");
+});
+
+test("casual prompt-copy item names are replaced with concise names", async () => {
+  const prompt = "dagger that has additional fire damage and cast fireball";
+  const spec = {
+    kind: "artifactWeaponHybrid",
+    name: prompt,
+    description: `${prompt} description`,
+    weaponType: "simpleM",
+    baseItem: "dagger",
+    damage: {
+      base: { number: 1, denomination: 4, bonus: "@mod", types: ["piercing"] }
+    },
+    extraDamageParts: [{ number: 1, denomination: 6, bonus: "", types: ["fire"] }],
+    uses: { max: "1", recovery: [{ period: "day", type: "recoverAll", formula: "" }] },
+    saveActivities: [{
+      activityName: "Cast Fireball",
+      save: { ability: "dex", dc: 15 },
+      damageParts: [{ number: 8, denomination: 6, bonus: "", types: ["fire"] }],
+      target: { template: { type: "sphere", size: 20, units: "ft" } },
+      range: { value: 150, units: "ft" }
+    }]
+  };
+  const compile = createCompiler({
+    config: config({ mode: "openai" }),
+    fetchImpl: responsesFetch({ specs: [spec], assumptions: [], warnings: [], deferred: [] }),
+    makeId: ids()
+  });
+
+  const result = await compile(envelope({ request: prompt }));
+  assert.equal(result.specs[0].name, "Dagger of Fireball and Flame");
+  assert.equal(result.specs[0].description, `${prompt} description`);
+});
+
+test("explicit prompt-like item names are preserved", async () => {
+  const explicitName = "dagger that has additional fire damage and cast fireball";
+  const spec = {
+    kind: "artifactWeaponHybrid",
+    name: explicitName,
+    description: `${explicitName} description`,
+    weaponType: "simpleM",
+    baseItem: "dagger",
+    damage: {
+      base: { number: 1, denomination: 4, bonus: "@mod", types: ["piercing"] }
+    },
+    extraDamageParts: [{ number: 1, denomination: 6, bonus: "", types: ["fire"] }],
+    saveActivities: [{
+      activityName: "Cast Fireball",
+      save: { ability: "dex", dc: 15 },
+      damageParts: [{ number: 8, denomination: 6, bonus: "", types: ["fire"] }]
+    }]
+  };
+  const compile = createCompiler({
+    config: config({ mode: "openai" }),
+    fetchImpl: responsesFetch({ specs: [spec], assumptions: [], warnings: [], deferred: [] }),
+    makeId: ids()
+  });
+
+  const result = await compile(envelope({ request: `Item name: ${explicitName}` }));
+  assert.equal(result.specs[0].name, explicitName);
+});
+
+test("contract-invalid model output receives one bounded retry", async () => {
+  let attempts = 0;
+  const compile = createCompiler({
+    config: config({ mode: "openai" }),
+    openaiAdapter: async () => {
+      attempts += 1;
+      if (attempts === 1) throw new ServiceError(502, "invalid_model_output", "The first model output was incomplete.");
+      return { specs: [validSpecs[0]], assumptions: [], warnings: [], deferred: [] };
+    },
+    makeId: ids()
+  });
+
+  const result = await compile(envelope({ request: `Item name: ${validSpecs[0].name}` }));
+  assert.equal(attempts, 2);
+  assert.equal(result.specs[0].name, validSpecs[0].name);
+});
+
+test("upstream service errors are not retried", async () => {
+  let attempts = 0;
+  const compile = createCompiler({
+    config: config({ mode: "openai" }),
+    openaiAdapter: async () => {
+      attempts += 1;
+      throw new ServiceError(502, "openai_error", "OpenAI returned HTTP 500.");
+    }
+  });
+
+  await assert.rejects(
+    compile(envelope({ request: "Item name: Upstream Failure" })),
+    error => error.code === "openai_error"
+  );
+  assert.equal(attempts, 1);
+});
+
+test("retryable model output stops after the second failed attempt", async () => {
+  let attempts = 0;
+  const compile = createCompiler({
+    config: config({ mode: "openai" }),
+    openaiAdapter: async () => {
+      attempts += 1;
+      throw new ServiceError(502, "invalid_model_json", "The model returned invalid JSON.");
+    }
+  });
+
+  await assert.rejects(
+    compile(envelope({ request: "Item name: Repeated Invalid Output" })),
+    error => error.code === "invalid_model_json"
+  );
+  assert.equal(attempts, 2);
 });

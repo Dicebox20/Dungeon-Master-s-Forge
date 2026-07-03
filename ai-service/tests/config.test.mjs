@@ -35,14 +35,30 @@ test("public free-tier mode requires bounded anonymous server-key deployment", (
     DMF_PUBLIC_FREE_TIER: "true",
     DMF_ALLOWED_ORIGINS: "*",
     DMF_CLIENT_DAILY_LIMIT: "4",
+    DMF_CLIENT_MONTHLY_LIMIT: "20",
     DMF_GLOBAL_DAILY_LIMIT: "80",
+    DMF_QUOTA_DATABASE_PATH: "./data/test-free-tier.sqlite",
+    DMF_QUOTA_HASH_SECRET: "test-quota-hash-secret-at-least-32-characters",
     DMF_TRUST_PROXY: "true"
   });
   assert.equal(result.publicFreeTier, true);
   assert.equal(result.trustProxy, true);
   assert.equal(result.clientDailyLimit, 4);
+  assert.equal(result.clientMonthlyLimit, 20);
   assert.equal(result.globalDailyLimit, 80);
+  assert.equal(result.quotaDatabasePath, "./data/test-free-tier.sqlite");
   assert.equal(result.allowClientApiKeyFallback, false);
+
+  assert.throws(() => loadConfig({
+    DMF_AI_MODE: "openai",
+    OPENAI_API_KEY: "server-secret",
+    DMF_PUBLIC_FREE_TIER: "true",
+    DMF_ALLOWED_ORIGINS: "*",
+    DMF_CLIENT_MONTHLY_LIMIT: "0",
+    DMF_GLOBAL_DAILY_LIMIT: "80",
+    DMF_QUOTA_DATABASE_PATH: "./data/test-free-tier.sqlite",
+    DMF_QUOTA_HASH_SECRET: "test-quota-hash-secret-at-least-32-characters"
+  }), /client monthly/);
 
   assert.throws(() => loadConfig({
     DMF_AI_MODE: "openai",
@@ -56,6 +72,21 @@ test("public free-tier mode requires bounded anonymous server-key deployment", (
     DMF_ALLOWED_ORIGINS: "*",
     DMF_CLIENT_TOKEN: "shared-secret"
   }), /must not require a shared DMF_CLIENT_TOKEN/);
+  assert.throws(() => loadConfig({
+    DMF_AI_MODE: "openai",
+    OPENAI_API_KEY: "server-secret",
+    DMF_PUBLIC_FREE_TIER: "true",
+    DMF_ALLOWED_ORIGINS: "*",
+    DMF_QUOTA_DATABASE_PATH: ":memory:",
+    DMF_QUOTA_HASH_SECRET: "test-quota-hash-secret-at-least-32-characters"
+  }), /durable DMF_QUOTA_DATABASE_PATH/);
+  assert.throws(() => loadConfig({
+    DMF_AI_MODE: "openai",
+    OPENAI_API_KEY: "server-secret",
+    DMF_PUBLIC_FREE_TIER: "true",
+    DMF_ALLOWED_ORIGINS: "*",
+    DMF_QUOTA_DATABASE_PATH: "./data/free-tier-quota.sqlite"
+  }), /DMF_QUOTA_HASH_SECRET/);
 });
 
 test("result cache settings are bounded and can be disabled", () => {

@@ -70,12 +70,14 @@ function validateEffect(spec, effect, field) {
   });
 }
 
-function validateWeapon(spec) {
+function validateWeapon(spec, { requireExtraDamageParts = true } = {}) {
   const damage = requireObject(spec, spec.damage, "damage");
   validateDamagePart(spec, damage.base, "damage.base");
   requireString(spec, spec.weaponType, "weaponType");
-  requireArray(spec, spec.extraDamageParts, "extraDamageParts");
-  spec.extraDamageParts.forEach((part, index) => validateDamagePart(spec, part, `extraDamageParts[${index}]`));
+  if (requireExtraDamageParts) requireArray(spec, spec.extraDamageParts, "extraDamageParts");
+  for (const [index, part] of (spec.extraDamageParts ?? []).entries()) {
+    validateDamagePart(spec, part, `extraDamageParts[${index}]`);
+  }
 }
 
 function validateChargedSave(spec) {
@@ -200,7 +202,7 @@ const validators = {
     validateSuite(spec);
   },
   artifactWeaponHybrid(spec) {
-    validateWeapon(spec);
+    validateWeapon(spec, { requireExtraDamageParts: false });
     const hybridFeatures = [spec.passiveEffects, spec.utilityActivities, spec.saveActivities]
       .some(value => Array.isArray(value) && value.length) || isObject(spec.toggleLight);
     if (!hybridFeatures) fail(spec, "at least one passive effect, utility, save power, or light toggle");

@@ -7,6 +7,7 @@ import { createCompiler } from "./compiler.mjs";
 import { createConcurrencyGate } from "./concurrency-gate.mjs";
 import { ServiceError, publicError } from "./errors.mjs";
 import { createCachedCompiler } from "./result-cache.mjs";
+import { createDailyQuotaStore } from "./quota-store.mjs";
 
 function tokenEqual(actual, expected) {
   const left = createHash("sha256").update(String(actual)).digest();
@@ -122,12 +123,15 @@ function createForgeServer(options) {
   });
   const logger = options.logger ?? console;
   const rateLimit = createRateLimiter(config.rateLimitPerMinute, options.now);
-  const clientDailyLimit = config.clientDailyLimit > 0
-    ? createRateLimiter(config.clientDailyLimit, options.now, 86400000)
+  const usesDailyQuota = config.clientDailyLimit > 0 || config.clientMonthlyLimit > 0 || config.globalDailyLimit > 0;
+  const dailyQuotaStore = usesDailyQuota
+    ? (options.dailyQuotaStore ?? createDailyQuotaStore({
+        databasePath: config.quotaDatabasePath,
+        hashSecret: config.quotaHashSecret,
+        now: options.now
+      }))
     : null;
-  const globalDailyLimit = config.globalDailyLimit > 0
-    ? createRateLimiter(config.globalDailyLimit, options.now, 86400000)
-    : null;
+  const ownsDailyQuotaStore = usesDailyQuota && !options.dailyQuotaStore;
 
   const server = createServer(async (request, response) => {
     const requestId = randomUUID();
@@ -152,12 +156,14 @@ function createForgeServer(options) {
           mode: config.mode,
           access: config.publicFreeTier ? "public-free-tier" : "private",
           cache: config.cacheTtlMs > 0 && config.cacheMaxEntries > 0 ? "enabled" : "disabled",
+          quotaStorage: dailyQuotaStore?.status?.() ?? { kind: "disabled", durable: false },
           compilation: compilationGate.status(),
           requestLimits: {
             maxCharacters: config.maxRequestChars,
             maxItems: config.maxItemsPerRequest,
             perMinute: config.rateLimitPerMinute,
             perClientDay: config.clientDailyLimit,
+            perClientMonth: config.clientMonthlyLimit,
             globalPerDay: config.globalDailyLimit
           }
         });
@@ -192,8 +198,17 @@ function createForgeServer(options) {
         throw new ServiceError(429, "rate_limited", "Forge AI request limit exceeded. Try again shortly.");
       }
 
-      if (clientDailyLimit) {
-        const daily = clientDailyLimit(client);
+      if (dailyQuotaStore && config.clientMonthlyLimit > 0) {
+        const monthly = dailyQuotaStore.consumeMonthly("client-month", client, config.clientMonthlyLimit);
+        response.setHeader("X-MonthlyLimit-Limit", String(config.clientMonthlyLimit));
+        response.setHeader("X-MonthlyLimit-Remaining", String(monthly.remaining));
+        if (!monthly.allowed) {
+          response.setHeader("Retry-After", String(monthly.retryAfter));
+          throw new ServiceError(429, "monthly_client_limit", "This free-tier client has reached its monthly Forge AI limit.");
+        }
+      }
+      if (dailyQuotaStore && config.clientDailyLimit > 0) {
+        const daily = dailyQuotaStore.consume("client", client, config.clientDailyLimit);
         response.setHeader("X-DailyLimit-Limit", String(config.clientDailyLimit));
         response.setHeader("X-DailyLimit-Remaining", String(daily.remaining));
         if (!daily.allowed) {
@@ -201,8 +216,8 @@ function createForgeServer(options) {
           throw new ServiceError(429, "daily_client_limit", "This free-tier client has reached its daily Forge AI limit.");
         }
       }
-      if (globalDailyLimit) {
-        const daily = globalDailyLimit("global");
+      if (dailyQuotaStore && config.globalDailyLimit > 0) {
+        const daily = dailyQuotaStore.consume("global", "global", config.globalDailyLimit);
         response.setHeader("X-GlobalDailyLimit-Limit", String(config.globalDailyLimit));
         response.setHeader("X-GlobalDailyLimit-Remaining", String(daily.remaining));
         if (!daily.allowed) {
@@ -221,6 +236,7 @@ function createForgeServer(options) {
     } catch (error) {
       if (response.destroyed) return;
       const safe = publicError(error);
+      logger.warn?.(`${request.method ?? "UNKNOWN"} ${request.url ?? "/"} failed ${safe.code} ${requestId}`);
       if (safe.code === "service_busy") response.setHeader("Retry-After", "5");
       sendJson(response, safe.status, {
         error: { code: safe.code, message: safe.message, requestId }
@@ -230,6 +246,8 @@ function createForgeServer(options) {
       logger.info?.(`${request.method ?? "UNKNOWN"} ${request.url ?? "/"} ${response.statusCode} ${elapsedMs}ms ${requestId}`);
     }
   });
+
+  if (ownsDailyQuotaStore) server.once("close", () => dailyQuotaStore.close());
 
   return server;
 }

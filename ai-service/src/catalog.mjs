@@ -12,7 +12,7 @@ const PATTERN_GUIDANCE = Object.freeze({
   casterUtilityEquipment: "Caster item combining passive effects with known utility spell activities. Use effects, uses, utilityActivities, saveActivities when a spell has a save, and resistances through Active Effect changes.",
   equipmentPowerSuite: "Complex non-weapon equipment. Use effects, uses, attackActivities, utilityActivities, saveActivities, summonActivity, and summonProfiles as needed. Keep each command as a separate activity.",
   legendaryEquipmentSuite: "Complex legendary non-weapon item. Use passive effects, shared charges, separate utility/save/attack/summon activities, and unresolved records for table-adjudicated clauses.",
-  artifactWeaponHybrid: "Artifact weapon. Use normal weapon damage plus extraDamageParts, passiveEffects, toggleLight, uses, and separate saveActivities. Never make activated spell damage part of every weapon attack."
+  artifactWeaponHybrid: "Artifact weapon. Use normal weapon damage, optional extraDamageParts only for on-hit riders, passiveEffects, toggleLight, uses, utilityActivities, and separate saveActivities for activated spell damage. Never make activated spell damage part of every weapon attack."
 });
 
 const COMMON_GUIDANCE = `

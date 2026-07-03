@@ -1,8 +1,8 @@
 # Dungeon Master's Forge AI Service
 
-This is the stable reference server for Dungeon Master's Forge V2.17. Foundry sends the versioned Forge `1.0` request envelope to this service; the service compiles it with either a deterministic mock or OpenAI and returns reviewed Forge item specs.
+This is the stable reference server for Dungeon Master's Forge V2.21.12. Foundry sends the versioned Forge `1.0` request envelope to this service; the service compiles it with either a deterministic mock or OpenAI and returns reviewed Forge item specs.
 
-The service requires Node.js 20 or newer and has no package dependencies.
+The service requires Node.js 22.13 or newer and has no package dependencies.
 
 ## Architecture
 
@@ -15,6 +15,7 @@ The service requires Node.js 20 or newer and has no package dependencies.
 - Successful compilations are cached briefly by canonical request content. Duplicate and concurrent submissions reuse the same result, reducing accidental model charges without storing data on disk.
 - Distinct compilations pass through a bounded FIFO queue, preventing request bursts from creating unlimited simultaneous model calls.
 - Request length and requested item count are checked before model invocation, bounding prompt cost and batch output size.
+- Public free-tier monthly client allowances and global daily safeguards use a transactional SQLite ledger that survives restarts and stores only keyed client digests rather than raw IP addresses.
 - The system prompt has an explicit version and treats all request text and item names as untrusted data that cannot override compiler rules.
 - Foundry still validates every returned spec and requires explicit review before creating world documents.
 
@@ -23,7 +24,7 @@ The service requires Node.js 20 or newer and has no package dependencies.
 Mock mode proves the entire Foundry-to-service workflow without credentials, spending money, or making an external network request.
 
 ```powershell
-cd "C:\Users\rujie\Documents\Codex\2026-06-25\can\outputs\dungeon-masters-forge-ai-service"
+cd "<your Dungeon Master's Forge checkout>\ai-service"
 $env:DMF_AI_MODE = "mock"
 $env:DMF_ALLOWED_ORIGINS = "http://10.0.0.26:30000"
 node src/cli.mjs
@@ -48,7 +49,7 @@ OpenAI mode supports two live setups:
 - **Client-key mode:** leave `OPENAI_API_KEY` blank and paste a personal OpenAI API key into Foundry's **API token** field on a trusted device.
 
 ```powershell
-cd "C:\Users\rujie\Documents\Codex\2026-06-25\can\outputs\dungeon-masters-forge-ai-service"
+cd "<your Dungeon Master's Forge checkout>\ai-service"
 $env:DMF_AI_MODE = "openai"
 $env:DMF_ALLOWED_ORIGINS = "http://10.0.0.26:30000"
 $env:DMF_CLIENT_TOKEN = "choose-a-long-random-service-token"
@@ -70,7 +71,7 @@ For the current release candidate, the canonical local live-testing endpoint is:
 Recommended launch command on Windows:
 
 ```powershell
-cd "C:\Users\rujie\Documents\Codex\2026-06-25\can\outputs\dungeon-masters-forge-ai-service"
+cd "<your Dungeon Master's Forge checkout>\ai-service"
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\start-openai-service.ps1 -Port 8788
 ```
 
@@ -89,11 +90,14 @@ Copy `.env.example` to `.env` and run `npm run start:env`, or set variables dire
 | `DMF_AI_MODE` | `mock` | `mock` or `openai`. |
 | `DMF_ALLOWED_ORIGINS` | localhost Foundry origins | Comma-separated exact Foundry origins. |
 | `DMF_CLIENT_TOKEN` | empty | Optional bearer token shared with the Foundry client in server-key mode. |
-| `DMF_PUBLIC_FREE_TIER` | `false` | Enables bounded anonymous downloader access; requires a server key, wildcard origins, and daily limits. |
+| `DMF_PUBLIC_FREE_TIER` | `false` | Enables bounded anonymous downloader access; requires a server key, wildcard origins, a monthly client allowance, and a global daily ceiling. |
 | `DMF_TRUST_PROXY` | `false` | Trust the first `X-Forwarded-For` address. Enable only behind a proxy that replaces untrusted forwarding headers. |
 | `DMF_RATE_LIMIT_PER_MINUTE` | `20` | Per-client in-memory limit. |
-| `DMF_CLIENT_DAILY_LIMIT` | `0` private / `5` free tier | Per-client in-memory daily request limit; `0` disables it outside free-tier mode. |
-| `DMF_GLOBAL_DAILY_LIMIT` | `0` private / `100` free tier | Global in-memory daily request limit; `0` disables it outside free-tier mode. |
+| `DMF_CLIENT_DAILY_LIMIT` | `0` | Optional per-client daily request limit; `0` disables it. |
+| `DMF_CLIENT_MONTHLY_LIMIT` | `0` private / `20` free tier | Per-client calendar-month request limit; required in public free-tier mode. |
+| `DMF_GLOBAL_DAILY_LIMIT` | `0` private / `100` free tier | Global daily request limit; `0` disables it outside free-tier mode. |
+| `DMF_QUOTA_DATABASE_PATH` | `:memory:` private / `./data/free-tier-quota.sqlite` free tier | SQLite quota ledger. Public mode rejects in-memory storage. |
+| `DMF_QUOTA_HASH_SECRET` | empty | Server-only secret of at least 32 characters used to pseudonymize client addresses in the quota ledger. Required in public mode. |
 | `DMF_MAX_CONCURRENT_COMPILATIONS` | `2` | Maximum simultaneous compiler or model calls. |
 | `DMF_MAX_QUEUED_COMPILATIONS` | `20` | Waiting compilation limit; `0` rejects when all active slots are occupied. |
 | `DMF_CACHE_TTL_MS` | `300000` | Successful-result lifetime in milliseconds; `0` disables caching. |
@@ -112,12 +116,13 @@ Copy `.env.example` to `.env` and run `npm run start:env`, or set variables dire
 ```powershell
 npm run check
 npm test
+npm run preflight:free-tier
 npm run smoke
 npm run smoke:batch
 npm run smoke:capabilities
 ```
 
-The smoke commands expect the service to already be running. They print only contract versions and generated item names, never credentials or full requests. The batch smoke proves two explicitly named items survive the complete request/response path. The automated suite drives all fourteen supported Forge families through a mocked OpenAI Responses call and the complete compiler pipeline, then rejects incomplete or unsafe weapons, effects, charged powers, enchantments, summons, suites, and hybrid artifacts before they can reach Foundry.
+`preflight:free-tier` validates `.env`, opens the configured SQLite quota ledger, and prints a redacted deployment report without calling a model. The smoke commands expect the service to already be running. They print only contract versions and generated item names, never credentials or full requests. The batch smoke proves two explicitly named items survive the complete request/response path. The automated suite drives all fourteen supported Forge families through a mocked OpenAI Responses call and the complete compiler pipeline, then rejects incomplete or unsafe weapons, effects, charged powers, enchantments, summons, suites, and hybrid artifacts before they can reach Foundry.
 
 For the current release candidate, a direct local smoke proof was verified successfully against:
 
@@ -138,4 +143,4 @@ For the current release candidate, a direct local smoke proof was verified succe
 
 ## Production Boundary
 
-Service `1.3.0` includes a bounded public free-tier alpha mode. See `docs/FREE_TIER_DEPLOYMENT.md` and `.env.free-tier.example`. Its rate limiters and result cache are still in memory, it has no project access control store, and it does not provide durable multi-tenant accounting. Keep the module's Hosted Forge provider disabled until a public HTTPS deployment, durable quotas, and launch smoke tests are complete.
+Service `1.6.0` includes bounded public free-tier mode with a durable SQLite quota ledger and one controlled retry for malformed or contract-invalid model output. Authentication, quota, timeout, network, and generic upstream failures are never retried. See `docs/FREE_TIER_DEPLOYMENT.md` and `.env.free-tier.example`. The per-minute limiter and result cache remain in memory by design, while the 20-request client calendar-month allowance and global daily ceiling survive restarts. The service still has no project access control store and is intended for one persistent host; horizontally scaled deployments need a shared transactional quota backend.
