@@ -117,9 +117,19 @@ test("unsupported generated kinds cannot reach Foundry", () => {
   }, request), /unsupported Forge kind/);
 });
 
-test("malformed model IDs are rejected rather than repaired silently", () => {
+test("malformed model IDs are replaced with trusted service IDs", () => {
   const request = validateForgeRequest(envelope());
-  assert.throws(() => normalizeModelOutput({
-    specs: [{ kind: "chargedSaveDamage", name: "Bad Wand", activityId: "short" }]
-  }, request), /exactly 16/);
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "chargedSaveDamage",
+      name: "Bad Wand",
+      description: "A wand with a malformed model-generated ID.",
+      activityId: "short",
+      uses: { max: "3", recovery: [{ period: "dawn", type: "recoverAll", formula: "" }] },
+      save: { ability: "dex", dc: 15 },
+      damageParts: [{ number: 1, denomination: 6, bonus: "", types: ["fire"] }]
+    }]
+  }, request, { makeId: ids() });
+
+  assert.equal(result.specs[0].activityId, "0000000000000001");
 });
