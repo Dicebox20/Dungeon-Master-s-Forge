@@ -13,7 +13,7 @@ Updated: 2026-07-02
 - The Tailscale endpoint-support pull request is merged into GitHub `main`.
 - A local true AI compile has succeeded end to end without creating a world document during the smoke proof.
 - The official Droplet service runs `1.6.0` behind HTTPS with bounded model-output retry and preserved rollback backups.
-- A separate `2.22.0-test.5` manifest automatically connects invited testers to Free Forge, removes obsolete Patreon planning gates, and displays structured service failures.
+- A separate `2.23.0-test.1` manifest migrates the package identity, automatically connects invited testers to Free Forge, removes obsolete Patreon planning gates, and displays structured service failures.
 - The public manifest and `2.21.12` release ZIP URLs both return HTTP 200 from GitHub raw content.
 
 ## Needed Before Wider Live Testing

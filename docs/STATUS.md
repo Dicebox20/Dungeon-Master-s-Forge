@@ -4,7 +4,7 @@ Updated: 2026-07-02
 
 ## Publish Candidate
 
-- Public export candidate: `2.21.12`
+- Package-identity migration candidate: `2.23.0`
 - Module manifest target: `module/module.json`
 - Release ZIP: `releases/dungeon-masters-forge-v2-2.21.12.zip`
 - Release ZIP SHA-256: `FC9FEBC4B7404541563965F6632614A3C41E175D92EC952942950942BFABC5C0`
@@ -33,7 +33,7 @@ Updated: 2026-07-02
 - Added AI service `1.5.0` calendar-month client quotas for the official 20-generation Free Forge allowance.
 - Added AI service `1.6.0` bounded model-output retry and safe request-id error logging after an invited tester exposed an opaque `502` failure.
 - Added a disabled-by-default module activation seam for automatic Free Forge selection in private hosted builds without publishing a temporary endpoint.
-- Added a separate `2.22.0-test.5` tester channel that enables Free Forge automatically, removes obsolete Patreon planning gates, and displays safe structured remote errors.
+- Added a `2.23.0-test.1` tester channel that migrates the package identity to `dungeon-masters-forge`, enables Free Forge automatically, and displays safe structured remote errors.
 
 ## Current Technical State
 
@@ -59,7 +59,7 @@ Updated: 2026-07-02
 - Tailscale HTTP endpoint acceptance is covered by module tests and merged; a second-machine Tailscale compile remains the next external verification.
 - The public manifest and `2.21.12` ZIP URLs both resolve successfully from GitHub raw content with HTTP 200.
 - AI service `1.6.0` passes all 86 tests independently on the Droplet and is live with the existing quota ledger intact.
-- The independently extracted `2.22.0-test.5` tester package passes all 14 packaged test files and is paired with live service `1.6.0`.
+- The independently extracted `2.23.0-test.1` package passes all 15 packaged test files; a live first-launch settings migration test remains before promotion.
 - The temporary staging hostname is present only in the tester channel; the stable release remains endpoint-free.
 
 ## Next Release Tasks

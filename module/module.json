@@ -1,5 +1,5 @@
 {
-  "id": "codex-item-forge",
+  "id": "dungeon-masters-forge",
   "title": "Dungeon Master's Forge V2",
   "description": "Dungeon Master's Forge V2: a reusable DND5e item creation engine for Foundry VTT v14.",
   "authors": [
@@ -7,10 +7,10 @@
       "name": "Dungeon Master's Forge V2 Project"
     }
   ],
-  "version": "2.21.12",
+  "version": "2.23.0",
   "url": "https://github.com/Dicebox20/Dungeon-Master-s-Forge",
   "manifest": "https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/main/module/module.json",
-  "download": "https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/main/releases/dungeon-masters-forge-v2-2.21.12.zip",
+  "download": "https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/main/releases/dungeon-masters-forge-v2-2.23.0.zip",
   "readme": "https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/main/module/README.md",
   "changelog": "https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/main/module/CHANGELOG.md",
   "compatibility": {
@@ -26,6 +26,13 @@
           "minimum": "5.3.3",
           "verified": "5.3.3"
         }
+      }
+    ],
+    "conflicts": [
+      {
+        "id": "codex-item-forge",
+        "type": "module",
+        "reason": "Legacy package identity. Disable the old package after settings migration."
       }
     ]
   },
