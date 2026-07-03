@@ -41,8 +41,12 @@ import {
   serializeProviderProfile
 } from "./provider-profile.js";
 import { buildReviewSummaries } from "./review-summary.js";
+import {
+  LEGACY_MODULE_ID,
+  MODULE_ID,
+  migrateLegacySettings
+} from "./package-identity.js";
 
-const MODULE_ID = "codex-item-forge";
 const MODULE_TITLE = PRODUCT_TITLE;
 const MIN_DND5E_VERSION = "5.3.3";
 const SETTINGS_TEMPLATE_PATH = `modules/${MODULE_ID}/templates/forge-settings.hbs`;
@@ -86,6 +90,15 @@ function escapeHTML(value) {
     .replaceAll("'", "&#039;");
 }
 
+function registerSetting(key, data) {
+  game.settings.register(MODULE_ID, key, { ...data });
+  const { name: _name, hint: _hint, ...legacyData } = data;
+  game.settings.register(LEGACY_MODULE_ID, key, {
+    ...legacyData,
+    config: false
+  });
+}
+
 function registerSettings() {
   game.settings.registerMenu(MODULE_ID, "forgeSettings", {
     name: "Forge settings",
@@ -96,7 +109,7 @@ function registerSettings() {
     restricted: true
   });
 
-  game.settings.register(MODULE_ID, "itemFolderName", {
+  registerSetting("itemFolderName", {
     name: "Item folder",
     hint: "World folder used for generated items.",
     scope: "world",
@@ -105,7 +118,7 @@ function registerSettings() {
     default: "Dungeon Master's Forge V2"
   });
 
-  game.settings.register(MODULE_ID, "actorFolderName", {
+  registerSetting("actorFolderName", {
     name: "Summon actor folder",
     hint: "World folder used for generated summon actors.",
     scope: "world",
@@ -114,7 +127,7 @@ function registerSettings() {
     default: "Dungeon Master's Forge V2 Summons"
   });
 
-  game.settings.register(MODULE_ID, "sourceLabel", {
+  registerSetting("sourceLabel", {
     name: "Source label",
     hint: "Source text written to generated items.",
     scope: "world",
@@ -123,7 +136,7 @@ function registerSettings() {
     default: sourceLabelForVersion(BUILD_VERSION)
   });
 
-  game.settings.register(MODULE_ID, "replaceExisting", {
+  registerSetting("replaceExisting", {
     name: "Replace matching world documents",
     hint: "Delete world items and summon actors with the same name before creating replacements.",
     scope: "world",
@@ -132,63 +145,63 @@ function registerSettings() {
     default: true
   });
 
-  game.settings.register(MODULE_ID, "lastSpecs", {
+  registerSetting("lastSpecs", {
     scope: "client",
     config: false,
     type: String,
     default: JSON.stringify(EXAMPLE_SPECS, null, 2)
   });
 
-  game.settings.register(MODULE_ID, "lastRequest", {
+  registerSetting("lastRequest", {
     scope: "client",
     config: false,
     type: String,
     default: ""
   });
 
-  game.settings.register(MODULE_ID, "providerId", {
+  registerSetting("providerId", {
     scope: "client",
     config: false,
     type: String,
     default: DEFAULT_PROVIDER_ID
   });
 
-  game.settings.register(MODULE_ID, "hostedDefaultApplied", {
+  registerSetting("hostedDefaultApplied", {
     scope: "client",
     config: false,
     type: Boolean,
     default: false
   });
 
-  game.settings.register(MODULE_ID, "unresolvedPolicy", {
+  registerSetting("unresolvedPolicy", {
     scope: "client",
     config: false,
     type: String,
     default: "review"
   });
 
-  game.settings.register(MODULE_ID, "providerEndpoint", {
+  registerSetting("providerEndpoint", {
     scope: "client",
     config: false,
     type: String,
     default: ""
   });
 
-  game.settings.register(MODULE_ID, "providerModel", {
+  registerSetting("providerModel", {
     scope: "client",
     config: false,
     type: String,
     default: ""
   });
 
-  game.settings.register(MODULE_ID, "rememberProviderApiToken", {
+  registerSetting("rememberProviderApiToken", {
     scope: "client",
     config: false,
     type: Boolean,
     default: false
   });
 
-  game.settings.register(MODULE_ID, "providerApiToken", {
+  registerSetting("providerApiToken", {
     scope: "client",
     config: false,
     type: String,
@@ -382,7 +395,7 @@ function forgeContent() {
   const unresolvedPolicy = currentUnresolvedPolicy();
 
   return `
-    <section class="codex-item-forge-shell">
+    <section class="dungeon-masters-forge-shell">
       <div class="codex-forge-statusbar" aria-label="System status">
         ${moduleStatusHTML()}
       </div>
@@ -1182,7 +1195,7 @@ class ForgeSettingsApplication extends FormApplication {
   static get defaultOptions() {
     return foundry.utils.mergeObject(super.defaultOptions, {
       id: `${MODULE_ID}-settings`,
-      classes: ["codex-item-forge-settings"],
+      classes: ["dungeon-masters-forge-settings"],
       template: SETTINGS_TEMPLATE_PATH,
       title: `${MODULE_TITLE} Settings`,
       width: 760,
@@ -1410,7 +1423,7 @@ async function openForge() {
   }
 
   forgeDialog = new foundry.applications.api.DialogV2({
-    classes: ["codex-item-forge"],
+    classes: ["dungeon-masters-forge"],
     window: {
       title: MODULE_TITLE,
       icon: "fa-solid fa-hammer",
@@ -1656,6 +1669,7 @@ async function applyHostedDefaultProvider() {
 
 Hooks.once("ready", async () => {
   const module = game.modules.get(MODULE_ID);
+  await migrateLegacySettings();
   await migrateV2Settings();
   await applyHostedDefaultProvider();
   module.api = {

@@ -1,14 +1,14 @@
 # Dungeon Master's Forge Tester Channel
 
-This channel is for invited pre-launch testers. It installs alongside the normal Dungeon Master's Forge module identity and automatically selects the hosted **Free Forge** provider.
+This channel is for invited pre-launch testers. It uses the new `dungeon-masters-forge` package identity and automatically selects the hosted **Free Forge** provider.
 
 ## Install
 
 Paste this URL into Foundry VTT's **Install Module** manifest field:
 
-`https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/codex/launch-readiness-docs/testing/module.json`
+`https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/codex/package-id-migration/testing/module.json`
 
-Enable **Dungeon Master's Forge V2** in a Foundry v14 world using DND5e 5.3.3 or newer. Free Forge does not require an endpoint, API token, or personal OpenAI key.
+If the legacy `codex-item-forge` package is installed, disable it before enabling **Dungeon Master's Forge V2**. Keep it installed through the first launch so the new module can copy its saved settings. Existing generated-item flags remain compatible. Free Forge does not require an endpoint, API token, or personal OpenAI key.
 
 ## Testing Allowance
 
@@ -20,7 +20,7 @@ This is a temporary testing channel. Its hosted endpoint and update path may cha
 
 ## Build
 
-- Version: `2.22.0-test.5`
-- Archive SHA-256: `2D6859B9A001FEE2D0D570C964E897C6727236A40EE700E9BEDC89B46E32F37E`
-- Packaged module test files: 14/14 passing
+- Version: `2.23.0-test.1`
+- Archive SHA-256: `4101A3AA64A378AF9F951631629DF65FFF89CDEE1E34660F71F9EF72AE60B6E4`
+- Packaged module test files: 15/15 passing
 - Live service: `1.6.0` with bounded invalid-output retry and structured request-id errors

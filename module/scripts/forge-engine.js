@@ -5,6 +5,8 @@
  * Expects Foundry globals: game, ui, Folder, Item, Actor, CONFIG, CONST, foundry, Roll, ChatMessage, canvas.
  */
 
+import { MODULE_ID, readForgeFlags } from "./package-identity.js";
+
 async function runCodexItemForge(FORGE, ITEMS, { validateOnly = false } = {}) {
   function makeIdentifier(name) {
     return name
@@ -173,12 +175,12 @@ async function runCodexItemForge(FORGE, ITEMS, { validateOnly = false } = {}) {
 
   async function createWorldItem(spec, data, folder) {
     await deleteExistingWorldItem(spec.name);
-    const forgeFlags = data.flags?.["codex-item-forge"] ?? {};
+    const forgeFlags = readForgeFlags(data.flags);
     return Item.create({
       ...data,
       folder: folder.id,
       flags: foundry.utils.mergeObject(data.flags ?? {}, {
-        "codex-item-forge": {
+        [MODULE_ID]: {
           ...forgeFlags,
           kind: spec.kind,
           engine: FORGE.engineVersion ?? "unknown",
@@ -500,7 +502,7 @@ async function runCodexItemForge(FORGE, ITEMS, { validateOnly = false } = {}) {
           disabled: false,
           duration: spec.duration?.seconds ? { seconds: spec.duration.seconds } : {},
           changes: (spec.enchantChanges ?? []).map(enchantChange),
-          flags: { "codex-item-forge": { effect: "native-enchantment" } }
+          flags: { [MODULE_ID]: { effect: "native-enchantment" } }
         }
       ]
     }, folder);
@@ -602,7 +604,7 @@ async function runCodexItemForge(FORGE, ITEMS, { validateOnly = false } = {}) {
         traits: { size: actorSpec.size ?? "med" }
       },
       flags: {
-        "codex-item-forge": {
+        [MODULE_ID]: {
           template: "summon-actor",
           engine: FORGE.engineVersion ?? "unknown",
           createdAt: new Date().toISOString()
@@ -663,7 +665,7 @@ async function runCodexItemForge(FORGE, ITEMS, { validateOnly = false } = {}) {
       }, { inplace: false }),
       effects: [],
       flags: {
-        "codex-item-forge": {
+        [MODULE_ID]: {
           summonActorUuid: summonActor.uuid
         }
       }
@@ -1002,7 +1004,7 @@ ${activitySpec.macroCommand}
         }
       },
       flags: {
-        "codex-item-forge": {
+        [MODULE_ID]: {
           template: "multi-profile-summon-actor",
           profileId: profile.profileId,
           profileName: profile.profileName ?? "",
@@ -1062,7 +1064,7 @@ ${activitySpec.macroCommand}
       system: equipmentSystem(spec),
       effects: [],
       flags: {
-        "codex-item-forge": {
+        [MODULE_ID]: {
           summonActorUuids: Object.fromEntries(Array.from(actorsByProfileId.entries()).map(([id, actor]) => [id, actor.uuid]))
         }
       }
@@ -1144,7 +1146,7 @@ ${activitySpec.macroCommand}
       effects: (spec.effects ?? []).map(effect => transferEffectFromSpec(spec, effect)),
       flags: foundry.utils.mergeObject(
         actorsByProfileId.size ? {
-          "codex-item-forge": {
+          [MODULE_ID]: {
             summonActorUuids: Object.fromEntries(Array.from(actorsByProfileId.entries()).map(([id, actor]) => [id, actor.uuid]))
           }
         } : {},
@@ -1547,7 +1549,7 @@ async function applyCondition(targetActor, targetToken) {
     description: CONDITION + " from " + (macroItem?.name ?? "weapon") + ".",
     flags: {
       core: { statusId: CONDITION },
-      "codex-item-forge": {
+      ${JSON.stringify(MODULE_ID)}: {
         source: SOURCE_LABEL,
         tokenUuid: targetToken?.document?.uuid ?? targetToken?.uuid ?? ""
       }
@@ -1742,7 +1744,7 @@ for (const target of targets) {
       rarity: doc.system.rarity ?? "",
       attunement: doc.system.attunement ?? "",
       usesMax: doc.system.uses?.max ?? "",
-      unresolvedMechanicCount: doc.flags?.["codex-item-forge"]?.unresolvedMechanics?.length ?? 0,
+      unresolvedMechanicCount: readForgeFlags(doc.flags).unresolvedMechanics?.length ?? 0,
       effects: Array.from(doc.effects ?? []).map(effect => ({
         name: effect.name,
         type: effect.type,
