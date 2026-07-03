@@ -47,6 +47,16 @@ function validateUses(spec) {
   requireArray(spec, uses.recovery, "uses.recovery");
 }
 
+function validateConsumedUses(spec) {
+  const uses = requireObject(spec, spec.uses, "uses");
+  if (String(uses.max ?? "").trim() === "") fail(spec, "uses.max", "to be set");
+  if (uses.autoDestroy === true || String(uses.max ?? "").trim() === "1") {
+    if (!Array.isArray(uses.recovery)) uses.recovery = [];
+    return;
+  }
+  requireArray(spec, uses.recovery, "uses.recovery");
+}
+
 function validateSave(spec, save, field) {
   requireObject(spec, save, field);
   requireString(spec, save.ability, `${field}.ability`);
@@ -137,7 +147,7 @@ const validators = {
     validateWeapon(spec);
   },
   weaponConditionOnHit(spec) {
-    validateWeapon(spec);
+    validateWeapon(spec, { requireExtraDamageParts: false });
     const condition = requireObject(spec, spec.conditionOnHit, "conditionOnHit");
     requireString(spec, condition.condition, "conditionOnHit.condition");
     validateSave(spec, condition.save, "conditionOnHit.save");
@@ -152,7 +162,7 @@ const validators = {
     if (String(spec.magicalBonus ?? "").trim() === "") fail(spec, "magicalBonus", "to be set");
   },
   chargedHealing(spec) {
-    validateUses(spec);
+    validateConsumedUses(spec);
     requireString(spec, spec.activityId, "activityId");
     validateDamagePart(spec, spec.healing, "healing");
   },

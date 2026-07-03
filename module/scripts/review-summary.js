@@ -1,3 +1,5 @@
+import { inferArmorProfile, safeItemIcon } from "./equipment-normalization.js";
+
 const KIND_LABELS = Object.freeze({
   artifactWeaponHybrid: "Hybrid artifact",
   casterUtilityEquipment: "Spellcasting equipment",
@@ -206,7 +208,8 @@ function summarizeSpec(spec, context = {}) {
   };
   let activityCount = 0;
 
-  if (spec.kind === "shieldArmorBonus" && spec.armorValue) add(`Shield bonus ${signedBonus(spec.armorValue)} AC`);
+  const armorProfile = spec.kind === "shieldArmorBonus" ? inferArmorProfile(spec) : null;
+  if (spec.kind === "shieldArmorBonus" && spec.armorValue) add(`${armorProfile?.isShield ? "Shield" : "Armor"} bonus ${signedBonus(spec.magicalBonus || spec.armorValue)} AC`);
   else if (spec.armorValue) add(`Base AC ${spec.armorValue}`);
   if (spec.magicalBonus) add(`${signedBonus(spec.magicalBonus)} magic bonus`);
 
@@ -294,14 +297,18 @@ function summarizeSpec(spec, context = {}) {
     ...unresolved
   ];
 
+  const kindLabel = spec.kind === "shieldArmorBonus" && armorProfile && !armorProfile.isShield
+    ? "Magic armor"
+    : KIND_LABELS[spec.kind] ?? titleCase(spec.kind);
+
   return {
     name: spec.name,
-    img: spec.img,
+    img: safeItemIcon(spec.img),
     kind: spec.kind,
-    kindLabel: KIND_LABELS[spec.kind] ?? titleCase(spec.kind),
+    kindLabel,
     rarity: rarityLabel(spec.rarity),
     attunement: attunementLabel(spec.attunement),
-    subtitle: `${KIND_LABELS[spec.kind] ?? titleCase(spec.kind)}, ${rarityLabel(spec.rarity).toLowerCase()}${attunementLabel(spec.attunement) !== "No attunement" ? ` (${attunementLabel(spec.attunement)})` : ""}`,
+    subtitle: `${kindLabel}, ${rarityLabel(spec.rarity).toLowerCase()}${attunementLabel(spec.attunement) !== "No attunement" ? ` (${attunementLabel(spec.attunement)})` : ""}`,
     description: String(spec.description ?? "").trim(),
     mechanics: Array.from(mechanics),
     activityCount,

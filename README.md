@@ -62,7 +62,7 @@ The stable `2.21.12` manifest still requires a reachable Forge-compatible servic
 
 ## Pre-Launch Tester Channel
 
-Invited testers can install `2.23.0-test.1`, which migrates the package identity and automatically connects to the hosted 20-request calendar-month Free Forge allowance:
+Invited testers can install `2.23.0-test.2`, which migrates the package identity and automatically connects to the hosted 20-request calendar-month Free Forge allowance:
 
 - Tester manifest: `https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/codex/package-id-migration/testing/module.json`
 - Tester notes: [testing/README.md](./testing/README.md)
