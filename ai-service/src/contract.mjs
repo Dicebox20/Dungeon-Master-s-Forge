@@ -65,6 +65,16 @@ const FEATURE_NAMES = Object.freeze([
   { pattern: /\b(flying|flight|wing|wings)\b/i, label: "Flight" }
 ]);
 
+const KNOWN_WEAPON_BASES = Object.freeze({
+  dagger: { weaponType: "simpleM", baseItem: "dagger", damage: { number: 1, denomination: 4, bonus: "@mod", types: ["piercing"] }, versatile: { number: null, denomination: null, bonus: "", types: [] } },
+  mace: { weaponType: "simpleM", baseItem: "mace", damage: { number: 1, denomination: 6, bonus: "@mod", types: ["bludgeoning"] }, versatile: { number: null, denomination: null, bonus: "", types: [] } },
+  shortsword: { weaponType: "martialM", baseItem: "shortsword", damage: { number: 1, denomination: 6, bonus: "@mod", types: ["piercing"] }, versatile: { number: null, denomination: null, bonus: "", types: [] } },
+  longsword: { weaponType: "martialM", baseItem: "longsword", damage: { number: 1, denomination: 8, bonus: "@mod", types: ["slashing"] }, versatile: { number: 1, denomination: 10, bonus: "@mod", types: ["slashing"] } },
+  warhammer: { weaponType: "martialM", baseItem: "warhammer", damage: { number: 1, denomination: 8, bonus: "@mod", types: ["bludgeoning"] }, versatile: { number: 1, denomination: 10, bonus: "@mod", types: ["bludgeoning"] } },
+  quarterstaff: { weaponType: "simpleM", baseItem: "quarterstaff", damage: { number: 1, denomination: 6, bonus: "@mod", types: ["bludgeoning"] }, versatile: { number: 1, denomination: 8, bonus: "@mod", types: ["bludgeoning"] } },
+  spear: { weaponType: "simpleM", baseItem: "spear", damage: { number: 1, denomination: 6, bonus: "@mod", types: ["piercing"] }, versatile: { number: 1, denomination: 8, bonus: "@mod", types: ["piercing"] } }
+});
+
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
 }
@@ -231,6 +241,98 @@ function normalizeRemoteSpecAliases(rawSpec) {
   return normalized;
 }
 
+function textForSpecInference(spec, requestChunk) {
+  return compactText([
+    requestChunk,
+    spec.name,
+    spec.baseItem,
+    spec.itemType,
+    spec.equipmentType,
+    spec.description
+  ].filter(Boolean).join(" ")).toLowerCase();
+}
+
+function detectKnownWeaponBase(spec, requestChunk) {
+  const text = textForSpecInference(spec, requestChunk);
+  const explicit = compactText(spec.baseItem).toLowerCase();
+  if (KNOWN_WEAPON_BASES[explicit]) return KNOWN_WEAPON_BASES[explicit];
+  return Object.entries(KNOWN_WEAPON_BASES).find(([name]) => wordPattern(name).test(text))?.[1] ?? null;
+}
+
+function inferSpecKind(spec, requestChunk, supportedKinds) {
+  const text = textForSpecInference(spec, requestChunk);
+  const supports = kind => supportedKinds.includes(kind);
+  if (spec.conditionOnHit && supports("weaponConditionOnHit")) return "weaponConditionOnHit";
+  if ((Array.isArray(spec.extraDamageParts) || /\bextra\b.*\bdamage\b|\bon hit\b/i.test(text)) && detectKnownWeaponBase(spec, requestChunk) && supports("weaponExtraDamage")) return "weaponExtraDamage";
+  if (Array.isArray(spec.activities) && spec.activities.length >= 2 && supports("multiActivityStaff")) return "multiActivityStaff";
+  if (spec.healing && supports("chargedHealing")) return "chargedHealing";
+  if (spec.save && Array.isArray(spec.damageParts) && supports("chargedSaveDamage")) return "chargedSaveDamage";
+  if ((spec.armorValue || spec.magicalBonus) && /\b(shield|armor|plate|leather|breastplate)\b/i.test(text) && supports("shieldArmorBonus")) return "shieldArmorBonus";
+  return "";
+}
+
+function normalizeSingleActivityStaff(spec) {
+  if (spec.kind !== "multiActivityStaff" || !Array.isArray(spec.activities) || spec.activities.length !== 1) return spec;
+  const activity = spec.activities[0];
+  if (!object(activity) || !object(activity.save) || !Array.isArray(activity.damageParts)) return spec;
+  const normalized = clone(spec);
+  normalized.kind = "chargedSaveDamage";
+  normalized.activityId = activity.activityId ?? normalized.activityId;
+  normalized.activityName = activity.activityName ?? normalized.activityName;
+  normalized.activationType = activity.activationType ?? normalized.activationType;
+  normalized.chargeCost = activity.chargeCost ?? normalized.chargeCost;
+  normalized.range = activity.range ?? normalized.range;
+  normalized.target = activity.target ?? normalized.target;
+  normalized.duration = activity.duration ?? normalized.duration;
+  normalized.save = activity.save;
+  normalized.damageOnSave = activity.damageOnSave ?? normalized.damageOnSave ?? "half";
+  normalized.damageParts = activity.damageParts;
+  delete normalized.activities;
+  return normalized;
+}
+
+function normalizeWeaponBase(spec, requestChunk) {
+  if (!["weaponExtraDamage", "weaponConditionOnHit", "artifactWeaponHybrid"].includes(spec.kind)) return spec;
+  const base = detectKnownWeaponBase(spec, requestChunk);
+  if (!base) return spec;
+  const normalized = clone(spec);
+  normalized.weaponType = normalized.weaponType || base.weaponType;
+  normalized.baseItem = normalized.baseItem || base.baseItem;
+  normalized.damage = {
+    ...(object(normalized.damage) ? normalized.damage : {}),
+    base: object(normalized.damage?.base) ? normalized.damage.base : clone(base.damage),
+    versatile: object(normalized.damage?.versatile) ? normalized.damage.versatile : clone(base.versatile)
+  };
+  return normalized;
+}
+
+function normalizeConsumedHealingUses(spec, requestChunk) {
+  if (spec.kind !== "chargedHealing" || !object(spec.uses)) return spec;
+  const text = textForSpecInference(spec, requestChunk);
+  const max = String(spec.uses.max ?? "").trim();
+  const looksConsumed = spec.uses.autoDestroy === true || max === "1" || /\b(potion|drink|consumed?|one use|single use)\b/i.test(text);
+  if (!looksConsumed) return spec;
+  const normalized = clone(spec);
+  normalized.itemType = normalized.itemType || "consumable";
+  normalized.consumableType = normalized.consumableType || "potion";
+  normalized.uses = {
+    ...normalized.uses,
+    max: max || "1",
+    recovery: Array.isArray(normalized.uses.recovery) ? normalized.uses.recovery : [],
+    autoDestroy: true
+  };
+  return normalized;
+}
+
+function normalizeRecoverableModelSlip(spec, requestChunk, supportedKinds) {
+  let normalized = clone(spec);
+  if (!compactText(normalized.kind)) normalized.kind = inferSpecKind(normalized, requestChunk, supportedKinds);
+  normalized = normalizeSingleActivityStaff(normalized);
+  normalized = normalizeWeaponBase(normalized, requestChunk);
+  normalized = normalizeConsumedHealingUses(normalized, requestChunk);
+  return normalized;
+}
+
 function validateForgeRequest(payload, limits = {}) {
   const maxRequestChars = limits.maxRequestChars ?? 20000;
   const maxItemsPerRequest = limits.maxItemsPerRequest ?? MAX_SPECS_PER_REQUEST;
@@ -364,7 +466,11 @@ function normalizeModelOutput(modelOutput, envelope, options = {}) {
   const names = new Set();
   const specs = modelOutput.specs.map((rawSpec, index) => {
     if (!object(rawSpec)) throw new ServiceError(502, "invalid_model_output", `Generated spec ${index + 1} is not an object.`);
-    const remoteSpec = normalizeRemoteSpecAliases(rawSpec);
+    const remoteSpec = normalizeRecoverableModelSlip(
+      normalizeRemoteSpecAliases(rawSpec),
+      intent.chunks[index] ?? envelope.request,
+      envelope.context.supportedKinds
+    );
     const rawName = String(remoteSpec.name ?? "").trim();
     const name = normalizeGeneratedName(rawName, intent, index);
     const kind = String(remoteSpec.kind ?? "").trim();

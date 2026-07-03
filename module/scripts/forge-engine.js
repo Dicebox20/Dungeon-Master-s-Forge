@@ -6,6 +6,7 @@
  */
 
 import { MODULE_ID, readForgeFlags } from "./package-identity.js";
+import { armorBonusValue, inferArmorProfile, isImplementCategory, normalizeItemDocumentType, safeItemIcon } from "./equipment-normalization.js";
 
 async function runCodexItemForge(FORGE, ITEMS, { validateOnly = false } = {}) {
   function makeIdentifier(name) {
@@ -52,6 +53,20 @@ async function runCodexItemForge(FORGE, ITEMS, { validateOnly = false } = {}) {
   function modeValue(mode) {
     if (typeof mode === "number") return mode;
     return CONST.ACTIVE_EFFECT_MODES[mode] ?? CONST.ACTIVE_EFFECT_MODES.ADD;
+  }
+
+  function effectChangeData(change) {
+    if (!change?.key) return null;
+    if (change.value && typeof change.value === "object") return null;
+    const value = String(change.value);
+    const saveBonusPath = /^system\.bonuses\.abilities\.save(?:\.|$)/.test(change.key);
+    if (saveBonusPath && /^(?:dis)?advantage$/i.test(value.trim())) return null;
+    return {
+      key: change.key,
+      mode: modeValue(change.mode),
+      value,
+      priority: change.priority ?? 20
+    };
   }
 
   async function ensureFolder(name, type, color) {
@@ -176,10 +191,15 @@ async function runCodexItemForge(FORGE, ITEMS, { validateOnly = false } = {}) {
   async function createWorldItem(spec, data, folder) {
     await deleteExistingWorldItem(spec.name);
     const forgeFlags = readForgeFlags(data.flags);
-    return Item.create({
+    const itemData = {
       ...data,
+      type: normalizeItemDocumentType(data.type, "equipment"),
+      img: safeItemIcon(data.img)
+    };
+    return Item.create({
+      ...itemData,
       folder: folder.id,
-      flags: foundry.utils.mergeObject(data.flags ?? {}, {
+      flags: foundry.utils.mergeObject(itemData.flags ?? {}, {
         [MODULE_ID]: {
           ...forgeFlags,
           kind: spec.kind,
@@ -274,12 +294,7 @@ async function runCodexItemForge(FORGE, ITEMS, { validateOnly = false } = {}) {
         transfer: true,
         disabled: false,
         duration: {},
-        changes: (effect.changes ?? []).map(change => ({
-          key: change.key,
-          mode: modeValue(change.mode),
-          value: String(change.value),
-          priority: change.priority ?? 20
-        })),
+        changes: (effect.changes ?? []).map(effectChangeData).filter(Boolean),
         flags: foundry.utils.mergeObject(effect.flags ?? {}, { dae: { transfer: true } }, { inplace: false })
       }))
     }, folder);
@@ -294,13 +309,16 @@ async function runCodexItemForge(FORGE, ITEMS, { validateOnly = false } = {}) {
   }
 
   async function createShieldArmorBonus(spec, folder) {
+    const profile = inferArmorProfile(spec);
     return createPassiveEffectEquipment({
-      equipmentType: "shield",
-      baseItem: "shield",
-      armorValue: spec.armorValue ?? 2,
-      magicalBonus: spec.magicalBonus ?? "1",
-      weight: spec.weight ?? 6,
-      ...spec
+      ...spec,
+      equipmentType: profile.equipmentType,
+      baseItem: profile.baseItem,
+      armorValue: profile.armorValue,
+      armorDex: profile.armorDex,
+      magicalBonus: armorBonusValue(spec, profile),
+      weight: spec.weight ?? profile.weight,
+      strength: spec.strength ?? profile.strength ?? null
     }, folder);
   }
 
@@ -348,9 +366,12 @@ async function runCodexItemForge(FORGE, ITEMS, { validateOnly = false } = {}) {
   }
 
   async function createChargedSaveDamage(spec, folder) {
-    const base = spec.itemType === "equipment"
+    const itemType = normalizeItemDocumentType(spec.itemType, isImplementCategory(spec.itemType) ? "equipment" : "consumable");
+    const equipmentType = spec.equipmentType ?? (isImplementCategory(spec.itemType) ? spec.itemType : "wondrous");
+    const equipmentBaseItem = spec.baseItem ?? (isImplementCategory(spec.itemType) ? spec.itemType : "");
+    const base = itemType === "equipment"
       ? foundry.utils.mergeObject(basePhysicalSystem(spec), {
-        type: { value: spec.equipmentType ?? "wondrous", baseItem: spec.baseItem ?? "" },
+        type: { value: equipmentType, baseItem: equipmentBaseItem },
         uses: usesData(spec.uses),
         armor: {
           value: spec.armorValue ?? 0,
@@ -371,7 +392,7 @@ async function runCodexItemForge(FORGE, ITEMS, { validateOnly = false } = {}) {
 
     const item = await createWorldItem(spec, {
       name: spec.name,
-      type: spec.itemType ?? "consumable",
+      type: itemType,
       img: spec.img,
       system: base,
       effects: []
@@ -813,12 +834,7 @@ ${activitySpec.macroCommand}
       transfer: effect.transfer ?? true,
       disabled: false,
       duration: effect.duration ?? {},
-      changes: (effect.changes ?? []).map(change => ({
-        key: change.key,
-        mode: modeValue(change.mode),
-        value: String(change.value),
-        priority: change.priority ?? 20
-      })),
+      changes: (effect.changes ?? []).map(effectChangeData).filter(Boolean),
       flags: foundry.utils.mergeObject(effect.flags ?? {}, { dae: { transfer: effect.transfer ?? true } }, { inplace: false })
     };
   }

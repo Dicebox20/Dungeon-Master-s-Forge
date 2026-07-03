@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Added the `2.23.0-test.2` live-testing repair build.
+- Fixed preview fallback icons so generated items without images no longer request `/undefined`.
+- Fixed armor bonus items so plate, leather, and breastplate requests are no longer created as shields.
+- Normalized rod/wand/staff charged powers to valid Foundry item document types.
+- Added AI-service repair for obvious missing `kind`, one-power charged items, consumed healing potions, and known weapon base damage.
+- Skipped unsafe object-shaped or advantage/disadvantage save-bonus Active Effect values instead of creating roll-breaking effects.
 - Added the `2.23.0-test.1` package-identity migration build.
 - Changed the install identity to `dungeon-masters-forge`, migrated legacy settings, and retained read compatibility for legacy generated-item flags.
 - Added the `2.22.0-test.5` tester build for service `1.6.0`.

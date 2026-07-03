@@ -41,6 +41,7 @@ import {
   serializeProviderProfile
 } from "./provider-profile.js";
 import { buildReviewSummaries } from "./review-summary.js";
+import { safeItemIcon } from "./equipment-normalization.js";
 import {
   LEGACY_MODULE_ID,
   MODULE_ID,
@@ -778,10 +779,11 @@ function itemNoteBadgesHTML(notes) {
 }
 
 function reviewItemHTML(summary) {
+  const itemIcon = safeItemIcon(summary.img);
   return `
     <article class="codex-forge-item-summary codex-forge-item-sheet" data-state="${summary.unresolvedCount ? "unresolved" : "ready"}">
       <header class="codex-forge-item-sheet-header">
-        <img src="${escapeHTML(summary.img)}" alt="">
+        <img src="${escapeHTML(itemIcon)}" alt="">
         <div class="codex-forge-item-sheet-titlewrap">
           <div class="codex-forge-item-sheet-titlebar">
             <h3>${escapeHTML(summary.name)}</h3>

@@ -20,7 +20,7 @@ This is a temporary testing channel. Its hosted endpoint and update path may cha
 
 ## Build
 
-- Version: `2.23.0-test.1`
-- Archive SHA-256: `0E4B5317E3BF0E62E87B12827702821F81924BB801FE13823A5708FCFFDC4DD0`
-- Packaged module test files: 15/15 passing
+- Version: `2.23.0-test.2`
+- Archive SHA-256: `DD641FC5321F0CCE4931F8BB2201E96CC900B1A1144E601B4B4576DC4962EF2B`
+- Packaged module test files: 20/20 passing
 - Live service: `1.6.0` with bounded invalid-output retry and structured request-id errors

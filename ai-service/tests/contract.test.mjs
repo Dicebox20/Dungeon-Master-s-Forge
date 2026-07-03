@@ -133,3 +133,103 @@ test("malformed model IDs are replaced with trusted service IDs", () => {
 
   assert.equal(result.specs[0].activityId, "0000000000000001");
 });
+
+test("single-activity staff output is normalized to charged save damage", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a rare wand called Wand of Shattering Ice. It has 7 charges. As an action, spend 1 charge for a DC 15 Dexterity save or 4d6 cold damage."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "multiActivityStaff",
+      name: "Wand of Shattering Ice",
+      description: "A wand with one charged cone power.",
+      uses: { max: "7", recovery: [{ period: "dawn", type: "formula", formula: "1d6 + 1" }] },
+      activities: [{
+        activityName: "Freezing Shards",
+        save: { ability: "dex", dc: 15 },
+        damageParts: [{ number: 4, denomination: 6, bonus: "", types: ["cold"] }]
+      }]
+    }]
+  }, request, { makeId: ids() });
+
+  assert.equal(result.specs[0].kind, "chargedSaveDamage");
+  assert.equal(result.specs[0].activityId, "0000000000000001");
+  assert.equal(result.specs[0].damageParts[0].types[0], "cold");
+});
+
+test("consumed healing potions do not require recovery", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create an uncommon potion called Potion of Verdant Renewal. Drink it to heal 4d4+4 hit points. It is consumed after use."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "chargedHealing",
+      name: "Potion of Verdant Renewal",
+      description: "A consumed healing potion.",
+      uses: { max: "1" },
+      healing: { number: 4, denomination: 4, bonus: "4", types: ["healing"] }
+    }]
+  }, request, { makeId: ids() });
+
+  assert.equal(result.specs[0].uses.autoDestroy, true);
+  assert.deepEqual(result.specs[0].uses.recovery, []);
+  assert.equal(result.specs[0].activityId, "0000000000000001");
+});
+
+test("condition weapons recover known base weapon damage", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a rare mace called Mace of Stunning. It is a +1 mace. On a hit, the target must make a DC 15 Wisdom saving throw or be stunned for 1 round."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "weaponConditionOnHit",
+      name: "Mace of Stunning",
+      description: "A stunning mace.",
+      rarity: "rare",
+      magicalBonus: "1",
+      extraDamageParts: [],
+      conditionOnHit: {
+        condition: "stunned",
+        save: { ability: "wis", dc: 15 },
+        durationSeconds: 6
+      }
+    }]
+  }, request, { makeId: ids() });
+
+  assert.equal(result.specs[0].baseItem, "mace");
+  assert.equal(result.specs[0].weaponType, "simpleM");
+  assert.deepEqual(result.specs[0].damage.base, { number: 1, denomination: 6, bonus: "@mod", types: ["bludgeoning"] });
+});
+
+test("missing kind is inferred for obvious weapon and staff outputs", () => {
+  const weaponRequest = validateForgeRequest(envelope({
+    request: "Create an uncommon shortsword called Venomkiss Shortsword. It is a +1 shortsword that deals an extra 1d4 poison damage on a hit."
+  }));
+  const weapon = normalizeModelOutput({
+    specs: [{
+      name: "Venomkiss Shortsword",
+      description: "A venomous shortsword.",
+      rarity: "uncommon",
+      magicalBonus: "1",
+      damage: { base: { number: 1, denomination: 6, bonus: "@mod", types: ["piercing"] } },
+      extraDamageParts: [{ number: 1, denomination: 4, bonus: "", types: ["poison"] }]
+    }]
+  }, weaponRequest, { makeId: ids() });
+  assert.equal(weapon.specs[0].kind, "weaponExtraDamage");
+
+  const staffRequest = validateForgeRequest(envelope({
+    request: "Create a rare staff called Staff of Ember and Frost. It has 10 charges. As an action spend 1 charge for Burning Hands. As an action spend 2 charges for Ice Knife."
+  }));
+  const staff = normalizeModelOutput({
+    specs: [{
+      name: "Staff of Ember and Frost",
+      description: "A staff with two powers.",
+      uses: { max: "10", recovery: [{ period: "dawn", type: "formula", formula: "1d6 + 4" }] },
+      activities: [
+        { activityName: "Burning Hands", save: { ability: "dex", dc: 15 }, damageParts: [{ number: 3, denomination: 6, bonus: "", types: ["fire"] }] },
+        { activityName: "Ice Knife", save: { ability: "dex", dc: 15 }, damageParts: [{ number: 2, denomination: 6, bonus: "", types: ["cold"] }] }
+      ]
+    }]
+  }, staffRequest, { makeId: ids() });
+  assert.equal(staff.specs[0].kind, "multiActivityStaff");
+});
