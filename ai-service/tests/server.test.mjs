@@ -58,6 +58,43 @@ test("capabilities endpoint is read-only and does not invoke compilation", async
   assert.equal(calls, 0);
 });
 
+test("error-report endpoint stores anonymous module reports when enabled", async t => {
+  const entries = [];
+  const app = await runningServer({
+    errorReportsEnabled: true
+  }, {
+    errorReportStore: {
+      async append(entry) {
+        entries.push(entry);
+        return true;
+      }
+    }
+  });
+  t.after(app.close);
+  const response = await fetch(`${app.baseUrl}/v1/forge/report-error`, {
+    method: "POST",
+    headers: {
+      Origin: origin,
+      Authorization: "Bearer test-client-token",
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      schemaVersion: "1.0",
+      source: "dungeon-masters-forge-module",
+      module: { id: "dungeon-masters-forge", version: "2.23.0-test.4" },
+      environment: { foundryVersion: "14", systemId: "dnd5e", systemVersion: "5.3.3" },
+      provider: { id: "hosted-forge", endpointHost: "forge.example", endpointPath: "/v1/forge/compile", unresolvedPolicy: "review" },
+      error: { stage: "compile", name: "Error", message: "Remote provider returned HTTP 502." },
+      items: [{ name: "Storm Blade", kind: "weaponExtraDamage", reviewState: "manual-review", notes: [{ state: "warning", label: "Warning", message: "Review charges." }] }]
+    })
+  });
+  assert.equal(response.status, 202);
+  assert.equal((await response.json()).stored, true);
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0].module.id, "dungeon-masters-forge");
+  assert.equal(entries[0].items[0].name, "Storm Blade");
+});
+
 test("mock compile completes the Forge 1.0 contract", async t => {
   const app = await runningServer();
   t.after(app.close);

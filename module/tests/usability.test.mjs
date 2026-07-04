@@ -40,6 +40,7 @@ assert.match(settingsTemplate, /name="providerEndpoint"/);
 assert.match(settingsTemplate, /name="providerModel"/);
 assert.match(settingsTemplate, /name="providerApiToken"/);
 assert.match(settingsTemplate, /name="rememberProviderApiToken"/);
+assert.match(settingsTemplate, /name="anonymousErrorReports"/);
 assert.match(settingsTemplate, /data-action="example"/);
 assert.match(settingsTemplate, /data-action="diagnostics"/);
 assert.match(script, /providerSessionConfiguration/);
@@ -66,4 +67,4 @@ assert.doesNotMatch(script, /planningTier/);
 assert.doesNotMatch(script, /tierReview/);
 assert.doesNotMatch(settingsTemplate, /Planning phase/);
 
-export const testedUsabilityContractCount = 61;
+export const testedUsabilityContractCount = 62;

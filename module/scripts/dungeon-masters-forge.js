@@ -24,7 +24,8 @@ import {
   requestRemoteHealth,
   requestRemoteCapabilities,
   requestRemoteServiceStatus,
-  requestRemoteCompilation
+  requestRemoteCompilation,
+  requestRemoteErrorReport
 } from "./provider-contract.js";
 import { DIAGNOSTIC_CASES, runLocalDiagnostics } from "./diagnostics.js";
 import {
@@ -42,6 +43,7 @@ import {
 } from "./provider-profile.js";
 import { buildReviewSummaries } from "./review-summary.js";
 import { safeItemIcon } from "./equipment-normalization.js";
+import { autoSelectSrdChoiceSpells } from "./srd-spell-enrichment.js";
 import {
   LEGACY_MODULE_ID,
   MODULE_ID,
@@ -209,6 +211,13 @@ function registerSettings() {
     default: ""
   });
 
+  registerSetting("anonymousErrorReports", {
+    scope: "client",
+    config: false,
+    type: Boolean,
+    default: false
+  });
+
 }
 
 function currentProviderId() {
@@ -225,6 +234,10 @@ function currentProviderToken({ rememberProviderToken } = {}) {
   const rememberToken = rememberProviderToken ?? (game.settings.get(MODULE_ID, "rememberProviderApiToken") === true);
   const rememberedProviderToken = rememberToken ? game.settings.get(MODULE_ID, "providerApiToken") || "" : "";
   return providerSessionConfiguration.get("bring-your-own")?.apiToken || rememberedProviderToken;
+}
+
+function currentAnonymousErrorReportsEnabled() {
+  return game.settings.get(MODULE_ID, "anonymousErrorReports") === true;
 }
 
 function configuredProviderState(overrides = {}) {
@@ -978,6 +991,10 @@ function uniqueReferences(entries = []) {
   });
 }
 
+function isSpellChoiceCompilationNote(text) {
+  return /\bspell/i.test(String(text ?? "")) && /\b(choice|charges?)\b/i.test(String(text ?? ""));
+}
+
 function specReferenceLookups(spec) {
   const references = [];
   const add = (kind, name, label) => {
@@ -1043,7 +1060,7 @@ async function enrichSpecsWithSystemReferences(specs) {
   };
 
   return Promise.all(items.map(async spec => {
-    const systemReferences = [];
+    const systemReferences = Array.isArray(spec.systemReferences) ? [...spec.systemReferences] : [];
     for (const reference of specReferenceLookups(spec)) {
       const resolution = await resolveReference(reference);
       if (resolution?.status !== "compatible") continue;
@@ -1057,8 +1074,55 @@ async function enrichSpecsWithSystemReferences(specs) {
         message: `${reference.name} from ${resolution.match.pack.label}`
       });
     }
-    return systemReferences.length ? { ...spec, systemReferences } : spec;
+    return systemReferences.length ? { ...spec, systemReferences: uniqueReferences(systemReferences) } : spec;
   }));
+}
+
+async function enrichCompilationWithSrdSpellChoices(compilation) {
+  const items = Array.isArray(compilation?.specs) ? compilation.specs : [];
+  if (!items.length) return compilation;
+
+  let applied = false;
+  const assumptions = [...(compilation.assumptions ?? [])];
+  const warnings = [...(compilation.warnings ?? [])];
+  const deferred = [...(compilation.deferred ?? [])];
+  const specs = [];
+
+  for (const spec of items) {
+    const result = await autoSelectSrdChoiceSpells(spec, compilation.request, {
+      resolveSpell: resolveSpellByName
+    });
+    specs.push(result.spec);
+    if (result.applied) {
+      applied = true;
+      if (result.assumption && !assumptions.includes(result.assumption)) assumptions.push(result.assumption);
+    } else if (result.warning && !warnings.includes(result.warning)) {
+      warnings.push(result.warning);
+    }
+  }
+
+  if (!applied) return compilation;
+
+  const filteredWarnings = warnings.filter(note => !isSpellChoiceCompilationNote(note) || /Selected compatible SRD spells automatically/i.test(note));
+  const filteredDeferred = deferred.filter(note => !isSpellChoiceCompilationNote(note));
+  const unresolvedMechanics = specs.flatMap(spec => (spec.unresolvedMechanics ?? []).map(mechanic => ({
+    itemName: spec.name,
+    ...mechanic
+  })));
+  const decisions = (compilation.decisions ?? []).map((decision, index) => ({
+    ...decision,
+    unresolvedCount: specs[index]?.unresolvedMechanics?.length ?? 0
+  }));
+
+  return {
+    ...compilation,
+    specs,
+    decisions,
+    assumptions,
+    warnings: filteredWarnings,
+    deferred: filteredDeferred,
+    unresolvedMechanics
+  };
 }
 
 async function renderPreview(dialog, validation) {
@@ -1193,8 +1257,144 @@ async function runFoundryDiagnostics() {
   };
 }
 
-function reportError(dialog, error) {
+function reportContextProvider(dialog) {
+  try {
+    if (dialog instanceof ForgeSettingsApplication) {
+      const form = settingsFormElement();
+      return form ? settingsFormProviderState(form) : configuredProviderState();
+    }
+    const form = dialog?.element?.querySelector?.("form");
+    return form instanceof HTMLFormElement
+      ? activeProviderState({ unresolvedPolicy: formControl(form, "unresolvedPolicy").value })
+      : configuredProviderState();
+  } catch {
+    return configuredProviderState();
+  }
+}
+
+function errorCodeFromMessage(message) {
+  return String(message ?? "").match(/\[([a-z0-9_]+),\s*request\s+[^\]]+\]/i)?.[1] ?? "";
+}
+
+function requestIdFromMessage(message) {
+  return String(message ?? "").match(/\brequest\s+([a-f0-9-]{8,})\b/i)?.[1] ?? "";
+}
+
+function sanitizedStack(error) {
+  const stack = String(error?.stack ?? "").split(/\r?\n/).slice(1, 7);
+  return stack.map(line => line
+    .replace(/[A-Z]:\\[^)\s]+/gi, path => path.split(/\\+/).slice(-2).join("\\"))
+    .replace(/https?:\/\/[^\s)]+/gi, url => {
+      try {
+        const parsed = new URL(url);
+        return `${parsed.hostname}${parsed.pathname}`;
+      } catch {
+        return url;
+      }
+    })
+    .trim()).filter(Boolean);
+}
+
+function summaryItemNotes(summary) {
+  return {
+    name: summary.name,
+    kind: summary.kind,
+    reviewState: summary.reviewState,
+    notes: (summary.notes ?? []).map(note => ({
+      state: note.state,
+      label: note.label,
+      message: note.message
+    }))
+  };
+}
+
+function reportSummariesForDialog(dialog) {
+  const compilation = dialog?._codexCompilation ?? null;
+  let specs = [];
+  try {
+    const form = dialog?.element?.querySelector?.("form");
+    if (form instanceof HTMLFormElement) {
+      const rawSpecs = formControl(form, "specs").value.trim();
+      specs = normalizeSpecs(rawSpecs);
+    }
+  } catch {
+    specs = [];
+  }
+  return buildReviewSummaries(specs, compilation).map(summaryItemNotes);
+}
+
+function buildAnonymousErrorReportPayload(dialog, error, context = {}) {
+  const provider = reportContextProvider(dialog);
+  let endpoint = "";
+  try {
+    endpoint = String(networkProviderConfiguration(provider.id, provider.configuration)?.endpoint ?? "").trim();
+  } catch {
+    endpoint = "";
+  }
+  const endpointUrl = endpoint ? new URL(endpoint) : null;
+  return {
+    schemaVersion: "1.0",
+    source: "dungeon-masters-forge-module",
+    occurredAt: new Date().toISOString(),
+    module: {
+      id: MODULE_ID,
+      version: BUILD_VERSION
+    },
+    environment: {
+      foundryVersion: String(game.version ?? ""),
+      systemId: String(game.system?.id ?? ""),
+      systemVersion: String(game.system?.version ?? ""),
+      browserOrigin: String(globalThis.location?.origin ?? "")
+    },
+    provider: {
+      id: provider.id,
+      endpointHost: endpointUrl?.host ?? "",
+      endpointPath: endpointUrl?.pathname ?? "",
+      unresolvedPolicy: provider.configuration?.unresolvedPolicy ?? "review"
+    },
+    error: {
+      stage: String(context.stage ?? "forge"),
+      name: String(error?.name ?? "Error"),
+      message: error instanceof Error ? error.message : String(error),
+      code: errorCodeFromMessage(error?.message),
+      requestId: requestIdFromMessage(error?.message),
+      stack: sanitizedStack(error)
+    },
+    items: reportSummariesForDialog(dialog)
+  };
+}
+
+async function maybeSubmitAnonymousErrorReport(dialog, error, context = {}) {
+  if (!currentAnonymousErrorReportsEnabled()) return;
+  const provider = reportContextProvider(dialog);
+  const providerRecord = getProvider(provider.id);
+  if (!providerRecord || providerRecord.mode !== "network") return;
+
+  let connection;
+  try {
+    connection = networkProviderConfiguration(provider.id, provider.configuration);
+  } catch {
+    return;
+  }
+  if (!String(connection.endpoint ?? "").trim()) return;
+
+  const payload = buildAnonymousErrorReportPayload(dialog, error, context);
+  try {
+    await requestRemoteErrorReport({
+      endpoint: connection.endpoint,
+      token: connection.apiToken,
+      payload
+    });
+  } catch (reportingError) {
+    console.info(`${MODULE_TITLE}: anonymous error report upload skipped: ${reportingError instanceof Error ? reportingError.message : reportingError}`);
+  }
+}
+
+function reportError(dialog, error, context = {}) {
   console.error(`${MODULE_TITLE}:`, error);
+  void maybeSubmitAnonymousErrorReport(dialog, error, {
+    stage: context.stage ?? (dialog instanceof ForgeSettingsApplication ? "settings" : "forge")
+  });
   const message = error instanceof Error ? error.message : String(error);
   setStatus(dialog, "error", message);
   setSettingsStatus(dialog, "error", message);
@@ -1324,6 +1524,7 @@ class ForgeSettingsApplication extends FormApplication {
       providerModel: provider.configuration.model,
       providerToken: provider.configuration.apiToken,
       rememberProviderToken,
+      anonymousErrorReports: currentAnonymousErrorReportsEnabled(),
       providerStatusIcon: snapshot.icon,
       providerStatusState: snapshot.state,
       providerStatusMessage: snapshot.message
@@ -1444,7 +1645,10 @@ class ForgeSettingsApplication extends FormApplication {
     const form = root instanceof HTMLFormElement ? root : root?.querySelector?.("form");
     if (!(form instanceof HTMLFormElement)) return;
     const providerState = settingsFormProviderState(form);
-    await persistProviderState(providerState);
+    await Promise.all([
+      persistProviderState(providerState),
+      game.settings.set(MODULE_ID, "anonymousErrorReports", formControl(form, "anonymousErrorReports").checked)
+    ]);
     if (forgeDialog?.rendered) {
       refreshForgeProviderSummary(forgeDialog, forgeDialog.element?.querySelector("form"));
     }
@@ -1569,7 +1773,7 @@ async function openForge() {
               clearProviderConnection(dialog);
               refreshForgeProviderSummary(dialog, button.form);
             }
-            const compilation = await compileWithProvider(request, {
+            const remoteCompilation = await compileWithProvider(request, {
               providerId: provider.id,
               configuration: provider.configuration,
               context: {
@@ -1580,6 +1784,7 @@ async function openForge() {
                 supportedKinds: SUPPORTED_SPEC_KINDS
               }
             });
+            const compilation = await enrichCompilationWithSrdSpellChoices(remoteCompilation);
             const rawSpecs = JSON.stringify(compilation.specs, null, 2);
             formControl(button.form, "specs").value = rawSpecs;
             formControl(button.form, "reviewApproval").checked = false;
@@ -1603,7 +1808,7 @@ async function openForge() {
               ? `${draftLabel} validated with ${noteCount} review note${noteCount === 1 ? "" : "s"}. Review the item summary before approval.`
               : `${draftLabel} compiled and validated. Review the item summary before approval.`);
           } catch (error) {
-            reportError(dialog, error);
+            reportError(dialog, error, { stage: "compile" });
           }
         }
       },
@@ -1641,7 +1846,7 @@ async function openForge() {
               `Specs are valid.${warning}${unresolved}`
             );
           } catch (error) {
-            reportError(dialog, error);
+            reportError(dialog, error, { stage: "validate" });
           }
         }
       },
@@ -1681,7 +1886,7 @@ async function openForge() {
               : "";
             setStatus(dialog, "success", `Created ${result.items.length} item${result.items.length === 1 ? "" : "s"}${actorText}.${unresolvedText}`);
           } catch (error) {
-            reportError(dialog, error);
+            reportError(dialog, error, { stage: "create" });
           }
         }
       },

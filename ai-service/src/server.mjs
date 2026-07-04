@@ -6,6 +6,7 @@ import { PROMPT_VERSION, SERVICE_NAME, SERVICE_VERSION } from "./constants.mjs";
 import { createCompiler } from "./compiler.mjs";
 import { createConcurrencyGate } from "./concurrency-gate.mjs";
 import { ServiceError, publicError } from "./errors.mjs";
+import { createErrorReportStore } from "./error-report-store.mjs";
 import { createCachedCompiler } from "./result-cache.mjs";
 import { createDailyQuotaStore } from "./quota-store.mjs";
 
@@ -107,6 +108,70 @@ function readJsonBody(request, limit) {
   });
 }
 
+function cleanText(value, max = 500) {
+  return String(value ?? "")
+    .replace(/[\u0000-\u001f\u007f]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, max);
+}
+
+function normalizeErrorReport(payload, requestId, client) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    throw new ServiceError(400, "invalid_error_report", "Error reports must be JSON objects.");
+  }
+  const moduleId = cleanText(payload.module?.id, 120);
+  const moduleVersion = cleanText(payload.module?.version, 80);
+  const stage = cleanText(payload.error?.stage, 80);
+  const message = cleanText(payload.error?.message, 1000);
+  if (!moduleId || !moduleVersion || !message) {
+    throw new ServiceError(400, "invalid_error_report", "Error reports require module id, module version, and an error message.");
+  }
+  const items = Array.isArray(payload.items) ? payload.items.slice(0, 10).map(item => ({
+    name: cleanText(item?.name, 160),
+    kind: cleanText(item?.kind, 80),
+    reviewState: cleanText(item?.reviewState, 80),
+    notes: Array.isArray(item?.notes) ? item.notes.slice(0, 20).map(note => ({
+      state: cleanText(note?.state, 40),
+      label: cleanText(note?.label, 160),
+      message: cleanText(note?.message, 500)
+    })) : []
+  })) : [];
+
+  return {
+    schemaVersion: cleanText(payload.schemaVersion, 20) || "1.0",
+    source: cleanText(payload.source, 80),
+    occurredAt: cleanText(payload.occurredAt, 80),
+    receivedRequestId: requestId,
+    client,
+    module: {
+      id: moduleId,
+      version: moduleVersion
+    },
+    environment: {
+      foundryVersion: cleanText(payload.environment?.foundryVersion, 80),
+      systemId: cleanText(payload.environment?.systemId, 80),
+      systemVersion: cleanText(payload.environment?.systemVersion, 80),
+      browserOrigin: cleanText(payload.environment?.browserOrigin, 200)
+    },
+    provider: {
+      id: cleanText(payload.provider?.id, 80),
+      endpointHost: cleanText(payload.provider?.endpointHost, 160),
+      endpointPath: cleanText(payload.provider?.endpointPath, 200),
+      unresolvedPolicy: cleanText(payload.provider?.unresolvedPolicy, 40)
+    },
+    error: {
+      stage,
+      name: cleanText(payload.error?.name, 120),
+      message,
+      code: cleanText(payload.error?.code, 80),
+      requestId: cleanText(payload.error?.requestId, 120),
+      stack: Array.isArray(payload.error?.stack) ? payload.error.stack.slice(0, 8).map(line => cleanText(line, 300)).filter(Boolean) : []
+    },
+    items
+  };
+}
+
 function createForgeServer(options) {
   const { config } = options;
   const compile = options.compile ?? createCompiler(options);
@@ -130,6 +195,9 @@ function createForgeServer(options) {
         hashSecret: config.quotaHashSecret,
         now: options.now
       }))
+    : null;
+  const errorReportStore = config.errorReportsEnabled
+    ? (options.errorReportStore ?? createErrorReportStore({ path: config.errorReportPath }))
     : null;
   const ownsDailyQuotaStore = usesDailyQuota && !options.dailyQuotaStore;
 
@@ -172,6 +240,35 @@ function createForgeServer(options) {
 
       if (request.method === "GET" && ["/v1/forge/capabilities", "/api/capabilities"].includes(url.pathname)) {
         sendJson(response, 200, serviceCapabilities(config));
+        return;
+      }
+
+      if (request.method === "POST" && ["/v1/forge/report-error", "/api/report-error"].includes(url.pathname)) {
+        if (!config.errorReportsEnabled || !errorReportStore) {
+          throw new ServiceError(404, "not_found", "Route not found.");
+        }
+        if (!String(request.headers["content-type"] ?? "").toLowerCase().startsWith("application/json")) {
+          throw new ServiceError(415, "unsupported_media_type", "Content-Type must be application/json.");
+        }
+        const bearer = bearerToken(request);
+        if (requiresClientOpenAiKey && !bearer) {
+          throw new ServiceError(401, "missing_openai_key", "This service expects an OpenAI API key in Foundry's API token field.");
+        }
+        if (!requiresClientOpenAiKey && config.clientToken && !tokenEqual(bearer, config.clientToken)) {
+          throw new ServiceError(401, "unauthorized", "A valid Forge service token is required.");
+        }
+        const client = clientAddress(request, config);
+        const quota = rateLimit(`${client}:report-error`);
+        response.setHeader("X-RateLimit-Limit", String(config.rateLimitPerMinute));
+        response.setHeader("X-RateLimit-Remaining", String(quota.remaining));
+        if (!quota.allowed) {
+          response.setHeader("Retry-After", String(quota.retryAfter));
+          throw new ServiceError(429, "rate_limited", "Forge AI request limit exceeded. Try again shortly.");
+        }
+        const payload = await readJsonBody(request, config.bodyLimitBytes);
+        const normalized = normalizeErrorReport(payload, requestId, client);
+        await errorReportStore.append(normalized);
+        sendJson(response, 202, { status: "accepted", stored: true, requestId });
         return;
       }
 
