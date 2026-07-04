@@ -16,7 +16,7 @@
 - Validation and explicit approval before writing world documents.
 - Provider-neutral `compile` API for future AI adapters.
 - Non-destructive in-world diagnostics for high-risk compiler families. Implemented in V2.9.
-- Version-aware generated-document provenance with custom-label preservation. Implemented in V2.10.
+- Private Forge provenance flags with custom-label preservation. Implemented in V2.10; visible item-sheet source branding is no longer added to new generated items.
 
 ## In Progress: Request-to-Spec V2
 
@@ -29,6 +29,8 @@
 
 - Read-only exact-name Spell and Equipment lookup from system-owned DND5e packs. Implemented in V2.19.
 - Source UUID provenance and compatibility reporting without importing compendium documents. Implemented in V2.19.
+- Prefer system-native SRD spell activity shapes for exact-name spellcasting items when Foundry's DND5e schema can safely support it, mirroring the useful parts of dragging a spell onto an item and then applying reviewed item-specific overrides.
+- Add charge-scaled spell item support where shared-charge items default each spell's charge cost to the spell level, with extra charge spend preserved as upcast/scaling review data.
 - Expand native resolution to actors, monster features, and roll tables after Spell and Equipment validation is proven.
 
 ## Implemented: Usability V1
@@ -58,6 +60,7 @@
 - Hosted generation service with project access control checks.
 - Server-side secrets, usage limits, logging controls, and abuse protection.
 - Optional item-image generation after text generation is stable.
+- Opt-in remote error report uploads to the hosted Droplet, with explicit GM consent, API-key redaction, prompt/item/world-data exclusion by default, request limits, and retention controls.
 
 ## Planned: Midi-QOL Compatibility
 

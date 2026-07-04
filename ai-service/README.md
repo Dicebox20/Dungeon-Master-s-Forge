@@ -1,6 +1,11 @@
 # Dungeon Master's Forge AI Service
 
-This is the stable reference server for Dungeon Master's Forge V2.21.12. Foundry sends the versioned Forge `1.0` request envelope to this service; the service compiles it with either a deterministic mock or OpenAI and returns reviewed Forge item specs.
+This is the reference Forge-compatible AI service for Dungeon Master's Forge. Foundry sends the versioned Forge `1.0` request envelope to this service; the service compiles it with either a deterministic mock or OpenAI and returns reviewed Forge item specs.
+
+At the time of writing, it serves two practical module lanes:
+
+- stable manifest lane `2.21.12`, which still expects a reachable Forge-compatible endpoint
+- tester migration lane `2.23.0-test.2`, which can auto-connect invited testers to the hosted Free Forge service
 
 The service requires Node.js 22.13 or newer and has no package dependencies.
 
@@ -64,7 +69,7 @@ In Foundry V2.18 and newer, use **Check Connection** after the service starts. A
 
 ## Current Recommended Local Launch Path
 
-For the current release candidate, the canonical local live-testing endpoint is:
+For the current workspace and tester flow, the canonical local live-testing endpoint is:
 
 - `http://localhost:8788/v1/forge/compile`
 
@@ -78,6 +83,8 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\start-openai-service.p
 Leave that terminal window open while Foundry performs **Check Connection**, compile, validate, and create.
 
 This is especially useful on local Windows setups where a detached background launcher may not stay alive reliably during active testing.
+
+If you deliberately start the service another way, keep the Foundry endpoint aligned with the port you actually chose.
 
 ## Environment
 
@@ -120,11 +127,39 @@ npm run preflight:free-tier
 npm run smoke
 npm run smoke:batch
 npm run smoke:capabilities
+npm run smoke:regression
 ```
 
 `preflight:free-tier` validates `.env`, opens the configured SQLite quota ledger, and prints a redacted deployment report without calling a model. The smoke commands expect the service to already be running. They print only contract versions and generated item names, never credentials or full requests. The batch smoke proves two explicitly named items survive the complete request/response path. The automated suite drives all fourteen supported Forge families through a mocked OpenAI Responses call and the complete compiler pipeline, then rejects incomplete or unsafe weapons, effects, charged powers, enchantments, summons, suites, and hybrid artifacts before they can reach Foundry.
 
-For the current release candidate, a direct local smoke proof was verified successfully against:
+`smoke:regression` runs a repeatable live-service compile sweep against curated prompt packs:
+
+- default `family` sweep: one prompt per supported Forge family with strict kind checks
+- `DMF_SWEEP=hybrid`: mixed-family stress prompts that focus on compile success and routed kind reporting
+- `DMF_SWEEP=transcript`: prompts derived from real tester failures that previously produced 502s or bad coercions
+
+Examples:
+
+```powershell
+npm run smoke:regression
+$env:DMF_SWEEP = "hybrid"; npm run smoke:regression
+$env:DMF_SWEEP = "transcript"; npm run smoke:regression
+$env:DMF_SWEEP = "family"; $env:DMF_SCENARIOS = "family-weapon-extra"; npm run smoke:regression
+```
+
+`DMF_SCENARIOS` accepts a comma-separated subset of scenario ids from the selected sweep. This is useful for hosted Free Forge validation, because it lets you spend a single monthly test request on one targeted regression instead of the whole sweep.
+
+For public free-tier host administration, the service also includes:
+
+```powershell
+npm run quota:admin -- summary
+npm run quota:admin -- reset-current-month
+npm run quota:admin -- reset-current-day
+```
+
+Use the reset commands only on the trusted host that owns the SQLite quota ledger when you intentionally want to reopen tester allowance.
+
+For the current hardened workspace build, a direct local smoke proof was verified successfully against:
 
 - `http://127.0.0.1:8788/v1/forge/compile`
 - `http://127.0.0.1:8788/v1/forge/capabilities`

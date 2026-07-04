@@ -32,14 +32,47 @@ const oil = review("Oil of Ember Edge\nUncommon consumable oil. As an action, ap
 assert.ok(oil.mechanics.some(value => value.includes("Enchant Weapon for 1 hour")));
 assert.ok(oil.mechanics.some(value => value.includes("Adds 1d4 fire damage")));
 
+const magicArmor = buildReviewSummaries([{
+  kind: "shieldArmorBonus",
+  name: "Moonshadow Leather",
+  description: "A rare suit of leather armor. It grants +1 AC while worn.",
+  rarity: "rare",
+  armorValue: 1,
+  magicalBonus: "1"
+}], null)[0];
+assert.equal(magicArmor.kindLabel, "Magic armor");
+assert.ok(magicArmor.mechanics.some(value => value.includes("Armor bonus +1 AC")));
+
+const magicShield = buildReviewSummaries([{
+  kind: "shieldArmorBonus",
+  name: "Sentinel Shield of the Deep",
+  description: "A rare shield that grants +2 AC while wielded.",
+  rarity: "rare",
+  armorValue: 2,
+  magicalBonus: "2"
+}], null)[0];
+assert.equal(magicShield.kindLabel, "Magic shield");
+assert.ok(magicShield.mechanics.some(value => value.includes("Shield bonus +2 AC")));
+
 const unresolved = review("Crown of Shared Aura\nLegendary crown requiring attunement. It emits a 30-foot aura granting allies +1 AC. It restores 1 sorcery point. It casts Fly once per dawn.");
 assert.equal(unresolved.unresolvedCount, 3);
+assert.equal(unresolved.reviewState, "manual-review");
+assert.equal(unresolved.reviewStateLabel, "3 manual review notes");
+assert.deepEqual(unresolved.unresolvedLabels, [
+  "Ally-affecting aura",
+  "Class-specific resource",
+  "Unmapped spell casting"
+]);
 assert.deepEqual(unresolved.notes.filter(note => note.state === "unresolved").map(note => note.label), [
   "Ally-affecting aura",
   "Class-specific resource",
   "Unmapped spell casting"
 ]);
 assert.ok(unresolved.notes.every(note => note.message.length > 0));
+
+assert.equal(weapon.reviewState, "forge-ready");
+assert.equal(weapon.reviewStateLabel, "Forge-ready");
+assert.deepEqual(weapon.unresolvedLabels, []);
 
 const referenced = buildReviewSummaries([{
   kind: "weaponExtraDamage",
@@ -58,4 +91,4 @@ const referenced = buildReviewSummaries([{
 assert.deepEqual(referenced.notes.filter(note => note.state === "reference").map(note => note.label), ["System equipment"]);
 assert.equal(referenced.notes.find(note => note.state === "reference")?.handling, "Compendium.dnd5e.equipment24.phbwepLongsword0");
 
-export const testedReviewSummaryCount = 20;
+export const testedReviewSummaryCount = 24;

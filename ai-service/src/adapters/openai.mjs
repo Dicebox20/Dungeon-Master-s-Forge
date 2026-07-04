@@ -56,6 +56,7 @@ async function compileWithOpenAI(envelope, options) {
 
   const model = chooseModel(envelope, config);
   const apiKey = resolveUpstreamApiKey(config, options);
+  const retryHint = String(options.retryHint ?? "").trim();
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), config.openaiTimeoutMs);
   let response;
@@ -72,7 +73,8 @@ async function compileWithOpenAI(envelope, options) {
         store: false,
         input: [
           { role: "system", content: buildSystemPrompt(envelope) },
-          { role: "user", content: envelope.request }
+          { role: "user", content: envelope.request },
+          ...(retryHint ? [{ role: "user", content: retryHint }] : [])
         ],
         max_output_tokens: config.maxOutputTokens,
         text: { format: { type: "json_object" } }

@@ -47,3 +47,16 @@ test("prompt includes target versions and unresolved policy", () => {
   assert.match(result, /Unresolved policy: block/);
   assert.match(result, /Do not silently automate unsupported behavior/);
 });
+
+test("prompt explains dominant-family handling for hybrid requests", () => {
+  const result = prompt();
+  assert.match(result, /Emit exactly one supported kind for every spec/);
+  assert.match(result, /choose the dominant supported family/);
+  assert.match(result, /move unsupported or secondary mechanics into unresolvedMechanics/);
+});
+
+test("prompt explicitly steers enchant oils and summon actor shape", () => {
+  const result = prompt();
+  assert.match(result, /Oils, unguents, salves, and coatings that enchant a weapon, armor, or shield must use nativeEnchant/i);
+  assert.match(result, /nativeSummon stores the summoned creature stat block under summonActor, not actor/i);
+});

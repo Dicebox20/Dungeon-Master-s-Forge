@@ -61,7 +61,7 @@ Plain-language test:
 Current project position:
 
 - **Local use:** ready
-- **Invited tester hosting:** active through the `2.23.0-test.1` package-identity migration candidate; still needs a successful post-migration creation result
+- **Invited tester hosting:** active through the `2.23.0-test.2` package-identity migration candidate; local compile-and-create smoke pass is complete, with second-machine confirmation still pending
 - **Public free hosting:** technically live, pending the permanent hostname and stable-manifest promotion gate
 - **project access control hosting:** intentionally deferred at launch
 

@@ -157,6 +157,38 @@ test("single-activity staff output is normalized to charged save damage", () => 
   assert.equal(result.specs[0].damageParts[0].types[0], "cold");
 });
 
+test("multi-activity staff specs recover missing shared uses from request text", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a rare quarterstaff called Shepherd's Reliquary. It has 8 charges and regains 1d6 + 2 charges daily at dawn. As an action, the wielder can spend 1 charge to restore 2d8 + 2 hit points to a creature they touch, spend 2 charges to cast Shatter at DC 14, or spend 3 charges to summon a friendly wolf for 1 hour. It requires attunement."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "multiActivityStaff",
+      name: "Shepherd's Reliquary",
+      description: "A reliquary staff with healing and thunder.",
+      activities: [
+        {
+          activityName: "Shatter",
+          chargeCost: 2,
+          save: { ability: "con", dc: 14 },
+          damageParts: [{ number: 3, denomination: 8, bonus: "", types: ["thunder"] }]
+        },
+        {
+          activityName: "Echo Burst",
+          chargeCost: 1,
+          save: { ability: "dex", dc: 14 },
+          damageParts: [{ number: 2, denomination: 8, bonus: "+2", types: ["force"] }]
+        }
+      ]
+    }]
+  }, request, { makeId: ids() });
+
+  assert.equal(result.specs[0].kind, "multiActivityStaff");
+  assert.equal(result.specs[0].uses.max, "8");
+  assert.equal(result.specs[0].uses.recovery[0].period, "dawn");
+  assert.equal(result.specs[0].uses.recovery[0].formula, "1d6 + 2");
+});
+
 test("consumed healing potions do not require recovery", () => {
   const request = validateForgeRequest(envelope({
     request: "Create an uncommon potion called Potion of Verdant Renewal. Drink it to heal 4d4+4 hit points. It is consumed after use."
@@ -232,4 +264,577 @@ test("missing kind is inferred for obvious weapon and staff outputs", () => {
     }]
   }, staffRequest, { makeId: ids() });
   assert.equal(staff.specs[0].kind, "multiActivityStaff");
+});
+
+test("condition riders recover aliases and short duration phrases", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a rare mace called Mace of Dazing Stars. It is a +1 mace. On a hit, the target must make a DC 15 Wisdom saving throw or be stunned until the end of the wielder's next turn."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "weaponConditionOnHit",
+      name: "Mace of Dazing Stars",
+      description: "A radiant mace.",
+      magicalBonus: "1",
+      conditionOnHit: {
+        conditionName: "stunned",
+        save: { saveAbility: "wis", saveDc: 15 }
+      }
+    }]
+  }, request, { makeId: ids() });
+
+  assert.equal(result.specs[0].conditionOnHit.condition, "stunned");
+  assert.equal(result.specs[0].conditionOnHit.save.ability, "wis");
+  assert.equal(result.specs[0].conditionOnHit.save.dc, 15);
+  assert.equal(result.specs[0].conditionOnHit.durationSeconds, 6);
+});
+
+test("healing and activity damage formulas are normalized from dice expressions", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a rare amulet called Heartglass Pendant. It has 3 charges and heals 2d8 + 2 hit points."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "chargedHealing",
+      name: "Heartglass Pendant",
+      description: "A healing pendant.",
+      uses: { max: "3", recovery: [{ period: "dawn", type: "recoverAll", formula: "" }] },
+      healing: { formula: "2d8 + 2", damageType: "healing" }
+    }]
+  }, request, { makeId: ids() });
+
+  assert.equal(result.specs[0].healing.number, 2);
+  assert.equal(result.specs[0].healing.denomination, 8);
+  assert.equal(result.specs[0].healing.bonus, "+2");
+  assert.deepEqual(result.specs[0].healing.types, ["healing"]);
+});
+
+test("healing recovers when the dice expression lands in denomination", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create an uncommon potion called Potion of Verdant Renewal. When a creature drinks it as an action, they regain 4d4+4 hit points."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "chargedHealing",
+      name: "Potion of Verdant Renewal",
+      description: "A healing potion.",
+      uses: { max: "1" },
+      healing: { number: "", denomination: "4d4+4", types: ["healing"] }
+    }]
+  }, request, { makeId: ids() });
+
+  assert.equal(result.specs[0].healing.number, 4);
+  assert.equal(result.specs[0].healing.denomination, 4);
+  assert.equal(result.specs[0].healing.bonus, "+4");
+});
+
+test("charged healing can recover from request text when healing data is incomplete", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create an uncommon potion called Potion of Verdant Renewal. When a creature drinks it as an action, they regain 4d4+4 hit points and end one disease affecting them. The potion is consumed after use."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "chargedHealing",
+      name: "Potion of Verdant Renewal",
+      description: "A restorative potion.",
+      uses: { max: "1" },
+      healing: { number: "", denomination: "", bonus: "", types: [] }
+    }]
+  }, request, { makeId: ids() });
+
+  assert.equal(result.specs[0].healing.number, 4);
+  assert.equal(result.specs[0].healing.denomination, 4);
+  assert.equal(result.specs[0].healing.bonus, "+4");
+  assert.deepEqual(result.specs[0].healing.types, ["healing"]);
+});
+
+test("weapon base recovery fills missing damage types from known weapon data", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a rare mace called Mace of Stunning. It is a +1 mace. On a hit, the target must make a DC 15 Wisdom saving throw or be stunned for 1 round."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "weaponConditionOnHit",
+      name: "Mace of Stunning",
+      description: "A stunning mace.",
+      magicalBonus: "1",
+      damage: { base: { number: 1, denomination: 6, bonus: "@mod", types: [] } },
+      conditionOnHit: {
+        condition: "stunned",
+        save: { ability: "wis", dc: 15 },
+        durationSeconds: 6
+      }
+    }]
+  }, request, { makeId: ids() });
+
+  assert.deepEqual(result.specs[0].damage.base.types, ["bludgeoning"]);
+});
+
+test("single-use summon and enchant items may omit recovery", () => {
+  const summonRequest = validateForgeRequest(envelope({
+    request: "Create a rare whistle called Whistle of the Lone Wolf. It is consumed after one use and summons a friendly wolf."
+  }));
+  const summon = normalizeModelOutput({
+    specs: [{
+      kind: "nativeSummon",
+      name: "Whistle of the Lone Wolf",
+      description: "A consumed whistle.",
+      uses: { max: "1" },
+      summonActor: { name: "Friendly Wolf", type: "beast", ac: 13, hp: { value: 11, max: 11 } }
+    }]
+  }, summonRequest, { makeId: ids() });
+  assert.deepEqual(summon.specs[0].uses.recovery, []);
+  assert.equal(summon.specs[0].uses.autoDestroy, true);
+
+  const enchantRequest = validateForgeRequest(envelope({
+    request: "Create a rare oil called Mooncall Unguent. The oil is consumed after one use."
+  }));
+  const enchant = normalizeModelOutput({
+    specs: [{
+      kind: "nativeEnchant",
+      name: "Mooncall Unguent",
+      description: "A consumed oil.",
+      uses: { max: "1" },
+      duration: { seconds: 3600 },
+      restrictions: { type: "weapon" },
+      enchantChanges: [{ key: "system.properties", mode: "ADD", value: "mgc" }]
+    }]
+  }, enchantRequest, { makeId: ids() });
+  assert.deepEqual(enchant.specs[0].uses.recovery, []);
+  assert.equal(enchant.specs[0].uses.autoDestroy, true);
+});
+
+test("enchant oils recover from save-damage model drift", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a rare oil called Oil of Stormforging. Apply it to a weapon. For 1 hour that weapon becomes magical and deals an extra 1d4 lightning damage. The oil is consumed after one use."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "chargedSaveDamage",
+      name: "Oil of Stormforging",
+      description: "A storm-forged oil.",
+      uses: { max: "1" },
+      save: { ability: "dex", dc: 13 },
+      damageParts: [{ number: 1, denomination: 4, bonus: "", types: ["lightning"] }]
+    }]
+  }, request, { makeId: ids() });
+
+  assert.equal(result.specs[0].kind, "nativeEnchant");
+  assert.equal(result.specs[0].itemType, "consumable");
+  assert.equal(result.specs[0].uses.autoDestroy, true);
+  assert.deepEqual(result.specs[0].uses.recovery, []);
+  assert.equal(result.specs[0].restrictions.type, "weapon");
+  assert.ok(result.specs[0].enchantChanges.some(change => change.key === "system.properties"));
+  assert.ok(result.specs[0].enchantChanges.some(change => change.key === "system.damage.parts"));
+});
+
+test("nativeEnchant specs synthesize missing duration from the request text", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a rare oil called Oil of Stormforging. Apply it to a weapon. For 1 hour that weapon becomes magical and deals an extra 1d4 lightning damage. The oil is consumed after one use."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "nativeEnchant",
+      name: "Oil of Stormforging",
+      description: "A storm-forged oil.",
+      uses: { max: "1" },
+      enchantChanges: [{ key: "system.properties", mode: "ADD", value: "mgc" }]
+    }]
+  }, request, { makeId: ids() });
+
+  assert.equal(result.specs[0].kind, "nativeEnchant");
+  assert.deepEqual(result.specs[0].duration, { seconds: 3600 });
+  assert.equal(result.specs[0].restrictions.type, "weapon");
+});
+
+test("single summon actor aliases normalize into summonActor", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a rare bell called Bell of the Pale Hunt. As an action, summon a friendly wolf for 1 hour. The bell is consumed after one use."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "nativeSummon",
+      name: "Bell of the Pale Hunt",
+      description: "A summoning bell.",
+      uses: { max: "1" },
+      actor: {
+        name: "Friendly Wolf",
+        type: "beast",
+        ac: 13,
+        hp: { value: 11, max: 11 }
+      }
+    }]
+  }, request, { makeId: ids() });
+
+  assert.equal(result.specs[0].kind, "nativeSummon");
+  assert.equal(result.specs[0].summonActor.name, "Friendly Wolf");
+  assert.equal(result.specs[0].profileName, "Friendly Wolf");
+  assert.equal(result.specs[0].profileId, "0000000000000002");
+});
+
+test("nativeSummon specs can infer a simple companion actor from the request", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a rare bell called Bell of the Pale Hunt. As an action, summon a friendly wolf for 1 hour. The bell is consumed after one use."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "nativeSummon",
+      name: "Bell of the Pale Hunt",
+      description: "A summoning bell.",
+      uses: { max: "1" }
+    }]
+  }, request, { makeId: ids() });
+
+  assert.equal(result.specs[0].kind, "nativeSummon");
+  assert.equal(result.specs[0].summonActor.name, "Friendly Wolf");
+  assert.equal(result.specs[0].summonActor.type, "beast");
+  assert.equal(result.specs[0].summonActor.ac, 13);
+  assert.equal(result.specs[0].summonActor.hp.max, 11);
+});
+
+test("missing activity names are backfilled for suite outputs", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a legendary idol called Throne of the Ninth Gate. It can cast Command and summon a fiend."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "legendaryEquipmentSuite",
+      name: "Throne of the Ninth Gate",
+      description: "A fiendish idol.",
+      saveActivities: [{ save: { ability: "wis", dc: 17 }, damageParts: [] }],
+      summonActivity: {},
+      summonProfiles: [
+        { profileName: "Demon", actor: { name: "Demon Spirit", type: "fiend", ac: 13, hp: { value: 30, max: 30 } } },
+        { profileName: "Devil", actor: { name: "Devil Spirit", type: "fiend", ac: 13, hp: { value: 30, max: 30 } } }
+      ]
+    }]
+  }, request, { makeId: ids() });
+
+  assert.equal(result.specs[0].saveActivities[0].activityName, "Save 1");
+  assert.equal(result.specs[0].summonActivity.activityName, "Summon Ally");
+});
+
+test("missing kind is inferred for obvious suite-style equipment outputs", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a very rare helm called Helm of the Venom Ray. It has charges and can make a ranged poison attack."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      name: "Helm of the Venom Ray",
+      description: "A charged battle helm.",
+      attackActivities: [{
+        damageParts: [{ formula: "4d8", damageType: "poison" }]
+      }]
+    }]
+  }, request, { makeId: ids() });
+
+  assert.equal(result.specs[0].kind, "equipmentPowerSuite");
+  assert.equal(result.specs[0].attackActivities[0].activityName, "Attack 1");
+  assert.equal(result.specs[0].attackActivities[0].damageParts[0].denomination, 8);
+});
+
+test("missing kind prefers a reusable suite over pure summon routing for hybrid staff outputs", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a very rare staff called Staff of the Three Tempests. It has 10 charges and regains 1d6 + 4 charges daily at dawn. As an action, the wielder can spend 3 charges to cast Shatter at DC 15 or 5 charges to cast Ice Storm at DC 15. It can also spend 4 charges to summon a friendly fiend for 1 hour, and the wielder chooses whether the spirit appears as a Demon, Devil, or Yugoloth. It requires attunement."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      name: "Staff of the Three Tempests",
+      description: "A storm staff with a fiendish calling power.",
+      utilityActivities: [{
+        name: "Cast Shatter",
+        save: { ability: "con", dc: 15 },
+        damageParts: [["3d8", "thunder"]]
+      }],
+      utilityActivities2: [{
+        name: "Cast Ice Storm",
+        save: { ability: "dex", dc: 15 },
+        damageParts: [["2d8", "bludgeoning"], ["4d6", "cold"]]
+      }],
+      summonProfiles: [
+        { profileName: "Demon", actor: { name: "Demon Spirit", type: "fiend", ac: 13, hp: { value: 30, max: 30 } } },
+        { profileName: "Devil", actor: { name: "Devil Spirit", type: "fiend", ac: 13, hp: { value: 30, max: 30 } } },
+        { profileName: "Yugoloth", actor: { name: "Yugoloth Spirit", type: "fiend", ac: 13, hp: { value: 30, max: 30 } } }
+      ]
+    }]
+  }, request, { makeId: ids() });
+
+  assert.equal(result.specs[0].kind, "equipmentPowerSuite");
+});
+
+test("missing kind prefers a reusable suite for single-summon hybrid staff outputs", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a rare quarterstaff called Shepherd's Reliquary. It has 8 charges and regains 1d6 + 2 charges daily at dawn. As an action, the wielder can spend 1 charge to restore 2d8 + 2 hit points to a creature they touch, spend 2 charges to cast Shatter at DC 14, or spend 3 charges to summon a friendly wolf for 1 hour. It requires attunement."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      name: "Shepherd's Reliquary",
+      description: "A reliquary staff with restorative and summoning magic.",
+      activities: [{
+        activityName: "Cast Shatter",
+        chargeCost: 2,
+        save: { ability: "con", dc: 14 },
+        damageParts: [{ number: 3, denomination: 8, bonus: "", types: ["thunder"] }]
+      }],
+      healing: { number: 2, denomination: 8, bonus: "2", types: ["healing"] },
+      summonActor: {
+        name: "Forge Summon - Wolf",
+        type: "beast",
+        ac: 13,
+        hp: { value: 11, max: 11 }
+      }
+    }]
+  }, request, { makeId: ids() });
+
+  assert.equal(result.specs[0].kind, "equipmentPowerSuite");
+});
+
+test("missing kind prefers a condition rider over plain extra weapon damage", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a rare mace called Mace of Dazing Stars. It is a +1 mace that deals an extra 1d6 radiant damage on hit. When it hits a creature, the target must succeed on a DC 15 Wisdom saving throw or be stunned until the end of the wielder's next turn."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      name: "Mace of Dazing Stars",
+      description: "A radiant mace with a stunning rider.",
+      magicalBonus: "1",
+      extraDamageParts: [{ formula: "1d6", damageType: "radiant" }],
+      conditionOnHit: {
+        save: { ability: "wis", dc: 15 },
+        durationSeconds: 6
+      }
+    }]
+  }, request, { makeId: ids() });
+
+  assert.equal(result.specs[0].kind, "weaponConditionOnHit");
+});
+
+test("unsafe flags are stripped before contract validation", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a very rare suit of plate armor called Frostguard Plate. It is +2 plate armor that grants resistance to fire damage while equipped."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "shieldArmorBonus",
+      name: "Frostguard Plate",
+      description: "A suit of enchanted plate.",
+      armorValue: 18,
+      magicalBonus: "2",
+      effects: [{
+        name: "Fire Ward",
+        flags: { dae: { transfer: true } },
+        changes: [{ key: "system.traits.dr.value", mode: "ADD", value: "fire" }]
+      }]
+    }]
+  }, request, { makeId: ids() });
+
+  assert.equal(result.specs[0].kind, "shieldArmorBonus");
+});
+
+test("weapon condition outputs recover malformed extra damage from request text", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a rare mace called Mace of Dazing Stars. It is a +1 mace that deals an extra 1d6 radiant damage on hit. When it hits a creature, the target must succeed on a DC 15 Wisdom saving throw or be stunned until the end of the wielder's next turn."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "weaponConditionOnHit",
+      name: "Mace of Dazing Stars",
+      description: "A radiant mace.",
+      magicalBonus: "1",
+      extraDamageParts: ["bad-part"],
+      conditionOnHit: {
+        condition: "stunned",
+        save: { ability: "wis", dc: 15 },
+        durationSeconds: 6
+      }
+    }]
+  }, request, { makeId: ids() });
+
+  assert.equal(result.specs[0].extraDamageParts[0].denomination, 6);
+  assert.deepEqual(result.specs[0].extraDamageParts[0].types, ["radiant"]);
+});
+
+test("mixed attack and save staff output falls back to equipment power suite", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a rare staff called Staff of Ember and Frost. It has 10 charges and regains 1d6+4 charges daily at dawn. As an action, the wielder can spend 1 charge to cast Burning Hands at DC 15, dealing 3d6 fire damage in a 15-foot cone. As an action, the wielder can spend 2 charges to cast Ice Knife at +7 to hit, dealing 1d10 piercing damage and 2d6 cold damage."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "multiActivityStaff",
+      name: "Staff of Ember and Frost",
+      description: "A staff with fire and ice powers.",
+      uses: { max: "10", recovery: [{ period: "dawn", type: "formula", formula: "1d6 + 4" }] },
+      saveActivities: [{
+        activityName: "Burning Hands",
+        save: { ability: "dex", dc: 15 },
+        damageParts: [{ number: 3, denomination: 6, bonus: "", types: ["fire"] }]
+      }],
+      attackActivities: [{
+        activityName: "Ice Knife",
+        damageParts: [
+          { number: 1, denomination: 10, bonus: "", types: ["piercing"] },
+          { number: 2, denomination: 6, bonus: "", types: ["cold"] }
+        ]
+      }]
+    }]
+  }, request, { makeId: ids() });
+
+  assert.equal(result.specs[0].kind, "equipmentPowerSuite");
+  assert.equal(result.specs[0].saveActivities.length, 1);
+  assert.equal(result.specs[0].attackActivities.length, 1);
+});
+
+test("staff output with summon profiles falls back to equipment power suite", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a very rare staff called Staff of the Three Tempests. It has 10 charges and regains 1d6 + 4 charges daily at dawn. As an action, the wielder can spend 3 charges to cast Shatter at DC 15 or 5 charges to cast Ice Storm at DC 15. It can also spend 4 charges to summon a friendly fiend for 1 hour, and the wielder chooses whether the spirit appears as a Demon, Devil, or Yugoloth. It requires attunement."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "multiActivityStaff",
+      name: "Staff of the Three Tempests",
+      description: "A staff of storm and fiendish power.",
+      uses: { max: "10", recovery: [{ period: "dawn", type: "formula", formula: "1d6 + 4" }] },
+      activities: [{
+        activityName: "Shatter",
+        save: { ability: "con", dc: 15 },
+        damageParts: [{ number: 3, denomination: 8, bonus: "", types: ["thunder"] }]
+      }],
+      summonProfiles: [
+        { profileName: "Demon", actor: { name: "Demon Spirit", type: "fiend", ac: 13, hp: { value: 30, max: 30 } } },
+        { profileName: "Devil", actor: { name: "Devil Spirit", type: "fiend", ac: 13, hp: { value: 30, max: 30 } } },
+        { profileName: "Yugoloth", actor: { name: "Yugoloth Spirit", type: "fiend", ac: 13, hp: { value: 30, max: 30 } } }
+      ]
+    }]
+  }, request, { makeId: ids() });
+
+  assert.equal(result.specs[0].kind, "equipmentPowerSuite");
+  assert.equal(result.specs[0].saveActivities.length, 1);
+  assert.equal(result.specs[0].summonProfiles.length, 3);
+  assert.equal(result.specs[0].summonActivity.activityName, "Summon Ally");
+});
+
+test("staff output with a single summon actor and healing falls back to a suite without hard failure", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a rare quarterstaff called Shepherd's Reliquary. It has 8 charges and regains 1d6 + 2 charges daily at dawn. As an action, the wielder can spend 1 charge to restore 2d8 + 2 hit points to a creature they touch, spend 2 charges to cast Shatter at DC 14, or spend 3 charges to summon a friendly wolf for 1 hour. It requires attunement."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "multiActivityStaff",
+      name: "Shepherd's Reliquary",
+      description: "A reliquary staff with restorative and summoning magic.",
+      uses: { max: 8, recovery: [{ period: "dawn", type: "formula", formula: "1d6 + 2" }] },
+      activities: [{
+        activityName: "Cast Shatter",
+        chargeCost: 2,
+        save: { ability: "con", dc: 14 },
+        damageParts: [{ number: 3, denomination: 8, bonus: "", types: ["thunder"] }]
+      }],
+      healing: { number: 2, denomination: 8, bonus: "2", types: ["healing"] },
+      summonActor: {
+        name: "Forge Summon - Wolf",
+        type: "beast",
+        ac: 13,
+        hp: { value: 11, max: 11 }
+      }
+    }]
+  }, request, { makeId: ids() });
+
+  assert.equal(result.specs[0].kind, "equipmentPowerSuite");
+  assert.equal(result.specs[0].saveActivities.length, 1);
+  assert.equal(result.specs[0].summonProfiles.length, 1);
+  assert.equal(result.specs[0].summonActivity.activityName, "Summon Ally");
+  assert.equal(result.specs[0].unresolvedMechanics[0].label, "Healing power needs manual review");
+});
+
+test("artifact weapon light radii are recovered from request text", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create an artifact longsword called Dawnforger. It is a +3 longsword that deals an extra 1d6 radiant damage and 1d6 fire damage on every hit. While attuned, the wielder gains +1 AC. As a bonus action, the blade can ignite, shedding 20 feet of bright light and another 20 feet of dim light. Once per dawn, it can cast Flame Strike at DC 18."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "artifactWeaponHybrid",
+      name: "Dawnforger",
+      description: "An ancient blazing sword.",
+      magicalBonus: "3",
+      damage: { base: { number: 1, denomination: 8, bonus: "@mod", types: ["slashing"] } },
+      toggleLight: { bright: "20 ft.", dim: "another 20 ft." }
+    }]
+  }, request, { makeId: ids() });
+
+  assert.equal(result.specs[0].toggleLight.bright, 20);
+  assert.equal(result.specs[0].toggleLight.dim, 20);
+  assert.equal(result.specs[0].toggleLight.activityName, "Ignite the Flame");
+});
+
+test("indexed utility activity arrays are merged and normalized", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a very rare staff called Staff of the Three Tempests. It has 10 charges and regains 1d6 + 4 charges daily at dawn. As an action, the wielder can spend 3 charges to cast Shatter at DC 15 or 5 charges to cast Ice Storm at DC 15. It can also spend 4 charges to summon a friendly fiend for 1 hour, and the wielder chooses whether the spirit appears as a Demon, Devil, or Yugoloth. It requires attunement."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "multiActivityStaff",
+      name: "Staff of the Three Tempests",
+      description: "A staff of storm and fiendish power.",
+      uses: { max: 10, recovery: [{ period: "daily", type: "dawn", formula: "1d6 + 4" }] },
+      utilityActivities: [{
+        id: "utilshatter000000",
+        name: "Cast Shatter",
+        chargeCost: 3,
+        save: { ability: "con", dc: 15 },
+        damageParts: [["3d8", "thunder"]]
+      }],
+      utilityActivities2: [{
+        id: "utilicestorm0001",
+        name: "Cast Ice Storm",
+        chargeCost: 5,
+        save: { ability: "dex", dc: 15 },
+        damageParts: [["2d8", "bludgeoning"], ["4d6", "cold"]]
+      }],
+      utilityActivities3: [{
+        id: "summonfiends0001",
+        name: "Summon Friendly Fiend",
+        chargeCost: 4
+      }]
+    }]
+  }, request, { makeId: ids() });
+
+  assert.equal(result.specs[0].kind, "equipmentPowerSuite");
+  assert.equal(result.specs[0].saveActivities.length, 2);
+  assert.equal(result.specs[0].saveActivities[0].damageParts[0].denomination, 8);
+  assert.equal(result.specs[0].utilityActivities.length, 1);
+});
+
+test("artifact greataxe aliases recover base damage and passive effect ids", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a legendary greataxe called Ashlord's Divide. It is a +3 greataxe that deals an extra 1d6 fire damage on every hit. While attuned, the wielder gains +1 AC and resistance to necrotic damage. It has 1 daily use of Command at DC 17. It requires attunement."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      name: "Ashlord's Divide",
+      kind: "artifactWeaponHybrid",
+      baseItem: "greataxe",
+      weaponType: "martialMelee",
+      magicalBonus: 3,
+      damage: { base: "1d12", versatile: null },
+      extraDamageParts: [{ number: 1, denomination: "d6", bonus: 0, types: ["fire"] }],
+      passiveEffects: [{
+        id: "effect001234567890",
+        label: "Ashlord's Divide: AC and Necrotic Resistance Bonus",
+        changes: [
+          { key: "system.attributes.ac.bonus", mode: "ADD", value: 1 },
+          { key: "system.traits.dr.value", mode: "CUSTOM", value: "necrotic" }
+        ]
+      }],
+      utilityActivities: [{
+        activityId: "cmdact0000000017",
+        save: { ability: "wis", dc: 17 },
+        damageParts: [],
+        description: "Cast the spell Command (DC 17) once per day."
+      }]
+    }]
+  }, request, { makeId: ids() });
+
+  assert.deepEqual(result.specs[0].damage.base.types, ["slashing"]);
+  assert.match(result.specs[0].passiveEffects[0].effectId, /^[A-Za-z0-9]{16}$/);
+  assert.equal(result.specs[0].utilityActivities[0].activityName, "Utility 1");
 });
