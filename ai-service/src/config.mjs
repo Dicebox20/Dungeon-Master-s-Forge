@@ -58,6 +58,8 @@ function loadConfig(env = process.env) {
     globalDailyLimit: integer(env.DMF_GLOBAL_DAILY_LIMIT, publicFreeTier ? 100 : 0, { min: 0, max: 1000000 }),
     quotaDatabasePath: String(env.DMF_QUOTA_DATABASE_PATH ?? (publicFreeTier ? "./data/free-tier-quota.sqlite" : ":memory:")).trim(),
     quotaHashSecret: String(env.DMF_QUOTA_HASH_SECRET ?? ""),
+    errorReportsEnabled: flag(env.DMF_ERROR_REPORTS_ENABLED, publicFreeTier),
+    errorReportPath: String(env.DMF_ERROR_REPORT_PATH ?? "./data/error-reports.jsonl").trim(),
     maxConcurrentCompilations: integer(env.DMF_MAX_CONCURRENT_COMPILATIONS, 2, { min: 1, max: 100 }),
     maxQueuedCompilations: integer(env.DMF_MAX_QUEUED_COMPILATIONS, 20, { min: 0, max: 1000 }),
     cacheTtlMs: integer(env.DMF_CACHE_TTL_MS, 300000, { min: 0, max: 86400000 }),

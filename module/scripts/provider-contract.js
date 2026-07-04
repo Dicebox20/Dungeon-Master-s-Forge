@@ -57,6 +57,16 @@ function healthEndpointFor(endpoint) {
   return url.toString();
 }
 
+function reportEndpointFor(endpoint) {
+  const normalized = normalizeRemoteEndpoint(endpoint);
+  const url = new URL(normalized);
+  const compileRoute = ["/v1/forge/compile", "/api/compile"].find(route => url.pathname.endsWith(route));
+  if (!compileRoute) return null;
+  url.pathname = `${url.pathname.slice(0, -"compile".length)}report-error`;
+  url.search = "";
+  return url.toString();
+}
+
 function rootEndpointFor(endpoint) {
   const normalized = normalizeRemoteEndpoint(endpoint);
   const url = new URL(normalized);
@@ -498,12 +508,69 @@ async function requestRemoteCompilation(options) {
   return normalizeRemoteProviderResponse(payload, options.provider);
 }
 
+async function requestRemoteErrorReport(options) {
+  const endpoint = reportEndpointFor(options?.endpoint);
+  if (!endpoint) return { available: false, status: "not-advertised", endpoint: null };
+  const fetchImpl = options?.fetchImpl ?? globalThis.fetch;
+  if (typeof fetchImpl !== "function") throw new Error("No fetch implementation is available for remote error reporting.");
+
+  const headers = { "Content-Type": "application/json", Accept: "application/json" };
+  if (options.token) headers.Authorization = `Bearer ${options.token}`;
+
+  const controller = new AbortController();
+  const timeoutMs = Number(options.timeoutMs ?? DEFAULT_REMOTE_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : DEFAULT_REMOTE_TIMEOUT_MS);
+
+  let response;
+  try {
+    response = await fetchImpl(endpoint, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(options.payload ?? {}),
+      signal: controller.signal
+    });
+  } catch (error) {
+    if (error?.name === "AbortError") throw new Error("Remote error-report request timed out.");
+    throw new Error("Remote error-report request failed before a valid response was received.");
+  } finally {
+    clearTimeout(timeout);
+  }
+
+  if ([404, 405].includes(Number(response?.status))) {
+    return { available: false, status: "not-supported", endpoint };
+  }
+  if (!response?.ok) {
+    let errorPayload = null;
+    try {
+      errorPayload = await response.json();
+    } catch {
+      // Keep the generic HTTP error.
+    }
+    throw remoteHttpError(response, "Remote error report", errorPayload);
+  }
+
+  let payload = {};
+  try {
+    payload = await response.json();
+  } catch {
+    payload = {};
+  }
+  return {
+    available: true,
+    status: "accepted",
+    endpoint,
+    requestId: String(payload.requestId ?? ""),
+    stored: payload.stored === true
+  };
+}
+
 export {
   DEFAULT_REMOTE_TIMEOUT_MS,
   REMOTE_PROVIDER_SCHEMA_VERSION,
   buildRemoteProviderRequest,
   capabilitiesEndpointFor,
   healthEndpointFor,
+  reportEndpointFor,
   normalizeRemoteEndpoint,
   normalizeRemoteBridgeDescriptor,
   normalizeRemoteCapabilities,
@@ -515,5 +582,6 @@ export {
   requestRemoteHealth,
   requestRemoteCapabilities,
   requestRemoteServiceStatus,
-  requestRemoteCompilation
+  requestRemoteCompilation,
+  requestRemoteErrorReport
 };

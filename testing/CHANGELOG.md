@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Added the `2.23.0-test.4` tester build for opt-in anonymous error reports and SRD spell auto-selection on supported charge-spell item requests.
+- Added a hosted-service `/v1/forge/report-error` route and a Foundry consent toggle that uploads redacted module errors with item review notes.
+- Added module-side SRD spell auto-selection for supported "spells of your choice" requests so compatible weapons and equipment can attach real save activities instead of unresolved empty slots.
 - Added the `2.23.0-test.3` tester build for the current hybrid-output hardening workspace.
 - Refreshed the packaged tester lane so the branch manifest matches the latest local fixes under test.
 - Added the `2.23.0-test.2` live-testing repair build.

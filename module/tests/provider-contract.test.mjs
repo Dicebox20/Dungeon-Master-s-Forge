@@ -4,6 +4,7 @@ import {
   buildRemoteProviderRequest,
   capabilitiesEndpointFor,
   healthEndpointFor,
+  reportEndpointFor,
   normalizeRemoteBridgeDescriptor,
   normalizeRemoteEndpoint,
   normalizeRemoteCapabilities,
@@ -45,6 +46,10 @@ assert.equal(
 assert.equal(
   healthEndpointFor("https://forge.example/api/compile?ignored=true"),
   "https://forge.example/health"
+);
+assert.equal(
+  reportEndpointFor("https://forge.example/v1/forge/compile"),
+  "https://forge.example/v1/forge/report-error"
 );
 
 assert.deepEqual(redactProviderConfiguration({

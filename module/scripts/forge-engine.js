@@ -243,26 +243,49 @@ async function runCodexItemForge(FORGE, ITEMS, { validateOnly = false } = {}) {
         hp: null,
         speed: null
       }, { inplace: false }),
-      effects: []
+      effects: [],
+      flags: activityMacroFlags((spec.utilityActivities ?? [])
+        .filter(activity => activity.macroCommand)
+        .map(activity => activity.activityId))
     }, folder);
 
     const created = game.items.get(item.id) ?? item;
     const attack = findAttackActivity(created);
+    const updateData = {};
     if (!attack) {
       ui.notifications.warn(`${spec.name} was created, but no attack activity was found to patch.`);
-      return created;
+    } else {
+      const attackData = attack.toObject ? attack.toObject() : foundry.utils.deepClone(attack);
+      foundry.utils.mergeObject(attackData, {
+        name: spec.attackName ?? `Attack with ${spec.name}`,
+        damage: {
+          includeBase: true,
+          critical: { bonus: "" },
+          parts: (spec.extraDamageParts ?? []).map(damageData)
+        }
+      }, { inplace: true });
+      updateData[`system.activities.${attack.id}`] = attackData;
     }
 
-    const attackData = attack.toObject ? attack.toObject() : foundry.utils.deepClone(attack);
-    foundry.utils.mergeObject(attackData, {
-      name: spec.attackName ?? `Attack with ${spec.name}`,
-      damage: {
-        includeBase: true,
-        critical: { bonus: "" },
-        parts: (spec.extraDamageParts ?? []).map(damageData)
-      }
-    }, { inplace: true });
-    await created.update({ [`system.activities.${attack.id}`]: attackData });
+    for (const activitySpec of spec.attackActivities ?? []) {
+      const activity = makeAttackActivity(created, spec, activitySpec);
+      updateData[`system.activities.${activity._id}`] = activity;
+    }
+    for (const activitySpec of spec.utilityActivities ?? []) {
+      const activity = makeUtilityActivity(created, spec, activitySpec);
+      updateData[`system.activities.${activity._id}`] = activity;
+    }
+    for (const activitySpec of spec.saveActivities ?? []) {
+      const activity = makeSaveActivity(created, {
+        ...activitySpec,
+        name: spec.name,
+        img: activitySpec.activityImg ?? spec.img,
+        requireAttunement: spec.attunement === "required"
+      });
+      updateData[`system.activities.${activity._id}`] = activity;
+    }
+
+    if (Object.keys(updateData).length) await created.update(updateData);
     return game.items.get(created.id) ?? created;
   }
 
