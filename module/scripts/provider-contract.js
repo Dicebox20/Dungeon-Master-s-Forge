@@ -81,7 +81,29 @@ function remoteErrorDetail(payload) {
 function remoteHttpError(response, subject, payload = null) {
   const status = Number(response?.status ?? 0);
   const retryAfter = String(response?.headers?.get?.("retry-after") ?? "").trim();
+  const monthlyLimit = String(response?.headers?.get?.("x-monthlylimit-limit") ?? "").trim();
+  const dailyLimit = String(response?.headers?.get?.("x-dailylimit-limit") ?? "").trim();
+  const globalDailyLimit = String(response?.headers?.get?.("x-globaldailylimit-limit") ?? "").trim();
+  const detail = remoteErrorDetail(payload);
   if (status === 429) {
+    if (detail?.code === "monthly_client_limit") {
+      const allowanceText = /^\d+$/.test(monthlyLimit)
+        ? ` This client can use Free Forge ${monthlyLimit} time${monthlyLimit === "1" ? "" : "s"} per calendar month.`
+        : "";
+      return new Error(`${subject} monthly free-tier limit reached (HTTP 429).${allowanceText}`);
+    }
+    if (detail?.code === "daily_client_limit") {
+      const allowanceText = /^\d+$/.test(dailyLimit)
+        ? ` This client can use Free Forge ${dailyLimit} time${dailyLimit === "1" ? "" : "s"} per day.`
+        : "";
+      return new Error(`${subject} daily free-tier limit reached (HTTP 429).${allowanceText}`);
+    }
+    if (detail?.code === "daily_global_limit") {
+      const allowanceText = /^\d+$/.test(globalDailyLimit)
+        ? ` The shared Free Forge pool is capped at ${globalDailyLimit} request${globalDailyLimit === "1" ? "" : "s"} per day.`
+        : "";
+      return new Error(`${subject} shared free-tier daily limit reached (HTTP 429).${allowanceText}`);
+    }
     const retryText = /^\d+$/.test(retryAfter)
       ? ` Retry in about ${retryAfter} second${retryAfter === "1" ? "" : "s"}.`
       : " Wait briefly before trying again.";
@@ -93,7 +115,6 @@ function remoteHttpError(response, subject, payload = null) {
   if (status === 404) {
     return new Error(`${subject} route was not found (HTTP 404). Check the endpoint path.`);
   }
-  const detail = remoteErrorDetail(payload);
   if (detail) {
     const context = [detail.code, detail.requestId ? `request ${detail.requestId}` : ""].filter(Boolean).join(", ");
     return new Error(`${subject}: ${detail.message}${context ? ` [${context}]` : ""} (HTTP ${status}).`);

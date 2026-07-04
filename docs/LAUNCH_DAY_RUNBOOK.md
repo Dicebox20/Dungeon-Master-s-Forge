@@ -7,7 +7,7 @@ This runbook promotes the verified Free Forge tester channel to the stable Found
 ## Current Baseline
 
 - Stable module: `2.21.12`
-- Tester module: `2.23.0-test.1`
+- Tester module: `2.23.0-test.2`
 - AI service: `1.6.0`
 - Free Forge allowance: 20 generation requests per client per calendar month
 - Stable manifest: `module/module.json`
@@ -59,6 +59,16 @@ On a clean or non-development computer:
 7. Restart Foundry and repeat **Check Connection**.
 
 No test should delete or replace unrelated world documents.
+
+If the tester or launch machine exhausts its hosted monthly allowance during validation, reset only the current tester bucket on the trusted host:
+
+```bash
+cd /opt/dmforge-ai
+npm run quota:admin -- summary
+npm run quota:admin -- reset-current-month
+```
+
+Do not clear daily or monthly quota rows casually during public use; reserve resets for controlled tester validation or recovery after intentionally spent launch checks.
 
 ## 4. GitHub Promotion
 

@@ -1,6 +1,6 @@
 import { KNOWN_SPEC_KINDS } from "../src/constants.mjs";
 
-const endpoint = process.env.DMF_ENDPOINT ?? "http://127.0.0.1:8787/v1/forge/compile";
+const endpoint = process.env.DMF_ENDPOINT ?? "http://127.0.0.1:8788/v1/forge/compile";
 const token = process.env.DMF_CLIENT_TOKEN ?? "";
 const headers = { "Content-Type": "application/json", Accept: "application/json" };
 if (token) headers.Authorization = `Bearer ${token}`;

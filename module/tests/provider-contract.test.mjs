@@ -10,6 +10,7 @@ import {
   normalizeRemoteHealth,
   normalizeRemoteProviderResponse,
   remoteErrorDetail,
+  remoteHttpError,
   redactProviderConfiguration,
   requestRemoteHealth,
   requestRemoteCapabilities,
@@ -255,6 +256,38 @@ assert.deepEqual(bridgeHealthRequests.map(request => request.url), [
 assert.equal(discoveredBridgeHealth.status, "legacy-bridge");
 assert.equal(discoveredBridgeHealth.service.name, "Foundry AI bridge is running.");
 assert.equal(discoveredBridgeHealth.bridge.endpoint, "/api/compile");
+
+const monthlyLimitError = remoteHttpError({
+  status: 429,
+  headers: {
+    get(name) {
+      return name?.toLowerCase() === "x-monthlylimit-limit" ? "20" : null;
+    }
+  }
+}, "Remote provider", {
+  error: {
+    code: "monthly_client_limit",
+    message: "This free-tier client has reached its monthly Forge AI limit."
+  }
+});
+assert.match(monthlyLimitError.message, /monthly free-tier limit reached/i);
+assert.match(monthlyLimitError.message, /20 time/i);
+
+const dailyGlobalLimitError = remoteHttpError({
+  status: 429,
+  headers: {
+    get(name) {
+      return name?.toLowerCase() === "x-globaldailylimit-limit" ? "50" : null;
+    }
+  }
+}, "Remote provider", {
+  error: {
+    code: "daily_global_limit",
+    message: "The Dungeon Master's Forge free-tier daily allowance has been reached."
+  }
+});
+assert.match(dailyGlobalLimitError.message, /shared free-tier daily limit reached/i);
+assert.match(dailyGlobalLimitError.message, /50 request/i);
 
 assert.throws(
   () => normalizeRemoteProviderResponse({ schemaVersion: REMOTE_PROVIDER_SCHEMA_VERSION, specs: [] }),

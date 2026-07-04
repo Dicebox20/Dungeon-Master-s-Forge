@@ -12,8 +12,10 @@
     "start:env": "node --env-file=.env src/cli.mjs",
     "smoke": "node scripts/smoke-client.mjs",
     "smoke:batch": "node scripts/batch-smoke-client.mjs",
+    "smoke:regression": "node scripts/regression-client.mjs",
     "smoke:capabilities": "node scripts/capabilities-client.mjs",
     "preflight:free-tier": "node --env-file=.env scripts/free-tier-preflight.mjs",
+    "quota:admin": "node scripts/quota-admin.mjs",
     "check": "node --check src/cli.mjs && node --check src/server.mjs && node --check src/adapters/openai.mjs",
     "test": "node scripts/run-tests.mjs"
   }

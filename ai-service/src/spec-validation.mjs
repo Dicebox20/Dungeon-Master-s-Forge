@@ -180,7 +180,7 @@ const validators = {
     });
   },
   nativeEnchant(spec) {
-    validateUses(spec);
+    validateConsumedUses(spec);
     requireString(spec, spec.activityId, "activityId");
     requireString(spec, spec.effectId, "effectId");
     requireObject(spec, spec.duration, "duration");
@@ -192,13 +192,13 @@ const validators = {
     });
   },
   nativeSummon(spec) {
-    validateUses(spec);
+    validateConsumedUses(spec);
     requireString(spec, spec.activityId, "activityId");
     requireString(spec, spec.profileId, "profileId");
     validateActor(spec, spec.summonActor, "summonActor");
   },
   nativeMultiProfileSummon(spec) {
-    validateUses(spec);
+    validateConsumedUses(spec);
     requireString(spec, spec.activityId, "activityId");
     validateSummonProfiles(spec, requireArray(spec, spec.summonProfiles, "summonProfiles", 2));
   },

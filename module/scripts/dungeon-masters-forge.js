@@ -445,6 +445,10 @@ function forgeContent() {
             </label>
           </div>
 
+          <label class="codex-forge-approval">
+            <input type="checkbox" name="reviewApproval">
+            <span>I reviewed these specifications and approve creation.</span>
+          </label>
           <details class="codex-forge-advanced">
             <summary><i class="fa-solid fa-code"></i><span>Advanced specification editor</span></summary>
             <label class="codex-forge-specs">
@@ -452,10 +456,6 @@ function forgeContent() {
               <textarea name="specs" spellcheck="false" aria-label="Item specs JSON">${escapeHTML(specs)}</textarea>
             </label>
           </details>
-          <label class="codex-forge-approval">
-            <input type="checkbox" name="reviewApproval">
-            <span>I reviewed these specifications and approve creation.</span>
-          </label>
         </section>
       </div>
 
@@ -569,8 +569,14 @@ function providerConnectionDetailText(connection) {
   const mode = String(connection.health?.mode ?? "").trim().toLowerCase();
   const compatibleKinds = Number(connection.capabilities?.compatibleKinds?.length ?? 0);
   const rateLimit = Number(connection.health?.requestLimits?.perMinute ?? 0);
+  const monthlyLimit = Number(connection.health?.requestLimits?.perClientMonth ?? 0);
+  const dailyLimit = Number(connection.health?.requestLimits?.perClientDay ?? 0);
   const compatibility = connection.capabilities?.status;
-  const rateText = rateLimit ? ` Rate limit: ${rateLimit}/minute.` : "";
+  const quotaParts = [];
+  if (rateLimit > 0) quotaParts.push(`${rateLimit}/minute`);
+  if (dailyLimit > 0) quotaParts.push(`${dailyLimit}/day`);
+  if (monthlyLimit > 0) quotaParts.push(`${monthlyLimit}/month`);
+  const rateText = quotaParts.length ? ` Limits: ${quotaParts.join(", ")}.` : "";
 
   if (mode === "mock") {
     return `${serviceLabel} is connected in mock mode. ${compatibleKinds} Forge item famil${compatibleKinds === 1 ? "y is" : "ies are"} compatible.${rateText} Switch the service to openai mode for live AI generation.`;
@@ -778,6 +784,53 @@ function itemNoteBadgesHTML(notes) {
   `;
 }
 
+function reviewOverview(summaries = []) {
+  const itemCount = summaries.length;
+  const unresolvedItems = summaries.filter(summary => (summary.unresolvedCount ?? 0) > 0).length;
+  const unresolvedMechanics = summaries.reduce((total, summary) => total + (summary.unresolvedCount ?? 0), 0);
+  return {
+    itemCount,
+    readyItems: itemCount - unresolvedItems,
+    unresolvedItems,
+    unresolvedMechanics
+  };
+}
+
+function reviewOverviewHTML(summaries = []) {
+  const overview = reviewOverview(summaries);
+  const pills = [
+    {
+      state: "ready",
+      icon: "fa-check",
+      label: `${overview.readyItems} forge-ready`
+    }
+  ];
+  if (overview.unresolvedItems) {
+    pills.push({
+      state: "unresolved",
+      icon: "fa-triangle-exclamation",
+      label: `${overview.unresolvedItems} item${overview.unresolvedItems === 1 ? "" : "s"} need manual review`
+    });
+  }
+  if (overview.unresolvedMechanics) {
+    pills.push({
+      state: "warning",
+      icon: "fa-list-check",
+      label: `${overview.unresolvedMechanics} unresolved mechanic${overview.unresolvedMechanics === 1 ? "" : "s"} preserved`
+    });
+  }
+  return `
+    <div class="codex-forge-review-overview">
+      ${pills.map(pill => `
+        <span class="codex-forge-review-pill" data-state="${pill.state}">
+          <i class="fa-solid ${pill.icon}"></i>
+          <span>${escapeHTML(pill.label)}</span>
+        </span>
+      `).join("")}
+    </div>
+  `;
+}
+
 function reviewItemHTML(summary) {
   const itemIcon = safeItemIcon(summary.img);
   return `
@@ -793,6 +846,12 @@ function reviewItemHTML(summary) {
             <span>${escapeHTML(summary.rarity)}</span>
             <span>${escapeHTML(summary.attunement)}</span>
           </div>
+          <div class="codex-forge-item-sheet-status">
+            <span class="codex-forge-review-pill" data-state="${summary.unresolvedCount ? "unresolved" : "ready"}">
+              <i class="fa-solid ${summary.unresolvedCount ? "fa-triangle-exclamation" : "fa-check"}"></i>
+              <span>${escapeHTML(summary.reviewStateLabel ?? (summary.unresolvedCount ? "Manual review needed" : "Forge-ready"))}</span>
+            </span>
+          </div>
         </div>
       </header>
       <div class="codex-forge-item-sheet-tabs" aria-hidden="true">
@@ -804,6 +863,23 @@ function reviewItemHTML(summary) {
       <div class="codex-forge-item-sheet-body">
         <p class="codex-forge-item-sheet-subtitle">${escapeHTML(summary.subtitle)}</p>
         ${summary.description ? `<div class="codex-forge-item-sheet-description">${escapeHTML(summary.description)}</div>` : ""}
+        ${summary.unresolvedCount
+          ? `
+            <section class="codex-forge-item-sheet-card codex-forge-item-sheet-alert" data-state="unresolved">
+              <div class="codex-forge-item-sheet-card-head">
+                <strong>Manual review preserved</strong>
+                <span>${summary.unresolvedCount} mechanic${summary.unresolvedCount === 1 ? "" : "s"}</span>
+              </div>
+              <div class="codex-forge-item-sheet-alert-copy">
+                <p>Forge kept the dominant supported item pattern and preserved the leftover mechanic${summary.unresolvedCount === 1 ? "" : "s"} for review instead of failing the request.</p>
+                ${summary.unresolvedLabels?.length
+                  ? `<div class="codex-forge-item-sheet-alert-tags">${summary.unresolvedLabels.map(label => `<span>${escapeHTML(label)}</span>`).join("")}</div>`
+                  : ""}
+              </div>
+            </section>
+          `
+          : ""
+        }
         <section class="codex-forge-item-sheet-card">
           <div class="codex-forge-item-sheet-card-head">
             <strong>Mechanical preview</strong>
@@ -998,6 +1074,7 @@ async function renderPreview(dialog, validation) {
       <strong>${validation.itemCount} item${validation.itemCount === 1 ? "" : "s"} ready for review</strong>
       <span><i class="fa-solid fa-check"></i> Validated</span>
     </div>
+    ${reviewOverviewHTML(summaries)}
     <div class="codex-forge-review-items">${summaries.map(reviewItemHTML).join("")}</div>
   `;
   renderFooterNotices(dialog, summaries, validation);
@@ -1010,11 +1087,37 @@ function renderCompilationReport(dialog, compilation) {
   const connectionDetail = compilation.providerMode === "network"
     ? providerConnectionDetailText(dialog._codexProviderConnection)
     : "";
+  const unresolvedCount = compilation.unresolvedMechanics?.length ?? 0;
+  const warningCount = compilation.warnings?.length ?? 0;
   report.hidden = false;
   report.innerHTML = `
     <div class="codex-forge-compile-head">
       <strong>${escapeHTML(compilation.providerLabel ?? "Local Rules")}</strong>
       <span>${compilation.decisions.map(decision => escapeHTML(decision.pattern)).join(", ")}</span>
+    </div>
+    <div class="codex-forge-compile-pills">
+      <span class="codex-forge-review-pill" data-state="ready">
+        <i class="fa-solid fa-check"></i>
+        <span>${compilation.specs.length} validated spec${compilation.specs.length === 1 ? "" : "s"}</span>
+      </span>
+      ${unresolvedCount
+        ? `
+          <span class="codex-forge-review-pill" data-state="unresolved">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            <span>${unresolvedCount} manual review mechanic${unresolvedCount === 1 ? "" : "s"}</span>
+          </span>
+        `
+        : ""
+      }
+      ${warningCount
+        ? `
+          <span class="codex-forge-review-pill" data-state="warning">
+            <i class="fa-solid fa-circle-exclamation"></i>
+            <span>${warningCount} warning${warningCount === 1 ? "" : "s"}</span>
+          </span>
+        `
+        : ""
+      }
     </div>
     ${connectionDetail ? `<small>${escapeHTML(connectionDetail)}</small>` : ""}
   `;

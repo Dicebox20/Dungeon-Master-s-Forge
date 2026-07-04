@@ -78,6 +78,14 @@ Confirmed structure:
 
 When an item casts or reproduces an existing DND5e spell, model the parts Foundry can automate. Use `saveActivities` for spells with saving throws, even if they deal no damage, such as Command or Fear. Reserve utility activities for spells or clauses where no attack roll, saving throw, damage, healing, enchantment, summon, or active effect can be cleanly represented.
 
+## Charge-Scaled Spell Item Rule
+
+Items with a shared charge pool and multiple spell activities should default each spell's charge cost to the spell level when the request does not specify another cost. A 3rd-level spell costs 3 charges, a 7th-level spell costs 7 charges, and so on. When the user asks for upcasting, preserve the base spell activity and expose the extra charge spend as an upcast/scaling review target rather than flattening it into a separate unrelated power.
+
+## Native SRD Spell Activity Rule
+
+When a requested item casts an exact-name DND5e SRD spell, prefer the read-only system content resolver and source UUID provenance before synthesizing a hand-made activity. If Foundry's DND5e item workflow can safely copy or derive the spell's activity shape the same way a GM can drag a spell onto an item, use that system-native activity data as the first choice, then apply item-specific charge cost, uses, save DC, or activation overrides during review. Never mutate locked system packs.
+
 ## Utility Macro Rule
 
 Set `macroCommand` on a utility activity when a reviewed power must update a resource or document that a normal DND5e activity cannot change. The engine embeds the Item Macro command and registers that activity with Midi-QOL. Class-resource macros remain deferred until the workflow can identify the actor's embedded feature safely.

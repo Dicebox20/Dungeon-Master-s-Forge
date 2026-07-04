@@ -15,6 +15,18 @@ function responsesFetch(output, captures = []) {
   };
 }
 
+function sequentialResponsesFetch(outputs, captures = []) {
+  let index = 0;
+  return async (url, init) => {
+    captures.push({ url, body: JSON.parse(init.body), authorization: init.headers.Authorization });
+    const output = outputs[Math.min(index, outputs.length - 1)];
+    index += 1;
+    return new Response(JSON.stringify({
+      output: [{ content: [{ type: "output_text", text: JSON.stringify(output) }] }]
+    }), { status: 200, headers: { "Content-Type": "application/json" } });
+  };
+}
+
 test("all fourteen Forge families survive the complete mocked provider pipeline", async () => {
   const captures = [];
   for (const spec of validSpecs) {
@@ -249,6 +261,60 @@ test("contract-invalid model output receives one bounded retry", async () => {
   const result = await compile(envelope({ request: `Item name: ${validSpecs[0].name}` }));
   assert.equal(attempts, 2);
   assert.equal(result.specs[0].name, validSpecs[0].name);
+});
+
+test("retryable validation failures send a repair hint on the second OpenAI attempt", async () => {
+  const captures = [];
+  const compile = createCompiler({
+    config: config({ mode: "openai" }),
+    fetchImpl: sequentialResponsesFetch([
+      {
+        specs: [{
+          kind: "totallyUnsupportedKind",
+          name: "Shepherd's Reliquary",
+          description: "Broken first attempt.",
+          activities: [{
+            activityName: "Shatter"
+          }]
+        }],
+        assumptions: [],
+        warnings: [],
+        deferred: []
+      },
+      {
+        specs: [{
+          kind: "chargedSaveDamage",
+          name: "Shepherd's Reliquary",
+          description: "A reliquary staff that can cast Shatter.",
+          uses: { max: "8", recovery: [{ period: "dawn", type: "formula", formula: "1d6 + 2" }] },
+          activityId: "saveact000000001",
+          activityName: "Cast Shatter",
+          activationType: "action",
+          chargeCost: 2,
+          save: { ability: "con", dc: 14 },
+          damageOnSave: "half",
+          damageParts: [{ number: 3, denomination: 8, bonus: "", types: ["thunder"] }],
+          target: { template: { type: "sphere", size: 10, units: "ft" } }
+        }],
+        assumptions: [],
+        warnings: [],
+        deferred: []
+      }
+    ], captures),
+    makeId: ids()
+  });
+
+  const result = await compile(envelope({
+    request: "Create a rare quarterstaff called Shepherd's Reliquary. It has 8 charges and regains 1d6 + 2 charges daily at dawn. As an action, the wielder can spend 2 charges to cast Shatter at DC 14."
+  }));
+
+  assert.equal(result.specs[0].name, "Shepherd's Reliquary");
+  assert.equal(result.specs[0].kind, "chargedSaveDamage");
+  assert.equal(captures.length, 2);
+  assert.equal(captures[0].body.input.length, 2);
+  assert.equal(captures[1].body.input.length, 3);
+  assert.match(captures[1].body.input[2].content, /Previous validation error \[(invalid_model_output|unsupported_generated_kind)\]/);
+  assert.match(captures[1].body.input[2].content, /Repair the previous response/);
 });
 
 test("upstream service errors are not retried", async () => {

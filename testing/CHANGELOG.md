@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added the `2.23.0-test.3` tester build for the current hybrid-output hardening workspace.
+- Refreshed the packaged tester lane so the branch manifest matches the latest local fixes under test.
 - Added the `2.23.0-test.2` live-testing repair build.
 - Fixed preview fallback icons so generated items without images no longer request `/undefined`.
 - Fixed armor bonus items so plate, leather, and breastplate requests are no longer created as shields.

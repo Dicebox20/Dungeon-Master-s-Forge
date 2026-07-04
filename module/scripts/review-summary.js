@@ -284,6 +284,7 @@ function summarizeSpec(spec, context = {}) {
     message: mechanic.requestedText || mechanic.handling || mechanic.reason || "Manual handling required.",
     handling: mechanic.handling || ""
   }));
+  const unresolvedLabels = [...new Set(unresolved.map(note => note.label).filter(Boolean))];
   const references = (spec.systemReferences ?? []).map(reference => ({
     state: "reference",
     label: reference.label || "System reference",
@@ -314,7 +315,12 @@ function summarizeSpec(spec, context = {}) {
     activityCount,
     effectCount: effects.length + (spec.enchantChanges?.length ?? 0) + (spec.toggleLight ? 1 : 0) + (spec.conditionOnHit ? 1 : 0),
     notes,
-    unresolvedCount: unresolved.length
+    unresolvedCount: unresolved.length,
+    unresolvedLabels,
+    reviewState: unresolved.length ? "manual-review" : "forge-ready",
+    reviewStateLabel: unresolved.length
+      ? `${unresolved.length} manual review ${unresolved.length === 1 ? "note" : "notes"}`
+      : "Forge-ready"
   };
 }
 

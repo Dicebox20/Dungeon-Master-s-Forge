@@ -20,6 +20,7 @@ The DND5e system exposes modern locked packs for Rules, Character Classes, Chara
 - Discover system-owned DND5e packs at runtime from Foundry metadata; do not depend on fixed pack IDs alone.
 - Prefer modern DND5e content over legacy packs when both contain an exact match.
 - Resolve exact spell, equipment, actor, monster-feature, and roll-table names before synthesizing mechanics.
+- Prefer system-native SRD spell activity data when an item casts a known exact-name spell; this should mirror the safe parts of dragging a DND5e spell into an item workflow, then layering item-specific charges, DCs, uses, or activation overrides on top.
 - Treat system content as an installed runtime reference. Do not copy bulk SRD text or assets into the Forge module or its release archives.
 - Copy only the document fields required to create the user's reviewed item, and preserve source UUID provenance when a system document is used.
 - Never mutate locked system packs or their documents.
@@ -33,4 +34,5 @@ The DND5e system exposes modern locked packs for Rules, Character Classes, Chara
 2. Return source UUID, pack label, document type, system version, and a small compatibility result without importing a document.
 3. Add non-destructive diagnostics for known modern entries such as Command, Flame Strike, a longsword, and plate armor.
 4. Use resolved spell mechanics only after schema validation and explicit review.
-5. Expand to actors, monster features, and roll tables after spell and equipment resolution is proven.
+5. Add charge-scaled spell item support so shared-charge spell items default spell cost to spell level and preserve upcast charge-spend choices for review.
+6. Expand to actors, monster features, and roll tables after spell and equipment resolution is proven.

@@ -16,13 +16,14 @@ Dungeon Master's Forge is a Foundry VTT item-generation toolkit for the DND5e sy
 - `releases/` - latest verified packaged build
 - `testing/` - temporary auto-connected Free Forge tester channel
 
-## Current Release Candidate
+## Current Release Lanes
 
 - Foundry VTT: v14
 - DND5e: 5.3.3
-- Module migration candidate: 2.23.0
+- Workspace stable-manifest candidate: `2.23.0`
+- Tester migration lane: `2.23.0-test.3`
 
-The current release candidate includes:
+The current project state includes:
 
 - Local Rules generation for proven item families
 - Bring Your Own API provider support for a Forge-compatible remote service
@@ -45,7 +46,11 @@ Dungeon Master's Forge is for Foundry VTT game masters who want to describe an i
 
 ## Stable Channel Hosting
 
-The stable `2.21.12` manifest still requires a reachable Forge-compatible service for live AI interpretation. The included reference service can run on the Foundry computer, another trusted LAN computer, or a Tailscale-connected computer.
+The workspace stable-manifest candidate `2.23.0` still requires a reachable Forge-compatible service for live AI interpretation. The included reference service can run on the Foundry computer, another trusted LAN computer, or a Tailscale-connected computer.
+
+## Tester Channel Hosting
+
+The temporary tester lane `2.23.0-test.3` automatically connects invited testers to the hosted **Free Forge** allowance. That channel exists to validate the package-identity migration and hosted-connection flow before stable promotion.
 
 ## Not Yet Included
 
@@ -58,11 +63,11 @@ The stable `2.21.12` manifest still requires a reachable Forge-compatible servic
 ## Manifest Install
 
 - Manifest URL: `https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/main/module/module.json`
-- Release ZIP: `https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/main/releases/dungeon-masters-forge-v2-2.21.12.zip`
+- Release ZIP: `https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/main/releases/dungeon-masters-forge-v2-2.23.0.zip`
 
 ## Pre-Launch Tester Channel
 
-Invited testers can install `2.23.0-test.2`, which migrates the package identity and automatically connects to the hosted 20-request calendar-month Free Forge allowance:
+Invited testers can install `2.23.0-test.3`, which migrates the package identity and automatically connects to the hosted 20-request calendar-month Free Forge allowance:
 
 - Tester manifest: `https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/codex/package-id-migration/testing/module.json`
 - Tester notes: [testing/README.md](./testing/README.md)

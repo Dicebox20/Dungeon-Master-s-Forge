@@ -23,10 +23,41 @@ test("remote specs cannot inject Item Macro source", () => {
   }, request), error => error.code === "unsafe_model_output" && /macroCommand/.test(error.message));
 });
 
-test("remote specs cannot set Foundry flags or macro registration data", () => {
-  assert.throws(() => normalizeModelOutput({
+test("top-level Foundry flags are stripped before normalized output reaches Foundry", () => {
+  const result = normalizeModelOutput({
     specs: [{ ...baseWeapon, flags: { "midi-qol": { onUseMacroName: "evil" } } }]
-  }, request), error => error.code === "unsafe_model_output" && /flags/.test(error.message));
+  }, request);
+  assert.equal(result.specs[0].name, "Policy Blade");
+  assert.equal("flags" in result.specs[0], false);
+});
+
+test("nested forbidden effect flags on aura-style output degrade into unresolved mechanics", () => {
+  const auraRequest = validateForgeRequest(envelope({
+    request: "Crown of Shared Aura\nLegendary crown requiring attunement. It emits a 30-foot aura granting allies +1 AC. It restores 1 sorcery point. It casts Fly once per dawn."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "passiveEffectEquipment",
+      name: "Crown of Shared Aura",
+      rarity: "legendary",
+      attunement: "required",
+      description: "A legendary crown with a defensive aura and a reserve of magic.",
+      equipmentType: "wondrous",
+      effects: [{
+        label: "Shared Aura",
+        flags: { dae: { transfer: true }, "midi-qol": { aura: { radius: 30 } } },
+        changes: [{ key: "system.attributes.ac.bonus", mode: "ADD", value: "1" }]
+      }]
+    }]
+  }, auraRequest);
+  assert.equal(result.specs[0].name, "Crown of Shared Aura");
+  assert.equal(result.specs[0].effects[0].flags, undefined);
+  assert.deepEqual(
+    result.specs[0].unresolvedMechanics.map(mechanic => mechanic.label),
+    ["Ally-affecting aura", "Class-specific resource"]
+  );
+  assert.match(result.warnings.join(" | "), /ally auras/i);
+  assert.match(result.deferred.join(" | "), /class-resource clause/i);
 });
 
 test("active HTML and JavaScript URLs are rejected", () => {

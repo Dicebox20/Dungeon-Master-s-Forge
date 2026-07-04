@@ -21,6 +21,8 @@ Use `ai-service/.env.free-tier.example` as the deployment template. Do not place
 
 Before starting the public listener, copy the template to `.env`, fill the server-side values, and run `npm run preflight:free-tier`. The command does not call a model or print either secret. A ready report confirms public mode, wildcard origins, proxy trust, bounded quotas, an OpenAI server key, and durable SQLite storage.
 
+For host-admin maintenance during tester validation, `npm run quota:admin -- summary` reports the current SQLite ledger by bucket and period, `npm run quota:admin -- reset-current-month` clears the current `client-month` rows, and `npm run quota:admin -- reset-current-day` clears the current daily client/global rows. Use those reset commands only on a trusted host when you intentionally want to reopen test allowance.
+
 ## Required Before Activation
 
 1. Deploy the service to a persistent host with Node.js 22.13 or newer and a stable public HTTPS URL.

@@ -23,7 +23,7 @@ Bring Your Own API connection details now live in **Forge Settings**. Endpoints 
 
 Use **Check Connection** in Forge Settings before live generation when you want to verify whether the remote service is still in deterministic `mock` mode or has been switched to server-side `openai` mode.
 
-Forge-managed source labels track the installed build version. Custom campaign source labels are preserved during upgrades.
+Generated item sheets do not add a visible Forge credit line or source label, so GMs can present their own creations cleanly. The module still keeps private Forge flags for troubleshooting and migration.
 
 ## First Test
 
