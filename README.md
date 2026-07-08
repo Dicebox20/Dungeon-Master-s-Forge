@@ -69,7 +69,7 @@ The temporary tester lane `2.23.0-test.4` automatically connects invited testers
 
 Invited testers can install `2.23.0-test.4`, which migrates the package identity and automatically connects to the hosted 20-request calendar-month Free Forge allowance:
 
-- Tester manifest: `https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/codex/package-id-migration/testing/module.json`
+- Tester manifest: `https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/main/testing/module.json`
 - Tester notes: [testing/README.md](./testing/README.md)
 
 The tester channel is temporary and is not the final public launch manifest.
