@@ -20,6 +20,10 @@ function bearerToken(request) {
   return value.startsWith("Bearer ") ? value.slice(7) : "";
 }
 
+function requestUsesClientProviderKey(config, bearer) {
+  return config.mode === "openai" && !config.clientToken && Boolean(String(bearer ?? "").trim());
+}
+
 function createRateLimiter(limit, now = Date.now, windowMs = 60000) {
   const clients = new Map();
   let checks = 0;
@@ -190,6 +194,7 @@ function createForgeServer(options) {
       }
 
       const client = clientAddress(request, config);
+      const usesClientProviderKey = requestUsesClientProviderKey(config, bearer);
       const quota = rateLimit(client);
       response.setHeader("X-RateLimit-Limit", String(config.rateLimitPerMinute));
       response.setHeader("X-RateLimit-Remaining", String(quota.remaining));
@@ -198,7 +203,7 @@ function createForgeServer(options) {
         throw new ServiceError(429, "rate_limited", "Forge AI request limit exceeded. Try again shortly.");
       }
 
-      if (dailyQuotaStore && config.clientMonthlyLimit > 0) {
+      if (!usesClientProviderKey && dailyQuotaStore && config.clientMonthlyLimit > 0) {
         const monthly = dailyQuotaStore.consumeMonthly("client-month", client, config.clientMonthlyLimit);
         response.setHeader("X-MonthlyLimit-Limit", String(config.clientMonthlyLimit));
         response.setHeader("X-MonthlyLimit-Remaining", String(monthly.remaining));
@@ -207,7 +212,7 @@ function createForgeServer(options) {
           throw new ServiceError(429, "monthly_client_limit", "This free-tier client has reached its monthly Forge AI limit.");
         }
       }
-      if (dailyQuotaStore && config.clientDailyLimit > 0) {
+      if (!usesClientProviderKey && dailyQuotaStore && config.clientDailyLimit > 0) {
         const daily = dailyQuotaStore.consume("client", client, config.clientDailyLimit);
         response.setHeader("X-DailyLimit-Limit", String(config.clientDailyLimit));
         response.setHeader("X-DailyLimit-Remaining", String(daily.remaining));
@@ -216,7 +221,7 @@ function createForgeServer(options) {
           throw new ServiceError(429, "daily_client_limit", "This free-tier client has reached its daily Forge AI limit.");
         }
       }
-      if (dailyQuotaStore && config.globalDailyLimit > 0) {
+      if (!usesClientProviderKey && dailyQuotaStore && config.globalDailyLimit > 0) {
         const daily = dailyQuotaStore.consume("global", "global", config.globalDailyLimit);
         response.setHeader("X-GlobalDailyLimit-Limit", String(config.globalDailyLimit));
         response.setHeader("X-GlobalDailyLimit-Remaining", String(daily.remaining));
@@ -229,7 +234,7 @@ function createForgeServer(options) {
       const payload = await readJsonBody(request, config.bodyLimitBytes);
       const { result, cacheStatus } = await cachedCompile({
         payload,
-        requestApiKey: requiresClientOpenAiKey ? bearer : ""
+        requestApiKey: requiresClientOpenAiKey || usesClientProviderKey ? bearer : ""
       });
       response.setHeader("X-Forge-Cache", cacheStatus);
       sendJson(response, 200, result);

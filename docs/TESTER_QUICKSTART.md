@@ -9,7 +9,7 @@ Updated: 2026-07-02
 - Foundry VTT v14
 - DND5e system 5.3.3
 - The Dungeon Master's Forge tester manifest:
-  - `https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/refs/heads/codex/package-id-migration/testing/module.json`
+  - `https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/main/testing/module.json`
 - An internet connection for hosted Free Forge generation
 
 ## Recommended Companion Modules
@@ -27,7 +27,7 @@ The Forge can still run its local deterministic workflow without every companion
 1. In Foundry, open **Add-on Modules**.
 2. Click **Install Module**.
 3. Paste the tester manifest URL:
-   - `https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/refs/heads/codex/package-id-migration/testing/module.json`
+   - `https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/main/testing/module.json`
 4. Install **Dungeon Master's Forge V2**.
 5. If the legacy package is installed, disable it and enable the new **Dungeon Master's Forge V2** package.
 6. Keep the legacy package installed through this first launch so its saved settings can migrate.
