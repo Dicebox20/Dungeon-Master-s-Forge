@@ -344,6 +344,50 @@ test("public free-tier mode enforces per-client monthly limits behind a trusted 
   assert.equal((await limited.json()).error.code, "monthly_client_limit");
 });
 
+test("public free-tier mode bypasses hosted quotas when a client provider key is supplied", async t => {
+  let seenRequestApiKey = "";
+  const app = await runningServer({
+    mode: "openai",
+    publicFreeTier: true,
+    clientToken: "",
+    trustProxy: true,
+    clientDailyLimit: 1,
+    clientMonthlyLimit: 1,
+    globalDailyLimit: 1,
+    allowedOrigins: ["*"],
+    cacheTtlMs: 0
+  }, {
+    openaiAdapter: async (_envelope, options) => {
+      seenRequestApiKey = options.requestApiKey;
+      return {
+        specs: [{ ...validSpecs[0], name: "BYO Quota Bypass Blade" }],
+        assumptions: [],
+        warnings: [],
+        deferred: []
+      };
+    }
+  });
+  t.after(app.close);
+  const request = () => fetch(`${app.baseUrl}/v1/forge/compile`, {
+    method: "POST",
+    headers: {
+      Origin: "https://foundry.example",
+      "X-Forwarded-For": "203.0.113.77",
+      Authorization: "Bearer client-openai-key",
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(envelope())
+  });
+  const first = await request();
+  const second = await request();
+  assert.equal(first.status, 200);
+  assert.equal(second.status, 200);
+  assert.equal(seenRequestApiKey, "client-openai-key");
+  assert.equal(first.headers.get("x-monthlylimit-limit"), null);
+  assert.equal(first.headers.get("x-dailylimit-limit"), null);
+  assert.equal(first.headers.get("x-globaldailylimit-limit"), null);
+});
+
 test("public free-tier mode enforces a global daily spend ceiling", async t => {
   const app = await runningServer({
     mode: "openai",
