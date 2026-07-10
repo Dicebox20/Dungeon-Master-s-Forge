@@ -102,7 +102,7 @@ Use a small request first:
 
 Then:
 
-1. Click **Compile Request**.
+1. Click **Preview**.
 2. Review the generated item in the **Result** pane.
 3. Check the approval box.
 4. Click **Create Items**.

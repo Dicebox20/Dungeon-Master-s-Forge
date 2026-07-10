@@ -8,11 +8,18 @@ import { validateSpecStructure } from "./spec-validation.mjs";
 const ID_PATTERN = /^[A-Za-z0-9]{16}$/;
 
 const BASE_ITEM_NAMES = Object.freeze([
+  "longbow",
+  "shortbow",
   "hand crossbow",
   "heavy crossbow",
   "light crossbow",
   "greatsword",
+  "glaive",
+  "halberd",
+  "rapier",
+  "trident",
   "longsword",
+  "lance",
   "shortsword",
   "scimitar",
   "warhammer",
@@ -65,15 +72,41 @@ const FEATURE_NAMES = Object.freeze([
   { pattern: /\b(flying|flight|wing|wings)\b/i, label: "Flight" }
 ]);
 
+const SRD_SPELL_PATTERNS = Object.freeze([
+  { pattern: /\bcommand\b/i, label: "Command" },
+  { pattern: /\bfly\b/i, label: "Fly" },
+  { pattern: /\bfireball\b/i, label: "Fireball" },
+  { pattern: /\blightning bolt\b/i, label: "Lightning Bolt" },
+  { pattern: /\bshatter\b/i, label: "Shatter" },
+  { pattern: /\bclairvoyance\b/i, label: "Clairvoyance" },
+  { pattern: /\bdetect thoughts\b/i, label: "Detect Thoughts" },
+  { pattern: /\bice storm\b/i, label: "Ice Storm" },
+  { pattern: /\bcone of cold\b/i, label: "Cone of Cold" },
+  { pattern: /\bflame strike\b/i, label: "Flame Strike" }
+]);
+
 const KNOWN_WEAPON_BASES = Object.freeze({
   dagger: { weaponType: "simpleM", baseItem: "dagger", damage: { number: 1, denomination: 4, bonus: "@mod", types: ["piercing"] }, versatile: { number: null, denomination: null, bonus: "", types: [] } },
   mace: { weaponType: "simpleM", baseItem: "mace", damage: { number: 1, denomination: 6, bonus: "@mod", types: ["bludgeoning"] }, versatile: { number: null, denomination: null, bonus: "", types: [] } },
+  "hand crossbow": { weaponType: "martialR", baseItem: "hand crossbow", damage: { number: 1, denomination: 6, bonus: "@mod", types: ["piercing"] }, versatile: { number: null, denomination: null, bonus: "", types: [] } },
+  "heavy crossbow": { weaponType: "martialR", baseItem: "heavy crossbow", damage: { number: 1, denomination: 10, bonus: "@mod", types: ["piercing"] }, versatile: { number: null, denomination: null, bonus: "", types: [] } },
+  "light crossbow": { weaponType: "simpleR", baseItem: "light crossbow", damage: { number: 1, denomination: 8, bonus: "@mod", types: ["piercing"] }, versatile: { number: null, denomination: null, bonus: "", types: [] } },
+  shortbow: { weaponType: "simpleR", baseItem: "shortbow", damage: { number: 1, denomination: 6, bonus: "@mod", types: ["piercing"] }, versatile: { number: null, denomination: null, bonus: "", types: [] } },
+  longbow: { weaponType: "martialR", baseItem: "longbow", damage: { number: 1, denomination: 8, bonus: "@mod", types: ["piercing"] }, versatile: { number: null, denomination: null, bonus: "", types: [] } },
   shortsword: { weaponType: "martialM", baseItem: "shortsword", damage: { number: 1, denomination: 6, bonus: "@mod", types: ["piercing"] }, versatile: { number: null, denomination: null, bonus: "", types: [] } },
   longsword: { weaponType: "martialM", baseItem: "longsword", damage: { number: 1, denomination: 8, bonus: "@mod", types: ["slashing"] }, versatile: { number: 1, denomination: 10, bonus: "@mod", types: ["slashing"] } },
   warhammer: { weaponType: "martialM", baseItem: "warhammer", damage: { number: 1, denomination: 8, bonus: "@mod", types: ["bludgeoning"] }, versatile: { number: 1, denomination: 10, bonus: "@mod", types: ["bludgeoning"] } },
+  battleaxe: { weaponType: "martialM", baseItem: "battleaxe", damage: { number: 1, denomination: 8, bonus: "@mod", types: ["slashing"] }, versatile: { number: 1, denomination: 10, bonus: "@mod", types: ["slashing"] } },
   quarterstaff: { weaponType: "simpleM", baseItem: "quarterstaff", damage: { number: 1, denomination: 6, bonus: "@mod", types: ["bludgeoning"] }, versatile: { number: 1, denomination: 8, bonus: "@mod", types: ["bludgeoning"] } },
   spear: { weaponType: "simpleM", baseItem: "spear", damage: { number: 1, denomination: 6, bonus: "@mod", types: ["piercing"] }, versatile: { number: 1, denomination: 8, bonus: "@mod", types: ["piercing"] } },
-  greataxe: { weaponType: "martialM", baseItem: "greataxe", damage: { number: 1, denomination: 12, bonus: "@mod", types: ["slashing"] }, versatile: { number: null, denomination: null, bonus: "", types: [] } }
+  trident: { weaponType: "martialM", baseItem: "trident", damage: { number: 1, denomination: 8, bonus: "@mod", types: ["piercing"] }, versatile: { number: 1, denomination: 10, bonus: "@mod", types: ["piercing"] } },
+  greataxe: { weaponType: "martialM", baseItem: "greataxe", damage: { number: 1, denomination: 12, bonus: "@mod", types: ["slashing"] }, versatile: { number: null, denomination: null, bonus: "", types: [] } },
+  greatsword: { weaponType: "martialM", baseItem: "greatsword", damage: { number: 2, denomination: 6, bonus: "@mod", types: ["slashing"] }, versatile: { number: null, denomination: null, bonus: "", types: [] } },
+  glaive: { weaponType: "martialM", baseItem: "glaive", damage: { number: 1, denomination: 10, bonus: "@mod", types: ["slashing"] }, versatile: { number: null, denomination: null, bonus: "", types: [] } },
+  halberd: { weaponType: "martialM", baseItem: "halberd", damage: { number: 1, denomination: 10, bonus: "@mod", types: ["slashing"] }, versatile: { number: null, denomination: null, bonus: "", types: [] } },
+  lance: { weaponType: "martialM", baseItem: "lance", damage: { number: 1, denomination: 12, bonus: "@mod", types: ["piercing"] }, versatile: { number: null, denomination: null, bonus: "", types: [] } },
+  rapier: { weaponType: "martialM", baseItem: "rapier", damage: { number: 1, denomination: 8, bonus: "@mod", types: ["piercing"] }, versatile: { number: null, denomination: null, bonus: "", types: [] } },
+  scimitar: { weaponType: "martialM", baseItem: "scimitar", damage: { number: 1, denomination: 6, bonus: "@mod", types: ["slashing"] }, versatile: { number: null, denomination: null, bonus: "", types: [] } }
 });
 
 const KNOWN_CONDITIONS = Object.freeze([
@@ -267,6 +300,89 @@ function unresolvedMechanicExists(spec, matcher) {
     && spec.unresolvedMechanics.some(mechanic => object(mechanic) && matcher(mechanic));
 }
 
+function allActivityNames(spec) {
+  const names = [];
+  for (const field of ["activities", "attackActivities", "saveActivities", "utilityActivities"]) {
+    if (!Array.isArray(spec[field])) continue;
+    for (const activity of spec[field]) {
+      if (!object(activity)) continue;
+      for (const key of ["activityName", "name", "label", "title", "spellName", "spell", "powerName", "utilityName", "saveName", "attackName"]) {
+        const name = compactText(activity[key] || "");
+        if (name && !names.includes(name)) names.push(name);
+      }
+    }
+  }
+  if (object(spec.summonActivity)) {
+    for (const key of ["activityName", "name", "label", "title", "spellName", "spell", "powerName", "utilityName"]) {
+      const name = compactText(spec.summonActivity[key] || "");
+      if (name && !names.includes(name)) names.push(name);
+    }
+  }
+  return names;
+}
+
+function requestedSpellLabels(text) {
+  const labels = [];
+  for (const entry of SRD_SPELL_PATTERNS) {
+    if (entry.pattern.test(text) && !labels.includes(entry.label)) labels.push(entry.label);
+  }
+  return labels;
+}
+
+function specHasSummonSupport(spec) {
+  return object(spec.summonActor)
+    || (Array.isArray(spec.summonProfiles) && spec.summonProfiles.some(profile => object(profile)))
+    || object(spec.summonActivity);
+}
+
+function specHasEnchantSupport(spec) {
+  if (spec.kind === "nativeEnchant") return true;
+  if (Array.isArray(spec.enchantChanges) && spec.enchantChanges.some(change => object(change) && compactText(change.key))) return true;
+  return Array.isArray(spec.utilityActivities) && spec.utilityActivities.some(activity =>
+    object(activity)
+    && Array.isArray(activity.enchantChanges)
+    && activity.enchantChanges.some(change => object(change) && compactText(change.key))
+  );
+}
+
+function specHasHealingSupport(spec) {
+  if (object(spec.healing) && hasMeaningfulNumericValue(spec.healing.number) && hasMeaningfulNumericValue(spec.healing.denomination)) return true;
+  return allActivityNames(spec).some(name => /\bheal|healing|restore\b/i.test(name));
+}
+
+function specHasSaveDamageSupport(spec) {
+  if (spec.kind === "chargedSaveDamage") return true;
+  if (object(spec.save) && Array.isArray(spec.damageParts) && spec.damageParts.length) return true;
+  if (object(spec.conditionOnHit?.save)) return true;
+  for (const field of ["saveActivities", "utilityActivities"]) {
+    if (!Array.isArray(spec[field])) continue;
+    if (spec[field].some(activity =>
+      object(activity) && object(activity.save) && Array.isArray(activity.damageParts) && activity.damageParts.length
+    )) return true;
+  }
+  return false;
+}
+
+function specHasToggleLightSupport(spec) {
+  if (object(spec.toggleLight)) return true;
+  return Array.isArray(spec.utilityActivities) && spec.utilityActivities.some(activity => {
+    if (!object(activity)) return false;
+    const name = compactText(activity.activityName || activity.name || activity.label || "");
+    const description = compactText(activity.description || "");
+    return /\b(light|bright|dim|shed|glow|ignite)\b/i.test(`${name} ${description}`);
+  });
+}
+
+function hasOnlyGenericUtilityNames(spec) {
+  const names = allActivityNames(spec);
+  if (!names.length) return false;
+  return names.every(name => /^((attack|save|utility|activity)\s+\d+|summon ally)$/i.test(name));
+}
+
+function isGenericActivityLabel(name) {
+  return /^((attack|save|utility|activity)\s+\d+|summon ally)$/i.test(compactText(name));
+}
+
 function appendRequestDerivedUnresolved(spec, requestChunk, warnings = [], deferred = []) {
   const text = compactText(requestChunk || spec.description || "");
   if (!text) return spec;
@@ -315,6 +431,135 @@ function appendRequestDerivedUnresolved(spec, requestChunk, warnings = [], defer
     }
     if (!deferred.includes("The class-resource clause was recorded in unresolvedMechanics for explicit review.")) {
       deferred.push("The class-resource clause was recorded in unresolvedMechanics for explicit review.");
+    }
+    changed = true;
+  }
+
+  if (/\b(summon|conjure|call forth|friendly wolf|friendly fiend|githzerai psimaster)\b/i.test(text)
+    && !specHasSummonSupport(normalized)
+    && !unresolvedMechanicExists({ unresolvedMechanics: unresolved }, mechanic =>
+      comparableText(mechanic.category || "") === "summon"
+      || /summon/i.test(compactText(mechanic.label || ""))
+    )) {
+    unresolved.push({
+      category: "summon",
+      label: "Requested summon",
+      requestedText: matchingClause(text, /\b(summon|conjure|call forth|friendly wolf|friendly fiend|githzerai psimaster)\b/i),
+      reason: "The request includes a summon, but the generated item does not contain a Foundry summon payload.",
+      handling: "Review and add the summon manually, or rephrase the request toward a dedicated summon pattern.",
+      resolved: false
+    });
+    if (!warnings.includes("A requested summon was not preserved in the generated Foundry structure.")) {
+      warnings.push("A requested summon was not preserved in the generated Foundry structure.");
+    }
+    if (!deferred.includes("Requested summon behavior was recorded in unresolvedMechanics for manual review.")) {
+      deferred.push("Requested summon behavior was recorded in unresolvedMechanics for manual review.");
+    }
+    changed = true;
+  }
+
+  if (/\b(enchant|enchanted|becomes magical)\b/i.test(text)
+    && !specHasEnchantSupport(normalized)
+    && !unresolvedMechanicExists({ unresolvedMechanics: unresolved }, mechanic =>
+      comparableText(mechanic.category || "") === "enchant"
+      || /enchant/i.test(compactText(mechanic.label || ""))
+    )) {
+    unresolved.push({
+      category: "enchant",
+      label: "Requested enchantment rider",
+      requestedText: matchingClause(text, /\b(enchant|enchanted|becomes magical)\b/i),
+      reason: "The request includes an enchantment effect, but the generated item does not contain a native enchant payload.",
+      handling: "Review and add the enchantment manually, or convert the item to a dedicated enchant pattern.",
+      resolved: false
+    });
+    if (!warnings.includes("A requested enchantment rider was not preserved in the generated Foundry structure.")) {
+      warnings.push("A requested enchantment rider was not preserved in the generated Foundry structure.");
+    }
+    changed = true;
+  }
+
+  if (/\b(restore|regain|heal|healing|hit points?)\b/i.test(text)
+    && !specHasHealingSupport(normalized)
+    && !unresolvedMechanicExists({ unresolvedMechanics: unresolved }, mechanic =>
+      comparableText(mechanic.category || "") === "healing"
+      || /healing/i.test(compactText(mechanic.label || ""))
+    )) {
+    unresolved.push({
+      category: "healing",
+      label: "Requested healing payload",
+      requestedText: matchingClause(text, /\b(restore|regain|heal|healing|hit points?)\b/i),
+      reason: "The request includes healing, but the generated item does not contain a concrete healing payload.",
+      handling: "Review and add healing manually, or rephrase toward a dedicated charged-healing pattern.",
+      resolved: false
+    });
+    if (!warnings.includes("A requested healing payload was not preserved in the generated Foundry structure.")) {
+      warnings.push("A requested healing payload was not preserved in the generated Foundry structure.");
+    }
+    changed = true;
+  }
+
+  if (/\b(\d+-foot (?:cone|line|radius|cube|emanation)|half on a success|damage on a failed save|deals? \d+d\d+|takes? \d+d\d+)\b/i.test(text)
+    && !specHasSaveDamageSupport(normalized)
+    && !unresolvedMechanicExists({ unresolvedMechanics: unresolved }, mechanic =>
+      comparableText(mechanic.category || "") === "savedamage"
+      || /save-based|area effect/i.test(compactText(mechanic.label || ""))
+    )) {
+    unresolved.push({
+      category: "saveDamage",
+      label: "Requested save-based effect",
+      requestedText: matchingClause(text, /\b(\d+-foot (?:cone|line|radius|cube|emanation)|half on a success|damage on a failed save|deals? \d+d\d+|takes? \d+d\d+)\b/i),
+      reason: "The request includes a save-based or area damage effect, but the generated item does not contain a concrete save-damage payload.",
+      handling: "Review and add the save-based activity manually, or rephrase toward a dedicated charged-save pattern.",
+      resolved: false
+    });
+    if (!warnings.includes("A requested save-based effect was not preserved in the generated Foundry structure.")) {
+      warnings.push("A requested save-based effect was not preserved in the generated Foundry structure.");
+    }
+    changed = true;
+  }
+
+  if (/\b(bright light|dim light|sheds? light|ignite)\b/i.test(text)
+    && !specHasToggleLightSupport(normalized)
+    && !unresolvedMechanicExists({ unresolvedMechanics: unresolved }, mechanic =>
+      comparableText(mechanic.category || "") === "lighttoggle"
+      || /light toggle|light effect/i.test(compactText(mechanic.label || ""))
+    )) {
+    unresolved.push({
+      category: "lightToggle",
+      label: "Requested light effect",
+      requestedText: matchingClause(text, /\b(bright light|dim light|sheds? light|ignite)\b/i),
+      reason: "The request includes a toggleable light effect, but the generated item does not contain light-toggle data.",
+      handling: "Review and add a toggle-light activity manually, or rephrase toward an artifact weapon light pattern.",
+      resolved: false
+    });
+    if (!warnings.includes("A requested light effect was not preserved in the generated Foundry structure.")) {
+      warnings.push("A requested light effect was not preserved in the generated Foundry structure.");
+    }
+    changed = true;
+  }
+
+  const requestedSpells = requestedSpellLabels(text);
+  const activityNames = allActivityNames(normalized).map(comparableText);
+  const missingSpells = requestedSpells.filter(label => !activityNames.some(name => name.includes(label.toLowerCase())));
+  if (missingSpells.length
+    && hasOnlyGenericUtilityNames(normalized)
+    && !unresolvedMechanicExists({ unresolvedMechanics: unresolved }, mechanic =>
+      comparableText(mechanic.category || "") === "namedspell"
+      || /named spell/i.test(compactText(mechanic.label || ""))
+    )) {
+    unresolved.push({
+      category: "namedSpell",
+      label: "Requested named spell activities",
+      requestedText: `Requested spells: ${missingSpells.join(", ")}`,
+      reason: "The request names specific spells, but the generated activities only preserved generic placeholders.",
+      handling: "Review and replace generic utility activities with the named SRD spells or equivalent manual activities.",
+      resolved: false
+    });
+    if (!warnings.includes("Specific named spells were reduced to generic utility placeholders.")) {
+      warnings.push("Specific named spells were reduced to generic utility placeholders.");
+    }
+    if (!deferred.includes("Named spell preservation requires review when the model returns only generic utility activities.")) {
+      deferred.push("Named spell preservation requires review when the model returns only generic utility activities.");
     }
     changed = true;
   }
@@ -406,6 +651,35 @@ function normalizeEffectAlias(effect) {
   return normalized;
 }
 
+function normalizeEffectChange(change) {
+  if (!object(change)) return null;
+  const normalized = clone(change);
+  const key = compactText(normalized.key ?? normalized.path ?? normalized.field ?? "");
+  if (!key) return null;
+  const value = normalized.value ?? normalized.amount ?? normalized.bonus ?? null;
+  if (value == null) return null;
+  if (typeof value === "string" && !value.trim()) return null;
+  normalized.key = key;
+  normalized.value = value;
+  return normalized;
+}
+
+function normalizeEffectCollections(normalized) {
+  for (const field of ["effects", "passiveEffects"]) {
+    if (!Array.isArray(normalized[field])) continue;
+    normalized[field] = normalized[field]
+      .map(effect => {
+        const next = normalizeEffectAlias(effect);
+        if (!object(next)) return null;
+        next.changes = Array.isArray(next.changes)
+          ? next.changes.map(normalizeEffectChange).filter(Boolean)
+          : [];
+        return next.changes.length ? next : null;
+      })
+      .filter(Boolean);
+  }
+}
+
 function normalizeProperties(properties) {
   if (!Array.isArray(properties)) return properties;
   return properties.map(entry => {
@@ -447,10 +721,7 @@ function normalizeRemoteSpecAliases(rawSpec) {
       return next;
     });
   }
-  for (const field of ["effects", "passiveEffects"]) {
-    if (!Array.isArray(normalized[field])) continue;
-    normalized[field] = normalized[field].map(effect => normalizeEffectAlias(effect));
-  }
+  normalizeEffectCollections(normalized);
   if (object(normalized.summonActivity)) normalized.summonActivity = normalizeActivityAlias(normalized.summonActivity);
 
   return normalized;
@@ -878,16 +1149,24 @@ function normalizeSuiteSummonShape(spec) {
 }
 
 function fallbackActivityName(activity, fallbackLabel) {
-  return compactText(
-    activity?.activityName
-    || activity?.name
-    || activity?.label
-    || activity?.title
-    || activity?.spellName
-    || activity?.spell
-    || activity?.powerName
-    || fallbackLabel
-  );
+  const candidates = [
+    activity?.activityName,
+    activity?.name,
+    activity?.label,
+    activity?.title,
+    activity?.spellName,
+    activity?.spell,
+    activity?.powerName,
+    activity?.utilityName,
+    activity?.saveName,
+    activity?.attackName
+  ]
+    .map(value => compactText(value || ""))
+    .filter(Boolean);
+
+  const specific = candidates.find(name => !isGenericActivityLabel(name));
+  if (specific) return specific;
+  return candidates[0] || fallbackLabel;
 }
 
 function normalizeActivityNames(spec) {
@@ -1030,7 +1309,9 @@ function normalizeToggleLight(spec, requestChunk) {
     dim: Number.isFinite(dim) ? dim : inferred.dim
   };
   if (!compactText(normalized.toggleLight.activityName)) normalized.toggleLight.activityName = "Ignite the Flame";
-  if (!compactText(normalized.toggleLight.effectName)) normalized.toggleLight.effectName = `${normalized.name} Ignited`;
+  if (!compactText(normalized.toggleLight.effectName) || /\btemplate\b/i.test(compactText(normalized.toggleLight.effectName))) {
+    normalized.toggleLight.effectName = `${normalized.name} Ignited`;
+  }
   return normalized;
 }
 
@@ -1236,6 +1517,7 @@ function validateForgeRequest(payload, limits = {}) {
   if (request.length > maxRequestChars) {
     throw new ServiceError(413, "request_too_large", `Item request exceeds the ${maxRequestChars.toLocaleString("en-US")} character limit.`);
   }
+  rejectExcessiveScaleRequest(request);
   const intent = analyzeRequestIntent(request);
   if (intent.count > maxItemsPerRequest) {
     throw new ServiceError(413, "item_batch_too_large", `Item request contains ${intent.count} items; this service allows at most ${maxItemsPerRequest} per request.`);
@@ -1417,6 +1699,35 @@ function normalizeModelOutput(modelOutput, envelope, options = {}) {
     deferred,
     unresolvedMechanics
   };
+}
+
+function rejectExcessiveScaleRequest(request) {
+  const text = String(request ?? "");
+  const normalized = text.toLowerCase();
+  const duplicateEffectPattern = /\b(\d{2,4})\s+(fireballs?|lightning bolts?|magic missiles?|meteors?|meteor swarms?|summons?|summoned creatures?|creatures?|copies|instances)\b/g;
+  for (const match of normalized.matchAll(duplicateEffectPattern)) {
+    const count = Number(match[1] ?? 0);
+    const subject = String(match[2] ?? "effects").trim();
+    if (count >= 25) {
+      throw new ServiceError(
+        400,
+        "unsupported_scale",
+        `The request asks for ${count} simultaneous ${subject}, which is beyond Dungeon Master's Forge's supported item scale. Please describe a bounded item power instead.`
+      );
+    }
+  }
+
+  const simultaneousPattern = /\b(\d{2,4})\b(?=[^.]{0,60}\b(?:at once|all at once|simultaneous(?:ly)?|in one action)\b)/g;
+  for (const match of normalized.matchAll(simultaneousPattern)) {
+    const count = Number(match[1] ?? 0);
+    if (count >= 10) {
+      throw new ServiceError(
+        400,
+        "unsupported_scale",
+        `The request asks for ${count} simultaneous effects at once, which is beyond Dungeon Master's Forge's supported item scale. Please describe a more bounded power.`
+      );
+    }
+  }
 }
 
 export { ID_PATTERN, normalizeModelOutput, secureId, validateForgeRequest };

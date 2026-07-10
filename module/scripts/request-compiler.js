@@ -1,4 +1,5 @@
 const COMPILER_VERSION = "2.4.0";
+const DEFAULT_SAVE_DC = 15;
 
 const KNOWN_CASTING_SPELLS = /\b(?:clairvoyance|command|ice\s+storm|cone\s+of\s+cold|flame\s+strike)\b/i;
 
@@ -17,6 +18,7 @@ const WEAPONS = {
   rapier: { weaponType: "martialM", baseItem: "rapier", damage: [1, 8, "piercing"], properties: ["mgc", "fin"], img: "icons/weapons/swords/sword-guard-steel-green.webp" },
   shortsword: { weaponType: "martialM", baseItem: "shortsword", damage: [1, 6, "piercing"], properties: ["mgc", "fin", "lgt"], img: "icons/weapons/swords/shortsword-guard.webp" },
   spear: { weaponType: "simpleM", baseItem: "spear", damage: [1, 6, "piercing"], versatile: [1, 8, "piercing"], properties: ["mgc", "thr", "ver"], range: { value: 20, long: 60, reach: 5, units: "ft" }, img: "icons/weapons/polearms/spear-hooked-broad.webp" },
+  trident: { weaponType: "martialM", baseItem: "trident", damage: [1, 6, "piercing"], versatile: [1, 8, "piercing"], properties: ["mgc", "thr", "ver"], range: { value: 20, long: 60, reach: 5, units: "ft" }, img: "icons/weapons/polearms/trident-silver-blue.webp" },
   warhammer: { weaponType: "martialM", baseItem: "warhammer", damage: [1, 8, "bludgeoning"], versatile: [1, 10, "bludgeoning"], properties: ["mgc", "ver"], img: "icons/weapons/hammers/hammer-double-steel.webp" },
   rifle: { weaponType: "martialR", baseItem: "", damage: [1, 10, "piercing"], properties: ["mgc", "amm", "fir", "lod", "two"], range: { value: 80, long: 240, reach: null, units: "ft" }, img: "icons/weapons/guns/gun-rifle.webp" },
   musket: { weaponType: "martialR", baseItem: "musket", damage: [1, 12, "piercing"], properties: ["mgc", "amm", "fir", "lod", "two"], range: { value: 40, long: 120, reach: null, units: "ft" }, img: "icons/weapons/guns/gun-rifle.webp" }
@@ -306,14 +308,84 @@ function parseSave(text, rarity) {
   const abilityNames = { strength: "str", dexterity: "dex", constitution: "con", intelligence: "int", wisdom: "wis", charisma: "cha" };
   const abilityPattern = "(strength|dexterity|constitution|intelligence|wisdom|charisma|str|dex|con|int|wis|cha)";
   const dcFirst = text.match(new RegExp(`dc\\s*(\\d+)\\s*${abilityPattern}(?:\\s+saving)?\\s+(?:throw|save)`, "i"));
-  const abilityFirst = text.match(new RegExp(`${abilityPattern}(?:\\s+saving)?\\s+(?:throw|save)[^\\d]{0,16}(?:dc\\s*)?(\\d+)?`, "i"));
+  const abilityFirst = text.match(new RegExp(`${abilityPattern}(?:\\s+saving)?\\s+(?:throw|save)(?:[^\\d]|\\b(?:dc)\\b){0,16}(?:(\\d+)(?!\\s*d))?`, "i"));
   const match = dcFirst ?? abilityFirst;
   if (!match) return null;
 
   const abilityText = dcFirst ? match[2] : match[1];
   const dcText = dcFirst ? match[1] : match[2];
-  const defaultDc = ["legendary", "artifact"].includes(rarity) ? 18 : rarity === "veryRare" ? 16 : rarity === "rare" ? 15 : 13;
+  const defaultDc = DEFAULT_SAVE_DC;
   return { ability: abilityNames[abilityText.toLowerCase()] ?? abilityText.toLowerCase(), dc: Number(dcText ?? defaultDc) };
+}
+
+function compactText(value) {
+  return String(value ?? "").replace(/\s+/g, " ").trim();
+}
+
+function normalizeMagicalBonusText(value) {
+  const normalized = compactText(value);
+  if (!normalized) return "";
+  if (/^(?:true|false|null|undefined|nan)$/i.test(normalized)) return "";
+  if (!/^[+-]?\d+$/.test(normalized)) {
+    const numeric = Number(normalized);
+    if (!Number.isFinite(numeric)) return "";
+    return String(Math.trunc(numeric));
+  }
+  const unsigned = normalized.startsWith("+") ? normalized.slice(1) : normalized;
+  return unsigned === "-0" ? "0" : unsigned;
+}
+
+function hasDefaultableMagicalBonus(spec = {}) {
+  const current = normalizeMagicalBonusText(spec.magicalBonus);
+  if (current && current !== "0") return false;
+  const weaponLike = Boolean(
+    spec.weaponType
+    || spec.damage?.base
+    || ["weaponExtraDamage", "weaponConditionOnHit", "artifactWeaponHybrid", "multiActivityStaff"].includes(spec.kind)
+  );
+  const armorLike = spec.kind === "shieldArmorBonus"
+    || (Number(spec.armorValue ?? 0) > 0 && /\b(?:shield|armor|plate|mail|leather)\b/i.test(compactText(spec.description)));
+  return weaponLike || armorLike;
+}
+
+function normalizeSaveEntry(save, assumptions) {
+  if (!save || typeof save !== "object") return save;
+  const next = { ...save };
+  const dc = Number(next.dc);
+  if (!Number.isFinite(dc) || dc <= 0) {
+    next.dc = DEFAULT_SAVE_DC;
+    assumptions.push(`No save DC was supplied; used DC ${DEFAULT_SAVE_DC}.`);
+  }
+  return next;
+}
+
+function applyLocalCompilerDefaults(spec, assumptions = []) {
+  const next = structuredClone(spec);
+  if (hasDefaultableMagicalBonus(next)) {
+    next.magicalBonus = "1";
+    assumptions.push("No magical bonus was supplied; used +1 by default.");
+  }
+
+  if (next.save) next.save = normalizeSaveEntry(next.save, assumptions);
+  if (next.conditionOnHit?.save) {
+    next.conditionOnHit = {
+      ...next.conditionOnHit,
+      save: normalizeSaveEntry(next.conditionOnHit.save, assumptions)
+    };
+  }
+
+  for (const listName of ["activities", "saveActivities", "utilityActivities", "attackActivities"]) {
+    if (!Array.isArray(next[listName])) continue;
+    next[listName] = next[listName].map(activity => {
+      if (!activity?.save) return activity;
+      return {
+        ...activity,
+        save: normalizeSaveEntry(activity.save, assumptions)
+      };
+    });
+  }
+
+  return next;
 }
 
 function parseActivation(text) {
@@ -803,7 +875,6 @@ function compileCasterEquipment(context) {
 
   if (/\bcommand\b/i.test(request)) {
     const suppliedSave = parseSave(request, rarity);
-    const defaultDc = ["legendary", "artifact"].includes(rarity) ? 18 : rarity === "veryRare" ? 16 : rarity === "rare" ? 15 : 13;
     saveActivities.push({
       activityId: stableId(`${name} Command`),
       activityName: "Cast Command",
@@ -812,7 +883,7 @@ function compileCasterEquipment(context) {
       range: { value: 60, units: "ft" },
       target: { affects: { count: "1", type: "creature" }, prompt: true },
       duration: { value: 1, units: "round", concentration: false },
-      save: suppliedSave ?? { ability: "wis", dc: defaultDc },
+      save: suppliedSave ?? { ability: "wis", dc: DEFAULT_SAVE_DC },
       damageOnSave: "none",
       damageParts: [],
       chatFlavor: "The target makes the Command spell's Wisdom saving throw."
@@ -874,7 +945,7 @@ function compileHealing(context) {
 function compileSaveDamage(context) {
   const { request, name, rarity, attunement, assumptions } = context;
   const damage = parseDamage(request);
-  const save = parseSave(request, rarity) ?? { ability: "dex", dc: rarity === "rare" ? 15 : 13 };
+  const save = parseSave(request, rarity) ?? { ability: "dex", dc: DEFAULT_SAVE_DC };
   if (!parseSave(request, rarity)) assumptions.push(`No saving throw was supplied; used DC ${save.dc} Dexterity.`);
   if (!damage.length) {
     const type = DAMAGE_TYPES.find(value => new RegExp(`\\b${value}\\b`, "i").test(request)) ?? "force";
@@ -1021,6 +1092,7 @@ function compileOne(request) {
   if (!/attunement|required by|requires? attunement/i.test(trimmed)) {
     assumptions.push("No attunement requirement was supplied; left attunement off.");
   }
+  spec = applyLocalCompilerDefaults(spec, assumptions);
   const unresolvedMechanics = collectUnresolvedMechanics(context);
   if (unresolvedMechanics.length) spec.unresolvedMechanics = unresolvedMechanics;
 

@@ -42,6 +42,20 @@ test("repeated item-name batches are rejected above the configured item limit", 
   );
 });
 
+test("absurd simultaneous spell-volume requests are rejected before compilation", () => {
+  assert.throws(
+    () => validateForgeRequest(envelope({ request: "Create a pair of gauntlets that can cast 500 fireballs at once." })),
+    error => error.status === 400 && error.code === "unsupported_scale" && /500 simultaneous fireballs/i.test(error.message)
+  );
+});
+
+test("normal charged multi-spell items remain allowed", () => {
+  const result = validateForgeRequest(envelope({
+    request: "Create a rare staff with 10 charges. It can cast Fireball for 3 charges or Lightning Bolt for 3 charges."
+  }));
+  assert.equal(result.request.includes("10 charges"), true);
+});
+
 test("model output becomes the exact Forge response envelope", () => {
   const request = validateForgeRequest(envelope());
   const result = normalizeModelOutput({
@@ -79,6 +93,43 @@ test("model output becomes the exact Forge response envelope", () => {
   assert.equal(result.specs[0].unresolvedMechanics[0].id, "0000000000000003");
   assert.equal(result.specs[0].unresolvedMechanics[0].resolved, false);
   assert.equal(result.unresolvedMechanics[0].itemName, "Mind Crown");
+});
+
+test("empty model-generated effects are pruned before suite validation", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a legendary crown called Crown of Shared Dawn. It grants +1 AC and resistance to radiant damage. It emits a 30-foot aura granting allies +1 AC. It has 3 charges and can cast Command for 1 charge."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "equipmentPowerSuite",
+      name: "Crown of Shared Dawn",
+      description: "A radiant crown with an ally aura.",
+      uses: { max: "3", recovery: [{ period: "dawn", type: "recoverAll", formula: "" }] },
+      effects: [
+        {
+          name: "Radiant Guard",
+          changes: [{ key: "system.attributes.ac.bonus", mode: "ADD", value: "1" }]
+        },
+        {
+          name: "Radiant Resistance",
+          changes: [{ key: "system.traits.dr.value", mode: "ADD", value: "radiant" }]
+        },
+        {
+          name: "Aura Placeholder",
+          changes: [{ key: "", mode: "ADD", value: "" }]
+        }
+      ],
+      saveActivities: [{
+        activityName: "Cast Command",
+        save: { ability: "wis", dc: 17 },
+        damageParts: []
+      }]
+    }]
+  }, request, { makeId: ids() });
+
+  assert.equal(result.specs[0].effects.length, 2);
+  assert.equal(result.specs[0].effects.some(effect => effect.name === "Aura Placeholder"), false);
+  assert.equal(result.specs[0].unresolvedMechanics.some(mechanic => mechanic.category === "allyAura"), true);
 });
 
 test("pattern aliases normalize into Forge kinds", () => {
@@ -231,6 +282,74 @@ test("condition weapons recover known base weapon damage", () => {
   assert.equal(result.specs[0].baseItem, "mace");
   assert.equal(result.specs[0].weaponType, "simpleM");
   assert.deepEqual(result.specs[0].damage.base, { number: 1, denomination: 6, bonus: "@mod", types: ["bludgeoning"] });
+});
+
+test("glaive hybrids recover known base weapon damage", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a legendary glaive called Dawncourt Halberd. It is a +2 glaive that deals an extra 1d6 fire damage and 1d6 lightning damage on every hit."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "artifactWeaponHybrid",
+      name: "Dawncourt Halberd",
+      description: "A blazing glaive.",
+      magicalBonus: "2",
+      baseItem: "glaive",
+      damage: { base: { number: 1, denomination: 10, bonus: "@mod", types: [] } },
+      toggleLight: { bright: 20, dim: 20 },
+      extraDamageParts: [
+        { number: 1, denomination: 6, bonus: "", types: ["fire"] },
+        { number: 1, denomination: 6, bonus: "", types: ["lightning"] }
+      ]
+    }]
+  }, request, { makeId: ids() });
+
+  assert.equal(result.specs[0].weaponType, "martialM");
+  assert.deepEqual(result.specs[0].damage.base.types, ["slashing"]);
+});
+
+test("longbow hybrids recover known base weapon damage", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a very rare longbow called Stormglass Longbow. It is a +2 longbow that deals an extra 1d6 lightning damage on every hit."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "artifactWeaponHybrid",
+      name: "Stormglass Longbow",
+      description: "A crackling longbow.",
+      magicalBonus: "2",
+      baseItem: "longbow",
+      damage: { base: { number: 1, denomination: 8, bonus: "@mod", types: [] } },
+      utilityActivities: [{ activityName: "Cast Lightning Arrow" }],
+      extraDamageParts: [
+        { number: 1, denomination: 6, bonus: "", types: ["lightning"] }
+      ]
+    }]
+  }, request, { makeId: ids() });
+
+  assert.equal(result.specs[0].weaponType, "martialR");
+  assert.deepEqual(result.specs[0].damage.base.types, ["piercing"]);
+});
+
+test("trident hybrids recover martial piercing base damage", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a rare trident called Frostwave Trident. It can cast Fog Cloud from its charges and summon friendly sea beasts."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "artifactWeaponHybrid",
+      name: "Frostwave Trident",
+      description: "A tidebound trident.",
+      baseItem: "trident",
+      damage: { base: { number: 1, denomination: 8, bonus: "@mod", types: [] } },
+      utilityActivities: [{ activityName: "Cast Fog Cloud" }]
+    }]
+  }, request, { makeId: ids() });
+
+  assert.equal(result.specs[0].weaponType, "martialM");
+  assert.equal(result.specs[0].baseItem, "trident");
+  assert.deepEqual(result.specs[0].damage.base.types, ["piercing"]);
+  assert.deepEqual(result.specs[0].damage.versatile.types, ["piercing"]);
 });
 
 test("missing kind is inferred for obvious weapon and staff outputs", () => {
@@ -837,4 +956,158 @@ test("artifact greataxe aliases recover base damage and passive effect ids", () 
   assert.deepEqual(result.specs[0].damage.base.types, ["slashing"]);
   assert.match(result.specs[0].passiveEffects[0].effectId, /^[A-Za-z0-9]{16}$/);
   assert.equal(result.specs[0].utilityActivities[0].activityName, "Utility 1");
+});
+
+test("missing hybrid mechanics are surfaced in unresolved review notes", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a legendary glaive called Beaconrend. It is a +2 glaive that deals an extra 1d6 fire damage and 1d6 lightning damage on every hit. It has 4 charges and regains 1d4 charges daily at dawn. The wielder can spend 1 charge to cast Command at DC 16, or 2 charges to summon a friendly wolf for 1 hour. As a bonus action, the blade can ignite, shedding 20 feet of bright light and 20 feet of dim light."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "artifactWeaponHybrid",
+      name: "Beaconrend",
+      description: "A blazing glaive with command magic.",
+      weaponType: "martialM",
+      damage: { base: { number: 1, denomination: 10, bonus: "@mod", types: ["slashing"] } },
+      extraDamageParts: [
+        { number: 1, denomination: 6, bonus: "", types: ["fire"] },
+        { number: 1, denomination: 6, bonus: "", types: ["lightning"] }
+      ],
+      uses: { max: "4", recovery: [{ type: "dawn", formula: "1d4" }] },
+      utilityActivities: [
+        { activityName: "Utility 1" },
+        { activityName: "Utility 2" }
+      ]
+    }]
+  }, request, { makeId: ids() });
+
+  const unresolvedCategories = new Set((result.specs[0].unresolvedMechanics ?? []).map(mechanic => mechanic.category));
+  assert.equal(unresolvedCategories.has("summon"), true);
+  assert.equal(unresolvedCategories.has("lightToggle"), true);
+  assert.equal(unresolvedCategories.has("namedSpell"), true);
+  assert.equal(result.warnings.includes("A requested summon was not preserved in the generated Foundry structure."), true);
+  assert.equal(result.warnings.includes("Specific named spells were reduced to generic utility placeholders."), true);
+});
+
+test("condition riders and named light utilities do not trigger false unresolved flags", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a very rare rapier called Zephyr Thorn. It is a +2 rapier that deals an extra 1d6 lightning damage on every hit. Any creature struck must succeed on a DC 15 Constitution saving throw or be poisoned for 1 minute. Once per day, the wielder can cast Fly, and as a bonus action the blade sheds 20 feet of bright light and 20 feet of dim light."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "weaponConditionOnHit",
+      name: "Zephyr Thorn",
+      description: "A brilliant lightning rapier.",
+      weaponType: "martialM",
+      baseItem: "rapier",
+      magicalBonus: 2,
+      damage: { base: { number: 1, denomination: 8, bonus: "@mod", types: ["piercing"] } },
+      extraDamageParts: [{ number: 1, denomination: 6, bonus: "", types: ["lightning"] }],
+      conditionOnHit: {
+        condition: "poisoned",
+        save: { ability: "con", dc: 15 },
+        durationSeconds: 60
+      },
+      utilityActivities: [
+        { activityName: "Cast Fly", description: "Cast Fly once per day." },
+        { activityName: "Blade Shedding Light", description: "As a bonus action, the blade sheds 20 feet of bright light and 20 feet of dim light." }
+      ]
+    }]
+  }, request, { makeId: ids() });
+
+  const unresolvedCategories = new Set((result.specs[0].unresolvedMechanics ?? []).map(mechanic => mechanic.category));
+  assert.equal(unresolvedCategories.has("saveDamage"), false);
+  assert.equal(unresolvedCategories.has("lightToggle"), false);
+});
+
+test("named spell aliases in utility fields are preserved for review logic", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a rare breastplate called Hearthwarden Breastplate. It can heal allies in a 15-foot burst for 2d8+3 and cast Beacon of Hope once per dawn."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "equipmentPowerSuite",
+      name: "Hearthwarden Breastplate",
+      description: "A breastplate with healing and hope magic.",
+      utilityActivities: [
+        {
+          activityName: "Healing Burst",
+          healing: { parts: [{ number: 2, denomination: 8, bonus: 3, types: ["healing"] }] }
+        },
+        {
+          activityName: "Utility 2",
+          utilityName: "Beacon of Hope",
+          description: "Cast Beacon of Hope once per dawn."
+        }
+      ]
+    }]
+  }, request, { makeId: ids() });
+
+  const utilityNames = result.specs[0].utilityActivities.map(activity => activity.activityName);
+  const unresolvedCategories = new Set((result.specs[0].unresolvedMechanics ?? []).map(mechanic => mechanic.category));
+  assert.deepEqual(utilityNames, ["Healing Burst", "Beacon of Hope"]);
+  assert.equal(unresolvedCategories.has("namedSpell"), false);
+});
+
+test("utility activities with save and damage satisfy save-effect preservation", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a rare breastplate called Hearthwarden Breastplate. While worn, it grants +1 AC and resistance to fire damage. It has 3 charges and regains all charges at dawn. The wearer can spend 1 charge to restore 2d8 + 2 hit points to a creature they touch, or 2 charges to exhale a 15-foot cone of fire that deals 4d6 fire damage with a DC 14 Dexterity save for half."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "passiveEffectEquipment",
+      name: "Hearthwarden Breastplate",
+      description: "Protective fire-touched armor.",
+      effects: [{
+        changes: [
+          { key: "system.attributes.ac.bonus", mode: "ADD", value: 1 },
+          { key: "system.traits.dr.value", mode: "ADD", value: "fire" }
+        ]
+      }],
+      utilityActivities: [
+        {
+          activityName: "Heal Touch",
+          description: "Restore 2d8 + 2 hit points to a creature you touch."
+        },
+        {
+          activityName: "Fire Cone",
+          description: "Exhale a 15-foot cone dealing 4d6 fire damage (Dexterity save DC 14 for half).",
+          save: { ability: "dex", dc: 14 },
+          damageParts: [{ number: 4, denomination: 6, bonus: "", types: ["fire"] }]
+        }
+      ]
+    }]
+  }, request, { makeId: ids() });
+
+  const unresolvedCategories = new Set((result.specs[0].unresolvedMechanics ?? []).map(mechanic => mechanic.category));
+  assert.equal(unresolvedCategories.has("saveDamage"), false);
+});
+
+test("suite utility enchantments do not trigger false unresolved enchant review notes", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a rare shield called Cinderwake Aegis. It grants resistance to fire damage while equipped. Once per long rest, the bearer can use an action to enchant one nonmagical weapon for 1 hour so it becomes magical and deals an extra 1d4 radiant damage."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "equipmentPowerSuite",
+      name: "Cinderwake Aegis",
+      description: "A shield that blesses a weapon with flame.",
+      effects: [{
+        name: "Cinderwake Guard",
+        changes: [{ key: "system.traits.dr.value", mode: "ADD", value: "fire" }]
+      }],
+      utilityActivities: [{
+        activityName: "Bless a Weapon",
+        effectId: "EnchantFx0000001",
+        enchantChanges: [
+          { key: "system.properties", mode: "ADD", value: "mgc" },
+          { key: "system.damage.parts", mode: "ADD", value: { number: 1, denomination: 4, bonus: "", types: ["radiant"] } }
+        ]
+      }]
+    }]
+  }, request, { makeId: ids() });
+
+  const unresolvedCategories = new Set((result.specs[0].unresolvedMechanics ?? []).map(mechanic => mechanic.category));
+  assert.equal(unresolvedCategories.has("enchant"), false);
+  assert.equal(result.warnings.includes("A requested enchantment rider was not preserved in the generated Foundry structure."), false);
 });

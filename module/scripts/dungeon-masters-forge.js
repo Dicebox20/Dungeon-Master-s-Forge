@@ -29,8 +29,11 @@ import {
 } from "./provider-contract.js";
 import { DIAGNOSTIC_CASES, runLocalDiagnostics } from "./diagnostics.js";
 import {
+  findSystemNonMagicalEquipmentForText,
+  findSystemNonMagicalWeaponForText,
   resolveEquipmentByName,
   resolveSpellByName,
+  resolveSystemDocument,
   resolveSystemContentByName,
   runSystemContentDiagnostics
 } from "./content-resolver.js";
@@ -42,8 +45,12 @@ import {
   serializeProviderProfile
 } from "./provider-profile.js";
 import { buildReviewSummaries } from "./review-summary.js";
-import { safeItemIcon } from "./equipment-normalization.js";
-import { autoSelectSrdChoiceSpells } from "./srd-spell-enrichment.js";
+import { normalizeWeight, safeItemIcon } from "./equipment-normalization.js";
+import { applyFeaturePlanToSpec, planItemFeatures } from "./feature-planner.js";
+import { sanitizeForgeSpec } from "./forge-spec-integrity.js";
+import { repairHybridSpecFromRequest } from "./hybrid-activity-repair.js";
+import { applyDefaultLeveledSpellCharges, applyForgeSpecDefaults, autoSelectSrdChoiceSpells, dedupeRecognizedSpellActivities, reconcilePlannedSrdSpellActivities, repairNamedSrdSpellActivities } from "./srd-spell-enrichment.js";
+import { applyFallbackActivityArt, applySpellActivityArt, applySystemEquipmentArt } from "./system-art-enrichment.js";
 import {
   LEGACY_MODULE_ID,
   MODULE_ID,
@@ -281,6 +288,21 @@ function normalizeSpecs(input) {
   return specs;
 }
 
+function repairSpecsForValidation(specs, requestText = "") {
+  return specs.map(spec => {
+    const repairContext = [requestText, spec.description].filter(Boolean).join("\n");
+    const repaired = repairHybridSpecFromRequest(spec, repairContext);
+    const defaulted = applyForgeSpecDefaults(repaired.spec);
+    const deduped = dedupeRecognizedSpellActivities(defaulted.spec, repairContext);
+    return deduped.spec;
+  });
+}
+
+async function prepareSpecsForForge(input, requestText = "") {
+  const repairedSpecs = repairSpecsForValidation(normalizeSpecs(input), requestText);
+  return enrichSpecsWithSystemReferences(repairedSpecs, requestText);
+}
+
 function currentConfig(overrides = {}) {
   return {
     itemFolderName: overrides.itemFolderName ?? game.settings.get(MODULE_ID, "itemFolderName"),
@@ -312,9 +334,9 @@ function dependencyWarnings(specs) {
   return warnings;
 }
 
-async function validateSpecs(input) {
+async function validateSpecs(input, requestText = "") {
   assertEnvironment();
-  const specs = normalizeSpecs(input);
+  const specs = await prepareSpecsForForge(input, requestText);
   const validation = await runCodexItemForge(currentConfig(), specs, { validateOnly: true });
   return {
     ...validation,
@@ -323,9 +345,9 @@ async function validateSpecs(input) {
   };
 }
 
-async function createFromSpecs(input, configOverrides = {}) {
+async function createFromSpecs(input, configOverrides = {}, requestText = "") {
   assertEnvironment({ requireGM: true });
-  const specs = normalizeSpecs(input);
+  const specs = await prepareSpecsForForge(input, requestText);
   await runCodexItemForge(currentConfig(configOverrides), specs, { validateOnly: true });
   return runCodexItemForge(currentConfig(configOverrides), specs);
 }
@@ -458,10 +480,6 @@ function forgeContent() {
             </label>
           </div>
 
-          <label class="codex-forge-approval">
-            <input type="checkbox" name="reviewApproval">
-            <span>I reviewed these specifications and approve creation.</span>
-          </label>
           <details class="codex-forge-advanced">
             <summary><i class="fa-solid fa-code"></i><span>Advanced specification editor</span></summary>
             <label class="codex-forge-specs">
@@ -475,6 +493,11 @@ function forgeContent() {
       <section class="codex-forge-bottom-tray">
         <div class="codex-forge-compile-report" data-forge-compile-report hidden></div>
         <div class="codex-forge-notice-stack" data-forge-notices hidden></div>
+        <label class="codex-forge-approval codex-forge-approval-footer">
+          <input type="checkbox" name="reviewApproval">
+          <span class="codex-forge-approval-box" aria-hidden="true"><i class="fa-solid fa-check"></i></span>
+          <span class="codex-forge-approval-text">I reviewed these specifications and approve creation.</span>
+        </label>
         <output class="codex-forge-message" data-forge-status data-state="idle" aria-live="polite">Ready.</output>
       </section>
     </section>
@@ -1045,7 +1068,67 @@ function specReferenceLookups(spec) {
   return uniqueReferences(references);
 }
 
-async function enrichSpecsWithSystemReferences(specs) {
+function supportsWeaponBase(spec) {
+  return [
+    "weaponExtraDamage",
+    "weaponConditionOnHit",
+    "artifactWeaponHybrid",
+    "equipmentPowerSuite",
+    "legendaryEquipmentSuite",
+    "casterUtilityEquipment",
+    "multiActivityStaff"
+  ].includes(spec?.kind);
+}
+
+function applySystemWeaponBase(spec, profile) {
+  if (!profile || !supportsWeaponBase(spec)) return spec;
+  const properties = new Set([...(profile.properties ?? []), ...(spec.properties ?? [])]);
+  if (String(spec.magicalBonus ?? "").trim() && String(spec.magicalBonus) !== "0") properties.add("mgc");
+  return {
+    ...spec,
+    weaponType: profile.weaponType,
+    baseItem: profile.baseItem,
+    damage: profile.damage,
+    properties: [...properties],
+    range: profile.range,
+    mastery: spec.mastery || profile.mastery,
+    weight: normalizeWeight(spec.weight, profile.weight ?? 0),
+    img: spec.img || profile.img
+  };
+}
+
+function supportsEquipmentBase(spec) {
+  return [
+    "shieldArmorBonus",
+    "passiveEffectEquipment",
+    "chargedSaveDamage",
+    "chargedHealing",
+    "nativeEnchant",
+    "nativeSummon",
+    "nativeMultiProfileSummon",
+    "wondrousPassive",
+    "casterUtilityEquipment",
+    "equipmentPowerSuite",
+    "legendaryEquipmentSuite"
+  ].includes(spec?.kind);
+}
+
+function applySystemEquipmentBase(spec, profile) {
+  if (!profile || !supportsEquipmentBase(spec)) return spec;
+  return {
+    ...spec,
+    itemType: spec.itemType || profile.itemType || "equipment",
+    equipmentType: spec.equipmentType || profile.equipmentType,
+    baseItem: spec.baseItem || profile.baseItem,
+    armorValue: Number(spec.armorValue ?? profile.armorValue ?? 0) || 0,
+    armorDex: spec.armorDex ?? profile.armorDex ?? null,
+    strength: spec.strength ?? profile.strength ?? null,
+    weight: normalizeWeight(spec.weight, profile.weight ?? 0),
+    img: spec.img || profile.img
+  };
+}
+
+async function enrichSpecsWithSystemReferences(specs, requestText = "") {
   const items = Array.isArray(specs) ? specs : [];
   const cache = new Map();
   const resolveReference = async reference => {
@@ -1060,7 +1143,39 @@ async function enrichSpecsWithSystemReferences(specs) {
   };
 
   return Promise.all(items.map(async spec => {
+    let nextSpec = spec;
     const systemReferences = Array.isArray(spec.systemReferences) ? [...spec.systemReferences] : [];
+    const profileText = [spec.name, spec.baseItem, spec.equipmentType, requestText].filter(Boolean).join(" ");
+    const weaponProfile = supportsWeaponBase(spec)
+      ? await findSystemNonMagicalWeaponForText(profileText).catch(() => null)
+      : null;
+    if (weaponProfile) {
+      nextSpec = applySystemWeaponBase(nextSpec, weaponProfile);
+      systemReferences.push({
+        kind: "equipment",
+        name: weaponProfile.name,
+        label: "System nonmagical weapon base",
+        uuid: weaponProfile.sourceUuid,
+        packLabel: weaponProfile.pack.label,
+        documentType: "Item",
+        message: `${weaponProfile.name} from ${weaponProfile.pack.label}`
+      });
+    }
+    const equipmentProfile = !weaponProfile && supportsEquipmentBase(spec)
+      ? await findSystemNonMagicalEquipmentForText(profileText).catch(() => null)
+      : null;
+    if (equipmentProfile) {
+      nextSpec = applySystemEquipmentBase(nextSpec, equipmentProfile);
+      systemReferences.push({
+        kind: "equipment",
+        name: equipmentProfile.name,
+        label: "System nonmagical equipment base",
+        uuid: equipmentProfile.sourceUuid,
+        packLabel: equipmentProfile.pack.label,
+        documentType: "Item",
+        message: `${equipmentProfile.name} from ${equipmentProfile.pack.label}`
+      });
+    }
     for (const reference of specReferenceLookups(spec)) {
       const resolution = await resolveReference(reference);
       if (resolution?.status !== "compatible") continue;
@@ -1073,8 +1188,14 @@ async function enrichSpecsWithSystemReferences(specs) {
         documentType: resolution.match.documentType,
         message: `${reference.name} from ${resolution.match.pack.label}`
       });
+      if (reference.kind === "equipment") {
+        nextSpec = applySystemEquipmentArt(nextSpec, resolution.match.img);
+      } else if (reference.kind === "spell") {
+        nextSpec = applySpellActivityArt(nextSpec, reference.name, resolution.match.img);
+      }
     }
-    return systemReferences.length ? { ...spec, systemReferences: uniqueReferences(systemReferences) } : spec;
+    nextSpec = applyFallbackActivityArt(nextSpec);
+    return systemReferences.length ? { ...nextSpec, systemReferences: uniqueReferences(systemReferences) } : nextSpec;
   }));
 }
 
@@ -1082,6 +1203,9 @@ async function enrichCompilationWithSrdSpellChoices(compilation) {
   const items = Array.isArray(compilation?.specs) ? compilation.specs : [];
   if (!items.length) return compilation;
 
+  const featurePlan = await planItemFeatures(compilation.request, {
+    resolveSpell: resolveSpellByName
+  });
   let applied = false;
   const assumptions = [...(compilation.assumptions ?? [])];
   const warnings = [...(compilation.warnings ?? [])];
@@ -1089,15 +1213,75 @@ async function enrichCompilationWithSrdSpellChoices(compilation) {
   const specs = [];
 
   for (const spec of items) {
-    const result = await autoSelectSrdChoiceSpells(spec, compilation.request, {
-      resolveSpell: resolveSpellByName
+    const planned = applyFeaturePlanToSpec(spec, featurePlan);
+    const repairedHybrid = repairHybridSpecFromRequest(planned.spec, compilation.request);
+    const result = await autoSelectSrdChoiceSpells(repairedHybrid.spec, compilation.request, {
+      resolveSpell: resolveSpellByName,
+      resolveSpellDocument: resolution => resolveSystemDocument(resolution)
     });
-    specs.push(result.spec);
+    const repaired = await repairNamedSrdSpellActivities(result.spec, compilation.request, {
+      resolveSpell: resolveSpellByName,
+      resolveSpellDocument: resolution => resolveSystemDocument(resolution)
+    });
+    const reconciled = await reconcilePlannedSrdSpellActivities(repaired.spec, featurePlan, compilation.request, {
+      resolveSpell: resolveSpellByName,
+      resolveSpellDocument: resolution => resolveSystemDocument(resolution)
+    });
+    const deduped = dedupeRecognizedSpellActivities(reconciled.spec, compilation.request);
+    const defaulted = applyForgeSpecDefaults(deduped.spec);
+    const charged = await applyDefaultLeveledSpellCharges(defaulted.spec, compilation.request, {
+      resolveSpell: resolveSpellByName,
+      resolveSpellDocument: resolution => resolveSystemDocument(resolution)
+    });
+    const sanitized = sanitizeForgeSpec(charged.spec);
+    specs.push(sanitized.spec);
+    if (planned.applied) applied = true;
+    if (repairedHybrid.applied) {
+      applied = true;
+      for (const assumption of repairedHybrid.assumptions ?? []) {
+        if (assumption && !assumptions.includes(assumption)) assumptions.push(assumption);
+      }
+    }
     if (result.applied) {
       applied = true;
       if (result.assumption && !assumptions.includes(result.assumption)) assumptions.push(result.assumption);
     } else if (result.warning && !warnings.includes(result.warning)) {
       warnings.push(result.warning);
+    }
+    if (repaired.applied) {
+      applied = true;
+      for (const assumption of repaired.assumptions ?? []) {
+        if (!assumptions.includes(assumption)) assumptions.push(assumption);
+      }
+    }
+    if (reconciled.applied) {
+      applied = true;
+      for (const assumption of reconciled.assumptions ?? []) {
+        if (!assumptions.includes(assumption)) assumptions.push(assumption);
+      }
+    }
+    if (deduped.applied) {
+      applied = true;
+      for (const assumption of deduped.assumptions ?? []) {
+        if (!assumptions.includes(assumption)) assumptions.push(assumption);
+      }
+    }
+    if (defaulted.applied) {
+      applied = true;
+      for (const assumption of defaulted.assumptions ?? []) {
+        if (!assumptions.includes(assumption)) assumptions.push(assumption);
+      }
+    }
+    if (charged.applied) {
+      applied = true;
+      for (const assumption of charged.assumptions ?? []) {
+        if (!assumptions.includes(assumption)) assumptions.push(assumption);
+      }
+    }
+    if (sanitized.applied) {
+      applied = true;
+      const summary = `Repaired malformed model fields: ${sanitized.repairs.join(", ")}.`;
+      if (!assumptions.includes(summary)) assumptions.push(summary);
     }
   }
 
@@ -1121,16 +1305,42 @@ async function enrichCompilationWithSrdSpellChoices(compilation) {
     assumptions,
     warnings: filteredWarnings,
     deferred: filteredDeferred,
-    unresolvedMechanics
+    unresolvedMechanics,
+    featurePlan
   };
+}
+
+function compilationWithPreparedSpecs(compilation, specs) {
+  if (!compilation) return null;
+  const preparedSpecs = Array.isArray(specs) ? specs : [];
+  return {
+    ...compilation,
+    specs: preparedSpecs,
+    decisions: (compilation.decisions ?? []).map((decision, index) => ({
+      ...decision,
+      unresolvedCount: preparedSpecs[index]?.unresolvedMechanics?.length ?? 0
+    })),
+    unresolvedMechanics: preparedSpecs.flatMap(spec => (spec.unresolvedMechanics ?? []).map(mechanic => ({
+      itemName: spec.name,
+      ...mechanic
+    })))
+  };
+}
+
+function syncPreparedSpecs(dialog, form, specs) {
+  const rawSpecs = JSON.stringify(specs, null, 2);
+  formControl(form, "specs").value = rawSpecs;
+  if (dialog?._codexCompilation) {
+    dialog._codexCompilation = compilationWithPreparedSpecs(dialog._codexCompilation, specs);
+  }
+  return rawSpecs;
 }
 
 async function renderPreview(dialog, validation) {
   const preview = dialog.element?.querySelector("[data-forge-preview]");
   if (!preview) return;
 
-  const enrichedSpecs = await enrichSpecsWithSystemReferences(validation.specs);
-  const summaries = buildReviewSummaries(enrichedSpecs, dialog._codexCompilation);
+  const summaries = buildReviewSummaries(validation.specs, dialog._codexCompilation);
   setReviewValidated(dialog, true);
   preview.hidden = false;
   preview.innerHTML = `
@@ -1736,7 +1946,8 @@ async function openForge() {
     window: {
       title: MODULE_TITLE,
       icon: "fa-solid fa-hammer",
-      resizable: true
+      resizable: true,
+      minimizable: true
     },
     position: { width: 1180, height: 760 },
     form: { closeOnSubmit: false },
@@ -1744,14 +1955,14 @@ async function openForge() {
     buttons: [
       {
         action: "compile",
-        label: "Compile Request",
+        label: "Preview",
         icon: "fa-solid fa-wand-magic-sparkles",
         tooltip: "Convert the description into editable Forge specs",
         class: "codex-forge-compile",
         type: "button",
         callback: async (_event, button, dialog) => {
           try {
-            setStatus(dialog, "working", "Compiling the item request...");
+            setStatus(dialog, "working", "Preparing preview...");
             setReviewValidated(dialog, false);
             const priorPreview = dialog.element?.querySelector("[data-forge-preview]");
             if (priorPreview) priorPreview.hidden = true;
@@ -1767,7 +1978,7 @@ async function openForge() {
               setStatus(
                 dialog,
                 dialog._codexProviderConnection.health?.mode === "mock" ? "warning" : "working",
-                `${detail} Compiling request...`
+                `${detail} Preparing preview...`
               );
             } else {
               clearProviderConnection(dialog);
@@ -1785,7 +1996,9 @@ async function openForge() {
               }
             });
             const compilation = await enrichCompilationWithSrdSpellChoices(remoteCompilation);
-            const rawSpecs = JSON.stringify(compilation.specs, null, 2);
+            const validation = await validateSpecs(compilation.specs, request);
+            const preparedCompilation = compilationWithPreparedSpecs(compilation, validation.specs);
+            const rawSpecs = JSON.stringify(validation.specs, null, 2);
             formControl(button.form, "specs").value = rawSpecs;
             formControl(button.form, "reviewApproval").checked = false;
             await Promise.all([
@@ -1795,14 +2008,13 @@ async function openForge() {
             ]);
             const diagnostics = dialog.element?.querySelector("[data-forge-diagnostics]");
             if (diagnostics) diagnostics.hidden = true;
-            renderCompilationReport(dialog, compilation);
-            const validation = await validateSpecs(compilation.specs);
+            renderCompilationReport(dialog, preparedCompilation);
             await renderPreview(dialog, validation);
             showDialogView(button.form, "review");
-            const noteCount = compilation.assumptions.length
-              + compilation.warnings.length
-              + compilation.deferred.length;
-            const itemCount = compilation.specs.length;
+            const noteCount = preparedCompilation.assumptions.length
+              + preparedCompilation.warnings.length
+              + preparedCompilation.deferred.length;
+            const itemCount = validation.specs.length;
             const draftLabel = `${itemCount} item${itemCount === 1 ? "" : "s"}`;
             setStatus(dialog, noteCount ? "warning" : "success", noteCount
               ? `${draftLabel} validated with ${noteCount} review note${noteCount === 1 ? "" : "s"}. Review the item summary before approval.`
@@ -1825,8 +2037,9 @@ async function openForge() {
             setReviewValidated(dialog, false);
             const priorPreview = dialog.element?.querySelector("[data-forge-preview]");
             if (priorPreview) priorPreview.hidden = true;
-            const { rawSpecs } = readDialogForm(button.form);
-            const validation = await validateSpecs(rawSpecs);
+            const { request, rawSpecs } = readDialogForm(button.form);
+            const validation = await validateSpecs(rawSpecs, request);
+            const preparedRawSpecs = syncPreparedSpecs(dialog, button.form, validation.specs);
             formControl(button.form, "reviewApproval").checked = false;
             const diagnostics = dialog.element?.querySelector("[data-forge-diagnostics]");
             if (diagnostics) diagnostics.hidden = true;
@@ -1834,7 +2047,8 @@ async function openForge() {
               const report = dialog.element?.querySelector("[data-forge-compile-report]");
               if (report) report.hidden = true;
             }
-            await game.settings.set(MODULE_ID, "lastSpecs", rawSpecs);
+            if (dialog._codexCompilation) renderCompilationReport(dialog, dialog._codexCompilation);
+            await game.settings.set(MODULE_ID, "lastSpecs", preparedRawSpecs);
             await renderPreview(dialog, validation);
             const warning = validation.warnings.length ? ` ${validation.warnings.join(" ")}` : "";
             const unresolved = validation.unresolvedMechanicCount
@@ -1868,19 +2082,21 @@ async function openForge() {
               return;
             }
             setStatus(dialog, "working", "Creating approved world documents...");
-            const validation = await validateSpecs(specs);
+            const validation = await validateSpecs(specs, request);
             if (provider.configuration.unresolvedPolicy === "block" && validation.unresolvedMechanicCount) {
               setStatus(dialog, "warning", `${validation.unresolvedMechanicCount} unresolved mechanic${validation.unresolvedMechanicCount === 1 ? " blocks" : "s block"} item creation under the selected policy.`);
               return;
             }
+            const preparedRawSpecs = syncPreparedSpecs(dialog, button.form, validation.specs);
+            if (dialog._codexCompilation) renderCompilationReport(dialog, dialog._codexCompilation);
             await renderPreview(dialog, validation);
             await Promise.all([
-              saveDialogState(rawSpecs, config, provider),
+              saveDialogState(preparedRawSpecs, config, provider),
               game.settings.set(MODULE_ID, "lastRequest", request)
             ]);
-            const result = await createFromSpecs(specs, config);
+            const result = await createFromSpecs(validation.specs, config, request);
             const actorText = result.actors.length ? ` and ${result.actors.length} summon actor${result.actors.length === 1 ? "" : "s"}` : "";
-            const unresolvedCount = specs.reduce((total, spec) => total + (spec.unresolvedMechanics?.length ?? 0), 0);
+            const unresolvedCount = validation.specs.reduce((total, spec) => total + (spec.unresolvedMechanics?.length ?? 0), 0);
             const unresolvedText = unresolvedCount
               ? ` ${unresolvedCount} unresolved mechanic${unresolvedCount === 1 ? " was" : "s were"} preserved on the created item${result.items.length === 1 ? "" : "s"}.`
               : "";

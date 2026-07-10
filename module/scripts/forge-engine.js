@@ -6,7 +6,7 @@
  */
 
 import { MODULE_ID, readForgeFlags } from "./package-identity.js";
-import { armorBonusValue, inferArmorProfile, isImplementCategory, normalizeItemDocumentType, safeItemIcon } from "./equipment-normalization.js";
+import { armorBonusValue, inferArmorProfile, isImplementCategory, normalizeItemDocumentType, normalizeMagicalBonus, normalizeWeight, safeItemIcon } from "./equipment-normalization.js";
 
 async function runCodexItemForge(FORGE, ITEMS, { validateOnly = false } = {}) {
   function makeIdentifier(name) {
@@ -31,14 +31,25 @@ async function runCodexItemForge(FORGE, ITEMS, { validateOnly = false } = {}) {
     return id;
   }
 
-  function damageData({ number = 1, denomination = 6, bonus = "", types = [] } = {}) {
+  function generatedDocumentId(seed = "ForgeEffect") {
+    const provided = String(seed ?? "").replace(/[^A-Za-z0-9]/g, "");
+    if (/^[A-Za-z0-9]{16}$/.test(provided)) return provided;
+    if (foundry?.utils?.randomID) return assertDocumentId(foundry.utils.randomID(16));
+    return assertDocumentId((provided || "ForgeEffect").padEnd(16, "0").slice(0, 16));
+  }
+
+  function damageData({ number = 1, denomination = 6, bonus = "", types = [], scaling: inputScaling = {} } = {}) {
     return {
       number,
       denomination,
       bonus,
       types,
       custom: { enabled: false, formula: "" },
-      scaling: { mode: "", number: 1, formula: "" }
+      scaling: {
+        mode: inputScaling.mode ?? "",
+        number: inputScaling.number ?? 1,
+        formula: inputScaling.formula ?? ""
+      }
     };
   }
 
@@ -107,7 +118,7 @@ async function runCodexItemForge(FORGE, ITEMS, { validateOnly = false } = {}) {
       unidentified: { name: "", description: "" },
       container: null,
       quantity: spec.quantity ?? 1,
-      weight: { value: spec.weight ?? 0, units: spec.weightUnits ?? "lb" },
+      weight: { value: normalizeWeight(spec.weight), units: spec.weightUnits ?? "lb" },
       price: { value: spec.price ?? 0, denomination: spec.priceDenomination ?? "gp" },
       rarity: spec.rarity ?? "common",
       attunement: spec.attunement ?? "",
@@ -126,16 +137,23 @@ async function runCodexItemForge(FORGE, ITEMS, { validateOnly = false } = {}) {
     };
   }
 
-  function activityConsumption(chargeCost = 1) {
+  function activityConsumption(chargeCost = 1, scaling = {}) {
+    const allowScaling = scaling?.allowed === true;
     return {
-      scaling: { allowed: false, max: "" },
+      scaling: {
+        allowed: allowScaling,
+        max: allowScaling ? String(scaling.max ?? "@item.uses.value") : ""
+      },
       spellSlot: true,
       targets: [
         {
           type: "itemUses",
           target: "",
           value: String(chargeCost),
-          scaling: {}
+          scaling: allowScaling ? {
+            mode: scaling.mode ?? "amount",
+            formula: String(scaling.formula ?? "")
+          } : {}
         }
       ]
     };
@@ -150,18 +168,38 @@ async function runCodexItemForge(FORGE, ITEMS, { validateOnly = false } = {}) {
     };
   }
 
+  function compactText(value) {
+    return String(value ?? "").trim();
+  }
+
   function rangeData(range = {}) {
+    const explicitValue = range.value != null;
+    const explicitUnits = compactText(range.units) && compactText(range.units).toLowerCase() !== "self";
+    const explicitSpecial = Boolean(compactText(range.special));
+    const hasExplicitRange = explicitValue || explicitUnits || explicitSpecial;
     return {
       value: range.value ?? null,
       units: range.units ?? "self",
       special: range.special ?? "",
-      override: false
+      override: Boolean(hasExplicitRange || range.override === true)
     };
   }
 
   function targetData(target = {}) {
     const template = target.template ?? {};
     const affects = target.affects ?? {};
+    const hasTemplate = Boolean(
+      compactText(template.type)
+      || template.size != null
+      || template.width != null
+      || template.height != null
+    );
+    const hasAffects = Boolean(
+      compactText(affects.count)
+      || compactText(affects.type)
+      || compactText(affects.special)
+      || affects.choice === true
+    );
     return {
       template: {
         count: template.count ?? (template.type ? "1" : ""),
@@ -179,7 +217,7 @@ async function runCodexItemForge(FORGE, ITEMS, { validateOnly = false } = {}) {
         choice: Boolean(affects.choice ?? false),
         special: affects.special ?? ""
       },
-      override: false,
+      override: Boolean(hasTemplate || hasAffects || target.override === true),
       prompt: Boolean(target.prompt ?? false)
     };
   }
@@ -227,7 +265,7 @@ async function runCodexItemForge(FORGE, ITEMS, { validateOnly = false } = {}) {
           base: damageData(spec.damage?.base ?? { number: 1, denomination: 4, bonus: "@mod", types: ["piercing"] }),
           versatile: damageData(spec.damage?.versatile ?? { number: null, denomination: null, bonus: "", types: [] })
         },
-        magicalBonus: String(spec.magicalBonus ?? ""),
+        magicalBonus: normalizeMagicalBonus(spec.magicalBonus),
         proficient: spec.proficient ?? null,
         range: {
           value: spec.range?.value ?? null,
@@ -301,7 +339,7 @@ async function runCodexItemForge(FORGE, ITEMS, { validateOnly = false } = {}) {
         },
         armor: {
           value: spec.armorValue ?? 0,
-          magicalBonus: String(spec.magicalBonus ?? ""),
+          magicalBonus: normalizeMagicalBonus(spec.magicalBonus),
           dex: null
         },
         proficient: null,
@@ -311,15 +349,18 @@ async function runCodexItemForge(FORGE, ITEMS, { validateOnly = false } = {}) {
         hp: null,
         speed: null
       }, { inplace: false }),
-      effects: (spec.effects ?? []).map(effect => ({
-        name: effect.name ?? spec.name,
-        img: effect.img ?? spec.img,
-        transfer: true,
-        disabled: false,
-        duration: {},
-        changes: (effect.changes ?? []).map(effectChangeData).filter(Boolean),
-        flags: foundry.utils.mergeObject(effect.flags ?? {}, { dae: { transfer: true } }, { inplace: false })
-      }))
+      effects: (spec.effects ?? [])
+        .filter(effect => effect && typeof effect === "object")
+        .map((effect, index) => ({
+          _id: generatedDocumentId(effect.effectId ?? `${spec.name}Passive${index + 1}`),
+          name: String(effect.name ?? spec.name).trim() || spec.name,
+          img: effect.img ?? spec.img,
+          transfer: true,
+          disabled: false,
+          duration: {},
+          changes: (effect.changes ?? []).map(effectChangeData).filter(Boolean),
+          flags: foundry.utils.mergeObject(effect.flags ?? {}, { dae: { transfer: true } }, { inplace: false })
+        }))
     }, folder);
   }
 
@@ -353,14 +394,14 @@ async function runCodexItemForge(FORGE, ITEMS, { validateOnly = false } = {}) {
       type: "save",
       name: spec.activityName ?? `Use ${spec.name}`,
       img: spec.activityImg ?? spec.img,
-      sort: spec.sort ?? 0,
+      sort: spec.sort ?? 70000,
       activation: {
         type: spec.activationType ?? "action",
         value: null,
         condition: spec.activationCondition ?? "",
         override: false
       },
-      consumption: activityConsumption(spec.chargeCost ?? 1),
+      consumption: activityConsumption(spec.chargeCost ?? 1, spec.chargeScaling),
       description: { chatFlavor: spec.chatFlavor ?? "" },
       duration: durationData(spec.duration),
       effects: [],
@@ -398,7 +439,7 @@ async function runCodexItemForge(FORGE, ITEMS, { validateOnly = false } = {}) {
         uses: usesData(spec.uses),
         armor: {
           value: spec.armorValue ?? 0,
-          magicalBonus: String(spec.magicalBonus ?? ""),
+          magicalBonus: normalizeMagicalBonus(spec.magicalBonus),
           dex: spec.armorDex ?? null
         },
         proficient: null,
@@ -451,7 +492,7 @@ async function runCodexItemForge(FORGE, ITEMS, { validateOnly = false } = {}) {
       name: spec.activityName ?? `Use ${spec.name}`,
       img: spec.activityImg ?? spec.img,
       activation: { type: spec.activationType ?? "action", value: null, condition: "", override: false },
-      consumption: activityConsumption(spec.chargeCost ?? 1),
+      consumption: activityConsumption(spec.chargeCost ?? 1, spec.chargeScaling),
       description: { chatFlavor: spec.chatFlavor ?? "" },
       duration: durationData(spec.duration),
       effects: [],
@@ -474,30 +515,33 @@ async function runCodexItemForge(FORGE, ITEMS, { validateOnly = false } = {}) {
   async function createMultiActivityStaff(spec, folder) {
     const item = await createWorldItem(spec, {
       name: spec.name,
-      type: "equipment",
+      type: suiteItemType(spec),
       img: spec.img,
-      system: foundry.utils.mergeObject(basePhysicalSystem({
-        properties: ["mgc", "foc"],
-        equipmentType: "wondrous",
-        baseItem: "staff",
-        ...spec
-      }), {
-        type: { value: spec.equipmentType ?? "wondrous", baseItem: spec.baseItem ?? "staff" },
-        uses: usesData(spec.uses),
-        armor: { value: 0, magicalBonus: "", dex: null },
-        proficient: null,
-        strength: null,
-        activities: {},
-        cover: null,
-        crew: { max: null, value: [] },
-        hp: null,
-        speed: null
-      }, { inplace: false }),
+      system: suiteUsesWeaponBase(spec)
+        ? weaponSystem({ properties: ["mgc", "ver"], ...spec })
+        : foundry.utils.mergeObject(basePhysicalSystem({
+          properties: ["mgc", "foc"],
+          equipmentType: "wondrous",
+          baseItem: "staff",
+          ...spec
+        }), {
+          type: { value: spec.equipmentType ?? "wondrous", baseItem: spec.baseItem ?? "staff" },
+          uses: usesData(spec.uses),
+          armor: { value: 0, magicalBonus: "", dex: null },
+          proficient: null,
+          strength: null,
+          activities: {},
+          cover: null,
+          crew: { max: null, value: [] },
+          hp: null,
+          speed: null
+        }, { inplace: false }),
       effects: []
     }, folder);
 
     const created = game.items.get(item.id) ?? item;
     const updateData = {};
+    patchWeaponBaseAttack(created, spec, updateData);
     for (const activitySpec of spec.activities ?? []) {
       const activity = makeSaveActivity(created, {
         ...activitySpec,
@@ -560,7 +604,7 @@ async function runCodexItemForge(FORGE, ITEMS, { validateOnly = false } = {}) {
       name: spec.activityName ?? `Apply ${spec.name}`,
       img: spec.activityImg ?? spec.img,
       activation: { type: spec.activationType ?? "action", value: null, condition: "", override: false },
-      consumption: activityConsumption(spec.chargeCost ?? 1),
+      consumption: activityConsumption(spec.chargeCost ?? 1, spec.chargeScaling),
       description: { chatFlavor: spec.chatFlavor ?? "" },
       duration: durationData(spec.duration),
       effects: [
@@ -696,7 +740,7 @@ async function runCodexItemForge(FORGE, ITEMS, { validateOnly = false } = {}) {
         uses: usesData(spec.uses),
         armor: {
           value: spec.armorValue ?? 0,
-          magicalBonus: String(spec.magicalBonus ?? ""),
+          magicalBonus: normalizeMagicalBonus(spec.magicalBonus),
           dex: spec.armorDex ?? null
         },
         proficient: null,
@@ -724,7 +768,7 @@ async function runCodexItemForge(FORGE, ITEMS, { validateOnly = false } = {}) {
       name: spec.activityName ?? `Summon ${spec.profileName ?? summonActor.name}`,
       img: spec.activityImg ?? spec.summonActor?.img ?? spec.img,
       activation: { type: spec.activationType ?? "action", value: null, condition: "", override: false },
-      consumption: activityConsumption(spec.chargeCost ?? 1),
+      consumption: activityConsumption(spec.chargeCost ?? 1, spec.chargeScaling),
       description: { chatFlavor: spec.chatFlavor ?? "" },
       duration: durationData(spec.duration),
       effects: [],
@@ -797,21 +841,41 @@ ${activitySpec.macroCommand}
   }
 
   function weaponSystem(spec) {
+    const baseWeapons = {
+      dagger: { weaponType: "simpleM", damage: { base: { number: 1, denomination: 4, bonus: "@mod", types: ["piercing"] } }, range: { value: 20, long: 60, reach: 5, units: "ft" } },
+      rapier: { weaponType: "martialM", damage: { base: { number: 1, denomination: 8, bonus: "@mod", types: ["piercing"] } }, range: { value: null, long: null, reach: 5, units: "ft" } },
+      glaive: { weaponType: "martialM", damage: { base: { number: 1, denomination: 10, bonus: "@mod", types: ["slashing"] } }, range: { value: null, long: null, reach: 10, units: "ft" } },
+      trident: { weaponType: "martialM", damage: { base: { number: 1, denomination: 6, bonus: "@mod", types: ["piercing"] }, versatile: { number: 1, denomination: 8, bonus: "@mod", types: ["piercing"] } }, range: { value: 20, long: 60, reach: 5, units: "ft" } },
+      "hand crossbow": { weaponType: "martialR", damage: { base: { number: 1, denomination: 6, bonus: "@mod", types: ["piercing"] } }, range: { value: 30, long: 120, reach: 5, units: "ft" } },
+      longbow: { weaponType: "martialR", damage: { base: { number: 1, denomination: 8, bonus: "@mod", types: ["piercing"] } }, range: { value: 150, long: 600, reach: 5, units: "ft" } },
+      quarterstaff: { weaponType: "simpleM", damage: { base: { number: 1, denomination: 6, bonus: "@mod", types: ["bludgeoning"] }, versatile: { number: 1, denomination: 8, bonus: "@mod", types: ["bludgeoning"] } }, range: { value: null, long: null, reach: 5, units: "ft" } }
+    };
+    const baseProfile = baseWeapons[String(spec.baseItem ?? "").toLowerCase()] ?? null;
+    const normalizedBase = spec.damage?.base ?? baseProfile?.damage?.base ?? { number: 1, denomination: 4, bonus: "@mod", types: ["piercing"] };
+    const normalizedVersatile = spec.damage?.versatile
+      ?? baseProfile?.damage?.versatile
+      ?? { number: null, denomination: null, bonus: "", types: [] };
+    const baseTypes = Array.isArray(normalizedBase?.types) && normalizedBase.types.length
+      ? normalizedBase.types
+      : (baseProfile?.damage?.base?.types ?? ["piercing"]);
+    const versatileTypes = Array.isArray(normalizedVersatile?.types) && normalizedVersatile.types.length
+      ? normalizedVersatile.types
+      : (baseProfile?.damage?.versatile?.types ?? []);
     const system = foundry.utils.mergeObject(basePhysicalSystem(spec), {
       type: {
-        value: spec.weaponType ?? "simpleM",
+        value: spec.weaponType ?? baseProfile?.weaponType ?? "simpleM",
         baseItem: spec.baseItem ?? ""
       },
       damage: {
-        base: damageData(spec.damage?.base ?? { number: 1, denomination: 4, bonus: "@mod", types: ["piercing"] }),
-        versatile: damageData(spec.damage?.versatile ?? { number: null, denomination: null, bonus: "", types: [] })
+        base: damageData({ ...normalizedBase, types: baseTypes }),
+        versatile: damageData({ ...normalizedVersatile, types: versatileTypes })
       },
-      magicalBonus: String(spec.magicalBonus ?? ""),
+      magicalBonus: normalizeMagicalBonus(spec.magicalBonus),
       proficient: spec.proficient ?? null,
       range: {
-        value: spec.range?.value ?? null,
-        long: spec.range?.long ?? null,
-        reach: spec.range?.reach ?? 5,
+        value: spec.range?.value ?? baseProfile?.range?.value ?? null,
+        long: spec.range?.long ?? baseProfile?.range?.long ?? null,
+        reach: spec.range?.reach ?? baseProfile?.range?.reach ?? 5,
         units: spec.range?.units ?? "ft"
       },
       mastery: spec.mastery ?? "",
@@ -828,19 +892,23 @@ ${activitySpec.macroCommand}
   }
 
   function equipmentSystem(spec) {
+    const armorLike = spec.kind === "shieldArmorBonus"
+      || Number(spec.armorValue ?? 0) > 0
+      || /\b(?:shield|armor|plate|mail|breastplate|half plate|scale mail|hide|studded|leather|padded)\b/i.test([spec.name, spec.description, spec.baseItem, spec.equipmentType].filter(Boolean).join(" "));
+    const armorProfile = armorLike ? inferArmorProfile(spec) : null;
     return foundry.utils.mergeObject(basePhysicalSystem(spec), {
       type: {
-        value: spec.equipmentType ?? "wondrous",
-        baseItem: spec.baseItem ?? ""
+        value: armorProfile?.equipmentType ?? spec.equipmentType ?? "wondrous",
+        baseItem: armorProfile?.baseItem ?? spec.baseItem ?? ""
       },
       uses: usesData(spec.uses),
       armor: {
-        value: spec.armorValue ?? 0,
-        magicalBonus: String(spec.magicalBonus ?? ""),
-        dex: spec.armorDex ?? null
+        value: armorProfile?.armorValue ?? spec.armorValue ?? 0,
+        magicalBonus: armorLike ? armorBonusValue(spec, armorProfile) : normalizeMagicalBonus(spec.magicalBonus),
+        dex: armorProfile?.armorDex ?? spec.armorDex ?? null
       },
       proficient: null,
-      strength: spec.strength ?? null,
+      strength: armorProfile?.strength ?? spec.strength ?? null,
       activities: {},
       cover: null,
       crew: { max: null, value: [] },
@@ -849,10 +917,22 @@ ${activitySpec.macroCommand}
     }, { inplace: false });
   }
 
+  function suiteUsesWeaponBase(spec) {
+    return Boolean(spec?.weaponType && spec?.baseItem);
+  }
+
+  function suiteItemType(spec) {
+    return suiteUsesWeaponBase(spec) ? "weapon" : "equipment";
+  }
+
+  function suiteItemSystem(spec) {
+    return suiteUsesWeaponBase(spec) ? weaponSystem(spec) : equipmentSystem(spec);
+  }
+
   function transferEffectFromSpec(spec, effect) {
     return {
-      _id: effect.effectId ? assertDocumentId(effect.effectId) : undefined,
-      name: effect.name ?? spec.name,
+      _id: generatedDocumentId(effect.effectId ?? `${spec.name}Fx`),
+      name: String(effect.name ?? spec.name).trim() || spec.name,
       img: effect.img ?? spec.img,
       transfer: effect.transfer ?? true,
       disabled: false,
@@ -860,6 +940,27 @@ ${activitySpec.macroCommand}
       changes: (effect.changes ?? []).map(effectChangeData).filter(Boolean),
       flags: foundry.utils.mergeObject(effect.flags ?? {}, { dae: { transfer: effect.transfer ?? true } }, { inplace: false })
     };
+  }
+
+  function suiteEffectDocuments(spec) {
+    const effects = (spec.effects ?? [])
+      .filter(effect => effect && typeof effect === "object")
+      .map(effect => transferEffectFromSpec(spec, effect));
+    for (const activitySpec of spec.utilityActivities ?? []) {
+      if (!Array.isArray(activitySpec?.enchantChanges) || !activitySpec.enchantChanges.length || !activitySpec.effectId) continue;
+      effects.push({
+        _id: assertDocumentId(activitySpec.effectId),
+        name: String(activitySpec.effectName ?? activitySpec.activityName ?? spec.name).trim() || spec.name,
+        type: "enchantment",
+        img: activitySpec.effectImg ?? activitySpec.activityImg ?? spec.img,
+        transfer: false,
+        disabled: false,
+        duration: activitySpec.duration?.seconds ? { seconds: activitySpec.duration.seconds } : {},
+        changes: activitySpec.enchantChanges.map(enchantChange),
+        flags: { [MODULE_ID]: { effect: "suite-enchantment" } }
+      });
+    }
+    return effects;
   }
 
   function makeUtilityActivity(item, spec, activitySpec) {
@@ -877,7 +978,7 @@ ${activitySpec.macroCommand}
         condition: activitySpec.activationCondition ?? "",
         override: false
       },
-      consumption: activitySpec.chargeCost ? activityConsumption(activitySpec.chargeCost) : activityConsumptionNone(),
+      consumption: activitySpec.chargeCost ? activityConsumption(activitySpec.chargeCost, activitySpec.chargeScaling) : activityConsumptionNone(),
       description: { chatFlavor: activitySpec.chatFlavor ?? "" },
       duration: durationData(activitySpec.duration),
       effects: [],
@@ -901,6 +1002,84 @@ ${activitySpec.macroCommand}
     }, { inplace: false });
   }
 
+  function makeHealingActivity(item, spec, activitySpec) {
+    const HealActivity = CONFIG.DND5E.activityTypes.heal.documentClass;
+    const activity = new HealActivity({}, { parent: item }).toObject();
+    return foundry.utils.mergeObject(activity, {
+      _id: assertActivityId(activitySpec.activityId),
+      type: "heal",
+      name: activitySpec.activityName ?? `Use ${spec.name}`,
+      img: activitySpec.activityImg ?? spec.img,
+      sort: activitySpec.sort ?? 90000,
+      activation: {
+        type: activitySpec.activationType ?? "action",
+        value: null,
+        condition: activitySpec.activationCondition ?? "",
+        override: false
+      },
+      consumption: activitySpec.chargeCost ? activityConsumption(activitySpec.chargeCost, activitySpec.chargeScaling) : activityConsumptionNone(),
+      description: { chatFlavor: activitySpec.chatFlavor ?? "" },
+      duration: durationData(activitySpec.duration),
+      effects: [],
+      range: rangeData(activitySpec.range),
+      target: targetData(activitySpec.target),
+      uses: { spent: 0, max: "", recovery: [] },
+      healing: damageData(activitySpec.healing ?? { number: 1, denomination: 4, bonus: "", types: ["healing"] }),
+      visibility: {
+        identifier: "",
+        level: { min: null, max: null },
+        requireAttunement: spec.attunement === "required",
+        requireIdentification: false,
+        requireMagic: activitySpec.requireMagic ?? true
+      }
+    }, { inplace: false });
+  }
+
+  function makeEnchantActivity(item, spec, activitySpec) {
+    const EnchantActivity = CONFIG.DND5E.activityTypes.enchant.documentClass;
+    const activity = new EnchantActivity({}, { parent: item }).toObject();
+    return foundry.utils.mergeObject(activity, {
+      _id: assertActivityId(activitySpec.activityId),
+      type: "enchant",
+      name: activitySpec.activityName ?? `Apply ${spec.name}`,
+      img: activitySpec.activityImg ?? spec.img,
+      activation: { type: activitySpec.activationType ?? "action", value: null, condition: "", override: false },
+      consumption: activitySpec.chargeCost ? activityConsumption(activitySpec.chargeCost, activitySpec.chargeScaling) : activityConsumptionNone(),
+      description: { chatFlavor: activitySpec.chatFlavor ?? "" },
+      duration: durationData(activitySpec.duration),
+      effects: activitySpec.effectId ? [{
+        _id: assertDocumentId(activitySpec.effectId),
+        level: { min: null, max: null },
+        riders: { activity: [], effect: [], item: [] }
+      }] : [],
+      enchant: { self: Boolean(activitySpec.enchantSelf ?? false) },
+      range: rangeData(activitySpec.range),
+      restrictions: {
+        allowMagical: Boolean(activitySpec.restrictions?.allowMagical ?? false),
+        categories: activitySpec.restrictions?.categories ?? [],
+        properties: activitySpec.restrictions?.properties ?? [],
+        type: activitySpec.restrictions?.type ?? ""
+      },
+      target: targetData(activitySpec.target),
+      uses: { spent: 0, max: "", recovery: [] },
+      visibility: {
+        identifier: "",
+        level: { min: null, max: null },
+        requireAttunement: spec.attunement === "required",
+        requireIdentification: false,
+        requireMagic: activitySpec.requireMagic ?? true
+      }
+    }, { inplace: false });
+  }
+
+  function makeSuiteUtilityActivity(item, spec, activitySpec) {
+    if (activitySpec?.healing) return makeHealingActivity(item, spec, activitySpec);
+    if (Array.isArray(activitySpec?.enchantChanges) && activitySpec.enchantChanges.length) {
+      return makeEnchantActivity(item, spec, activitySpec);
+    }
+    return makeUtilityActivity(item, spec, activitySpec);
+  }
+
   function makeAttackActivity(item, spec, activitySpec) {
     const AttackActivity = CONFIG.DND5E.activityTypes.attack.documentClass;
     const activity = new AttackActivity({}, { parent: item }).toObject();
@@ -916,7 +1095,7 @@ ${activitySpec.macroCommand}
         condition: activitySpec.activationCondition ?? "",
         override: false
       },
-      consumption: activitySpec.chargeCost ? activityConsumption(activitySpec.chargeCost) : activityConsumptionNone(),
+      consumption: activitySpec.chargeCost ? activityConsumption(activitySpec.chargeCost, activitySpec.chargeScaling) : activityConsumptionNone(),
       description: { chatFlavor: activitySpec.chatFlavor ?? "" },
       duration: durationData(activitySpec.duration),
       effects: [],
@@ -948,13 +1127,40 @@ ${activitySpec.macroCommand}
     }, { inplace: false });
   }
 
-  async function createCasterUtilityEquipment(spec, folder) {
+  function patchWeaponBaseAttack(created, spec, updateData) {
+    if (!suiteUsesWeaponBase(spec)) return;
+    const attack = findAttackActivity(created);
+    if (!attack) {
+      ui.notifications.warn(`${spec.name} was created, but no weapon attack activity was found to patch.`);
+      return;
+    }
+    const attackData = attack.toObject ? attack.toObject() : foundry.utils.deepClone(attack);
+    foundry.utils.mergeObject(attackData, {
+      name: spec.attackName ?? `Attack with ${spec.name}`,
+      damage: {
+        includeBase: true,
+        critical: { bonus: "" },
+        parts: (spec.extraDamageParts ?? []).map(damageData)
+      }
+    }, { inplace: true });
+    updateData[`system.activities.${attack.id}`] = attackData;
+  }
+
+  async function createCasterUtilityEquipment(spec, folder, actorFolder) {
+    const createdActors = [];
+    const actorsByProfileId = new Map();
+    for (const profile of allSummonProfiles(spec)) {
+      const actor = await createSummonProfileActor(spec, actorFolder, profile);
+      createdActors.push(actor);
+      actorsByProfileId.set(profile.profileId, actor);
+    }
+
     const item = await createWorldItem(spec, {
       name: spec.name,
-      type: "equipment",
+      type: suiteItemType(spec),
       img: spec.img,
-      system: equipmentSystem(spec),
-      effects: (spec.effects ?? []).map(effect => transferEffectFromSpec(spec, effect)),
+      system: suiteItemSystem(spec),
+      effects: suiteEffectDocuments(spec),
       flags: activityMacroFlags((spec.utilityActivities ?? [])
         .filter(activity => activity.macroCommand)
         .map(activity => activity.activityId))
@@ -962,16 +1168,33 @@ ${activitySpec.macroCommand}
 
     const created = game.items.get(item.id) ?? item;
     const updateData = {};
+    patchWeaponBaseAttack(created, spec, updateData);
     for (const activitySpec of spec.attackActivities ?? []) {
       const activity = makeAttackActivity(created, spec, activitySpec);
       updateData[`system.activities.${activity._id}`] = activity;
     }
     for (const activitySpec of spec.utilityActivities ?? []) {
-      const activity = makeUtilityActivity(created, spec, activitySpec);
+      const activity = summonProfilesFromActivity(activitySpec).length
+        ? summonActivityDocument(created, spec, activitySpec, actorsByProfileId)
+        : makeSuiteUtilityActivity(created, spec, activitySpec);
       updateData[`system.activities.${activity._id}`] = activity;
     }
+    for (const activitySpec of spec.saveActivities ?? []) {
+      const activity = makeSaveActivity(created, {
+        ...activitySpec,
+        name: spec.name,
+        img: activitySpec.activityImg ?? spec.img,
+        requireAttunement: spec.attunement === "required"
+      });
+      updateData[`system.activities.${activity._id}`] = activity;
+    }
+    if ((spec.summonProfiles ?? []).length) {
+      const activityData = summonActivityDocument(created, spec, spec.summonActivity ?? spec, actorsByProfileId);
+      updateData[`system.activities.${activityData._id}`] = activityData;
+    }
     if (Object.keys(updateData).length) await created.update(updateData);
-    return game.items.get(created.id) ?? created;
+    const refreshed = game.items.get(created.id) ?? created;
+    return createdActors.length ? { item: refreshed, actors: createdActors } : refreshed;
   }
 
   async function createSummonProfileActor(parentSpec, folder, profile) {
@@ -1087,10 +1310,94 @@ ${activitySpec.macroCommand}
     return game.actors.get(created.id) ?? created;
   }
 
+  function summonProfilesFromActivity(activitySpec) {
+    return Array.isArray(activitySpec?.summonProfiles)
+      ? activitySpec.summonProfiles.filter(profile => profile && typeof profile === "object")
+      : [];
+  }
+
+  function allSummonProfiles(spec) {
+    const profiles = [];
+    const seen = new Set();
+    for (const profile of spec.summonProfiles ?? []) {
+      if (!profile?.profileId || seen.has(profile.profileId)) continue;
+      seen.add(profile.profileId);
+      profiles.push(profile);
+    }
+    for (const activitySpec of spec.utilityActivities ?? []) {
+      for (const profile of summonProfilesFromActivity(activitySpec)) {
+        if (!profile?.profileId || seen.has(profile.profileId)) continue;
+        seen.add(profile.profileId);
+        profiles.push(profile);
+      }
+    }
+    return profiles;
+  }
+
+  function summonActivityDocument(item, spec, activitySpec, actorsByProfileId) {
+    const SummonActivity = CONFIG.DND5E.activityTypes.summon.documentClass;
+    const baseActivity = new SummonActivity({}, { parent: item }).toObject();
+    const summonProfiles = summonProfilesFromActivity(activitySpec).length
+      ? summonProfilesFromActivity(activitySpec)
+      : (spec.summonProfiles ?? []);
+    const profiles = summonProfiles.map(profile => {
+      const actor = actorsByProfileId.get(profile.profileId);
+      const actorType = profile.actor?.type ?? "beast";
+      return {
+        _id: assertActivityId(profile.profileId),
+        count: String(profile.count ?? "1"),
+        cr: "",
+        level: { min: null, max: null },
+        name: profile.profileName ?? profile.actor?.name ?? "Summon",
+        types: [actorType],
+        uuid: actor?.uuid ?? ""
+      };
+    });
+    const creatureSizes = Array.from(new Set(summonProfiles.map(profile => profile.actor?.size ?? "med")));
+    const creatureTypes = Array.from(new Set(summonProfiles.map(profile => profile.actor?.type ?? "beast")));
+    return foundry.utils.mergeObject(baseActivity, {
+      _id: assertActivityId(activitySpec.activityId),
+      type: "summon",
+      name: activitySpec.activityName ?? `Summon ${spec.name}`,
+      img: activitySpec.activityImg ?? spec.img,
+      activation: { type: activitySpec.activationType ?? "action", value: null, condition: activitySpec.activationCondition ?? "", override: false },
+      consumption: activitySpec.chargeCost ? activityConsumption(activitySpec.chargeCost, activitySpec.chargeScaling) : activityConsumptionNone(),
+      description: { chatFlavor: activitySpec.chatFlavor ?? "" },
+      duration: durationData(activitySpec.duration),
+      effects: [],
+      range: rangeData(activitySpec.range),
+      target: targetData(activitySpec.target ?? {
+        affects: { count: "1", type: "space", special: "An unoccupied space within range" },
+        prompt: true
+      }),
+      uses: { spent: 0, max: "", recovery: [] },
+      bonuses: { ac: "", hd: "", hp: "", attackDamage: "", saveDamage: "", healing: "" },
+      creatureSizes,
+      creatureTypes,
+      match: {
+        ability: "",
+        attacks: false,
+        disposition: Boolean(spec.matchDisposition ?? false),
+        proficiency: Boolean(spec.matchProficiency ?? false),
+        saves: false
+      },
+      profiles,
+      summon: { mode: "specific", prompt: profiles.length > 1 },
+      tempHP: "",
+      visibility: {
+        identifier: "",
+        level: { min: null, max: null },
+        requireAttunement: spec.attunement === "required",
+        requireIdentification: false,
+        requireMagic: true
+      }
+    }, { inplace: false });
+  }
+
   async function createNativeMultiProfileSummon(spec, itemFolder, actorFolder) {
     const actorsByProfileId = new Map();
     const createdActors = [];
-    for (const profile of spec.summonProfiles ?? []) {
+    for (const profile of allSummonProfiles(spec)) {
       const actor = await createSummonProfileActor(spec, actorFolder, profile);
       actorsByProfileId.set(profile.profileId, actor);
       createdActors.push(actor);
@@ -1110,60 +1417,7 @@ ${activitySpec.macroCommand}
     }, itemFolder);
 
     const created = game.items.get(item.id) ?? item;
-    const SummonActivity = CONFIG.DND5E.activityTypes.summon.documentClass;
-    const activity = new SummonActivity({}, { parent: created }).toObject();
-    const profiles = (spec.summonProfiles ?? []).map(profile => {
-      const actor = actorsByProfileId.get(profile.profileId);
-      const actorType = profile.actor?.type ?? "beast";
-      return {
-        _id: assertActivityId(profile.profileId),
-        count: String(profile.count ?? "1"),
-        cr: "",
-        level: { min: null, max: null },
-        name: profile.profileName ?? profile.actor?.name ?? "Summon",
-        types: [actorType],
-        uuid: actor.uuid
-      };
-    });
-    const creatureSizes = Array.from(new Set((spec.summonProfiles ?? []).map(profile => profile.actor?.size ?? "med")));
-    const creatureTypes = Array.from(new Set((spec.summonProfiles ?? []).map(profile => profile.actor?.type ?? "beast")));
-    const activityData = foundry.utils.mergeObject(activity, {
-      _id: assertActivityId(spec.activityId),
-      type: "summon",
-      name: spec.activityName ?? `Summon ${spec.name}`,
-      img: spec.activityImg ?? spec.img,
-      activation: { type: spec.activationType ?? "action", value: null, condition: "", override: false },
-      consumption: activityConsumption(spec.chargeCost ?? 1),
-      description: { chatFlavor: spec.chatFlavor ?? "" },
-      duration: durationData(spec.duration),
-      effects: [],
-      range: rangeData(spec.range),
-      target: targetData(spec.target ?? {
-        affects: { count: "1", type: "space", special: "An unoccupied space within range" },
-        prompt: true
-      }),
-      uses: { spent: 0, max: "", recovery: [] },
-      bonuses: { ac: "", hd: "", hp: "", attackDamage: "", saveDamage: "", healing: "" },
-      creatureSizes,
-      creatureTypes,
-      match: {
-        ability: "",
-        attacks: false,
-        disposition: Boolean(spec.matchDisposition ?? false),
-        proficiency: Boolean(spec.matchProficiency ?? false),
-        saves: false
-      },
-      profiles,
-      summon: { mode: "specific", prompt: true },
-      tempHP: "",
-      visibility: {
-        identifier: "",
-        level: { min: null, max: null },
-        requireAttunement: spec.attunement === "required",
-        requireIdentification: false,
-        requireMagic: true
-      }
-    }, { inplace: false });
+    const activityData = summonActivityDocument(created, spec, spec, actorsByProfileId);
     await created.update({ [`system.activities.${activityData._id}`]: activityData });
     return { item: game.items.get(created.id) ?? created, actors: createdActors };
   }
@@ -1171,7 +1425,7 @@ ${activitySpec.macroCommand}
   async function createLegendaryEquipmentSuite(spec, itemFolder, actorFolder) {
     const actorsByProfileId = new Map();
     const createdActors = [];
-    for (const profile of spec.summonProfiles ?? []) {
+    for (const profile of allSummonProfiles(spec)) {
       const actor = await createSummonProfileActor(spec, actorFolder, profile);
       actorsByProfileId.set(profile.profileId, actor);
       createdActors.push(actor);
@@ -1179,10 +1433,10 @@ ${activitySpec.macroCommand}
 
     const item = await createWorldItem(spec, {
       name: spec.name,
-      type: "equipment",
+      type: suiteItemType(spec),
       img: spec.img,
-      system: equipmentSystem(spec),
-      effects: (spec.effects ?? []).map(effect => transferEffectFromSpec(spec, effect)),
+      system: suiteItemSystem(spec),
+      effects: suiteEffectDocuments(spec),
       flags: foundry.utils.mergeObject(
         actorsByProfileId.size ? {
           [MODULE_ID]: {
@@ -1198,6 +1452,7 @@ ${activitySpec.macroCommand}
 
     const created = game.items.get(item.id) ?? item;
     const updateData = {};
+    patchWeaponBaseAttack(created, spec, updateData);
 
     for (const activitySpec of spec.attackActivities ?? []) {
       const activity = makeAttackActivity(created, spec, activitySpec);
@@ -1205,7 +1460,9 @@ ${activitySpec.macroCommand}
     }
 
     for (const activitySpec of spec.utilityActivities ?? []) {
-      const activity = makeUtilityActivity(created, spec, activitySpec);
+      const activity = summonProfilesFromActivity(activitySpec).length
+        ? summonActivityDocument(created, spec, activitySpec, actorsByProfileId)
+        : makeSuiteUtilityActivity(created, spec, activitySpec);
       updateData[`system.activities.${activity._id}`] = activity;
     }
 
@@ -1220,61 +1477,7 @@ ${activitySpec.macroCommand}
     }
 
     if ((spec.summonProfiles ?? []).length) {
-      const SummonActivity = CONFIG.DND5E.activityTypes.summon.documentClass;
-      const baseActivity = new SummonActivity({}, { parent: created }).toObject();
-      const summonSpec = spec.summonActivity ?? {};
-      const profiles = spec.summonProfiles.map(profile => {
-        const actor = actorsByProfileId.get(profile.profileId);
-        const actorType = profile.actor?.type ?? "beast";
-        return {
-          _id: assertActivityId(profile.profileId),
-          count: String(profile.count ?? "1"),
-          cr: "",
-          level: { min: null, max: null },
-          name: profile.profileName ?? profile.actor?.name ?? "Summon",
-          types: [actorType],
-          uuid: actor.uuid
-        };
-      });
-      const creatureSizes = Array.from(new Set(spec.summonProfiles.map(profile => profile.actor?.size ?? "med")));
-      const creatureTypes = Array.from(new Set(spec.summonProfiles.map(profile => profile.actor?.type ?? "beast")));
-      const activityData = foundry.utils.mergeObject(baseActivity, {
-        _id: assertActivityId(summonSpec.activityId),
-        type: "summon",
-        name: summonSpec.activityName ?? `Summon ${spec.name}`,
-        img: summonSpec.activityImg ?? spec.img,
-        activation: { type: summonSpec.activationType ?? "action", value: null, condition: summonSpec.activationCondition ?? "", override: false },
-        consumption: activityConsumption(summonSpec.chargeCost ?? 1),
-        description: { chatFlavor: summonSpec.chatFlavor ?? "" },
-        duration: durationData(summonSpec.duration),
-        effects: [],
-        range: rangeData(summonSpec.range),
-        target: targetData(summonSpec.target ?? {
-          affects: { count: "1", type: "space", special: "An unoccupied space within range" },
-          prompt: true
-        }),
-        uses: { spent: 0, max: "", recovery: [] },
-        bonuses: { ac: "", hd: "", hp: "", attackDamage: "", saveDamage: "", healing: "" },
-        creatureSizes,
-        creatureTypes,
-        match: {
-          ability: "",
-          attacks: false,
-          disposition: Boolean(spec.matchDisposition ?? false),
-          proficiency: Boolean(spec.matchProficiency ?? false),
-          saves: false
-        },
-        profiles,
-        summon: { mode: "specific", prompt: true },
-        tempHP: "",
-        visibility: {
-          identifier: "",
-          level: { min: null, max: null },
-          requireAttunement: spec.attunement === "required",
-          requireIdentification: false,
-          requireMagic: true
-        }
-      }, { inplace: false });
+      const activityData = summonActivityDocument(created, spec, spec.summonActivity ?? spec, actorsByProfileId);
       updateData[`system.activities.${activityData._id}`] = activityData;
     }
 
@@ -1459,9 +1662,16 @@ ui.notifications.info(ITEM_NAME + " light toggled on.");
     }, { inplace: false });
   }
 
-  async function createArtifactWeaponHybrid(spec, folder) {
+  async function createArtifactWeaponHybrid(spec, folder, actorFolder) {
     const effects = (spec.passiveEffects ?? []).map(effect => transferEffectFromSpec(spec, effect));
     if (spec.toggleLight) effects.push(lightTriggerEffect(spec.toggleLight));
+    const actorsByProfileId = new Map();
+    const createdActors = [];
+    for (const profile of allSummonProfiles(spec)) {
+      const actor = await createSummonProfileActor(spec, actorFolder, profile);
+      actorsByProfileId.set(profile.profileId, actor);
+      createdActors.push(actor);
+    }
 
     const item = await createWorldItem(spec, {
       name: spec.name,
@@ -1469,12 +1679,20 @@ ui.notifications.info(ITEM_NAME + " light toggled on.");
       img: spec.img,
       system: weaponSystem(spec),
       effects,
-      flags: activityMacroFlags([
-        spec.toggleLight?.activityId,
-        ...(spec.utilityActivities ?? [])
-          .filter(activity => activity.macroCommand)
-          .map(activity => activity.activityId)
-      ])
+      flags: foundry.utils.mergeObject(
+        actorsByProfileId.size ? {
+          [MODULE_ID]: {
+            summonActorUuids: Object.fromEntries(Array.from(actorsByProfileId.entries()).map(([id, actor]) => [id, actor.uuid]))
+          }
+        } : {},
+        activityMacroFlags([
+          spec.toggleLight?.activityId,
+          ...(spec.utilityActivities ?? [])
+            .filter(activity => activity.macroCommand)
+            .map(activity => activity.activityId)
+        ]),
+        { inplace: false }
+      )
     }, folder);
 
     const created = game.items.get(item.id) ?? item;
@@ -1502,7 +1720,9 @@ ui.notifications.info(ITEM_NAME + " light toggled on.");
     }
 
     for (const activitySpec of spec.utilityActivities ?? []) {
-      const activity = makeUtilityActivity(created, spec, activitySpec);
+      const activity = summonProfilesFromActivity(activitySpec).length
+        ? summonActivityDocument(created, spec, activitySpec, actorsByProfileId)
+        : makeSuiteUtilityActivity(created, spec, activitySpec);
       updateData[`system.activities.${activity._id}`] = activity;
     }
 
@@ -1516,7 +1736,13 @@ ui.notifications.info(ITEM_NAME + " light toggled on.");
       updateData[`system.activities.${activity._id}`] = activity;
     }
 
+    if ((spec.summonProfiles ?? []).length) {
+      const activityData = summonActivityDocument(created, spec, spec.summonActivity ?? spec, actorsByProfileId);
+      updateData[`system.activities.${activityData._id}`] = activityData;
+    }
+
     await created.update(updateData);
+    if (createdActors.length) return { item: game.items.get(created.id) ?? created, actors: createdActors };
     return game.items.get(created.id) ?? created;
   }
 
@@ -1702,6 +1928,9 @@ for (const target of targets) {
       }
       for (const activity of spec.utilityActivities ?? []) {
         if (activity.activityId) assertActivityId(activity.activityId);
+        for (const profile of activity.summonProfiles ?? []) {
+          if (profile.profileId) assertActivityId(profile.profileId);
+        }
       }
       for (const effect of spec.effects ?? []) {
         if (effect.effectId) assertDocumentId(effect.effectId);
@@ -1741,7 +1970,8 @@ for (const target of targets) {
           if (!profile.actor?.name) throw new Error(`${spec.name} summon profile ${profile.profileName ?? profile.profileId} is missing actor.name.`);
         }
       }
-      if (["equipmentPowerSuite", "legendaryEquipmentSuite"].includes(spec.kind) && spec.summonProfiles?.length && !spec.summonActivity?.activityId) {
+      const hasEmbeddedSummonActivities = (spec.utilityActivities ?? []).some(activity => activity.summonProfiles?.length);
+      if (["casterUtilityEquipment", "equipmentPowerSuite", "legendaryEquipmentSuite"].includes(spec.kind) && spec.summonProfiles?.length && !spec.summonActivity?.activityId && !hasEmbeddedSummonActivities) {
         throw new Error(`${spec.name} has summonProfiles but is missing summonActivity.activityId.`);
       }
     }
@@ -1814,7 +2044,7 @@ for (const target of targets) {
 
   for (const spec of ITEMS) {
     const factory = FACTORIES[spec.kind];
-    const result = ["nativeSummon", "nativeMultiProfileSummon", "equipmentPowerSuite", "legendaryEquipmentSuite"].includes(spec.kind)
+    const result = ["nativeSummon", "nativeMultiProfileSummon", "casterUtilityEquipment", "equipmentPowerSuite", "legendaryEquipmentSuite", "artifactWeaponHybrid"].includes(spec.kind)
       ? await factory(spec, itemFolder, actorFolder)
       : await factory(spec, itemFolder);
 

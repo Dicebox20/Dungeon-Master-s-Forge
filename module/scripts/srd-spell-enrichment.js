@@ -1,3 +1,5 @@
+import { normalizeMagicalBonus } from "./equipment-normalization.js";
+
 function clone(value) {
   return value == null ? value : JSON.parse(JSON.stringify(value));
 }
@@ -5,6 +7,8 @@ function clone(value) {
 function compactText(value) {
   return String(value ?? "").replace(/\s+/g, " ").trim();
 }
+
+const DEFAULT_SAVE_DC = 15;
 
 function stableId(label) {
   const base = String(label).replace(/[^A-Za-z0-9]/g, "").slice(0, 11) || "Forge";
@@ -17,13 +21,201 @@ function stableId(label) {
   return `${base}${suffix}`.padEnd(16, "0").slice(0, 16);
 }
 
+function activityList(value) {
+  if (!value) return [];
+  if (Array.isArray(value)) return value;
+  try {
+    return Array.from(value);
+  } catch {
+    return [];
+  }
+}
+
+function plainActivity(activity) {
+  if (!activity) return null;
+  return typeof activity.toObject === "function" ? activity.toObject() : clone(activity);
+}
+
+function normalizeAbility(value) {
+  const ability = Array.isArray(value) ? value[0] : value;
+  return compactText(ability).toLowerCase();
+}
+
+function normalizeSave(value = {}, fallback = {}) {
+  const ability = normalizeAbility(value.ability ?? fallback.ability);
+  const formula = value?.dc?.formula ?? value?.dc ?? fallback?.dc;
+  const dc = Number(formula);
+  return {
+    ...(ability ? { ability } : {}),
+    ...(Number.isFinite(dc) && dc > 0 ? { dc } : {})
+  };
+}
+
+function ensureSaveDc(save = {}) {
+  const next = clone(save) ?? {};
+  const dc = Number(next?.dc?.formula ?? next?.dc);
+  if (!Number.isFinite(dc) || dc <= 0) next.dc = DEFAULT_SAVE_DC;
+  return next;
+}
+
+function specNeedsDefaultMagicalBonus(spec = {}) {
+  const current = normalizeMagicalBonus(spec.magicalBonus);
+  if (current && current !== "0") return false;
+  const weaponLike = Boolean(
+    spec.weaponType
+    || spec.damage?.base
+    || ["weaponExtraDamage", "weaponConditionOnHit", "artifactWeaponHybrid", "multiActivityStaff"].includes(spec.kind)
+  );
+  const armorLike = spec.kind === "shieldArmorBonus"
+    || (Number(spec.armorValue ?? 0) > 0 && /\b(?:shield|armor|plate|mail|leather)\b/i.test(compactText(spec.description)));
+  return weaponLike || armorLike;
+}
+
+function activityMechanicalScore(activity = {}) {
+  let score = 0;
+  if (compactText(activity?.target?.template?.type) && activity?.target?.template?.size != null) score += 3;
+  if (compactText(activity?.range?.units) || activity?.range?.value != null) score += 2;
+  if (compactText(activity?.save?.ability)) score += 2;
+  if (Number(activity?.save?.dc) > 0 || Number(activity?.save?.dc?.formula) > 0) score += 2;
+  if (Array.isArray(activity?.damageParts) && activity.damageParts.length) score += 2;
+  if (/^cast\s+/i.test(compactText(activity?.activityName))) score += 1;
+  if (!/\(\d+\s*charge/i.test(compactText(activity?.activityName))) score += 1;
+  return score;
+}
+
+function normalizeTarget(target = {}) {
+  const next = clone(target) ?? {};
+  if (!next.affects) next.affects = {};
+  if (next.prompt == null) next.prompt = Boolean(next.template?.type || next.affects?.type || next.affects?.special);
+  return next;
+}
+
+function hasTemplateShape(target = {}) {
+  return Boolean(compactText(target?.template?.type) && compactText(target?.template?.size));
+}
+
+function hasMeaningfulRange(range = {}) {
+  const units = compactText(range?.units).toLowerCase();
+  const special = compactText(range?.special);
+  if (range?.value != null) return true;
+  if (special) return true;
+  if (!units) return false;
+  return units !== "self";
+}
+
+function hasMeaningfulDuration(duration = {}) {
+  return Boolean(duration?.value != null && compactText(duration?.units));
+}
+
+function mergeTargetWithFallback(target = {}, fallback = {}) {
+  const next = normalizeTarget(target);
+  const fallbackTarget = normalizeTarget(fallback);
+
+  if (!hasTemplateShape(next) && hasTemplateShape(fallbackTarget)) {
+    next.template = clone(fallbackTarget.template);
+  }
+  if (!compactText(next?.affects?.type) && compactText(fallbackTarget?.affects?.type)) {
+    next.affects = clone(fallbackTarget.affects);
+  } else if (!compactText(next?.affects?.special) && compactText(fallbackTarget?.affects?.special)) {
+    next.affects = {
+      ...next.affects,
+      special: fallbackTarget.affects.special
+    };
+  }
+  if (next.prompt == null && fallbackTarget.prompt != null) next.prompt = fallbackTarget.prompt;
+  return next;
+}
+
+function mergeSaveWithFallback(save = {}, fallback = {}) {
+  const primary = normalizeSave(save);
+  const backup = normalizeSave(fallback);
+  return {
+    ...(backup.ability && !primary.ability ? { ability: backup.ability } : {}),
+    ...primary,
+    ...(backup.dc && !primary.dc ? { dc: backup.dc } : {})
+  };
+}
+
+function supportsScalingFromDamageParts(damageParts = []) {
+  return damageParts.some(part => part?.scaling?.mode);
+}
+
+function supportsScalingFromHealing(healing = {}) {
+  return Boolean(healing?.scaling?.mode);
+}
+
+async function spellDocumentMetadata(spellName, options = {}) {
+  const resolveSpell = options.resolveSpell;
+  const resolveSpellDocument = options.resolveSpellDocument;
+  if (typeof resolveSpell !== "function" || typeof resolveSpellDocument !== "function") return null;
+  const fallbackProfile = SPELL_LIBRARY.find(profile => profile.name.toLowerCase() === compactText(spellName).toLowerCase()) ?? null;
+
+  const resolution = await resolveSpell(spellName);
+  if (resolution?.status !== "compatible") return null;
+  const document = await resolveSpellDocument(resolution);
+  if (!document) return null;
+
+  const activity = activityList(document.system?.activities).find(candidate => {
+    const type = compactText(candidate?.type).toLowerCase();
+    return ["save", "attack", "heal", "utility"].includes(type);
+  });
+  const raw = plainActivity(activity);
+  if (!raw) return null;
+
+  const damageParts = clone(raw.damage?.parts ?? raw.damageParts ?? []);
+  const fallbackDamageParts = clone(fallbackProfile?.damageParts ?? []);
+  const mergedDamageParts = damageParts.length ? damageParts : fallbackDamageParts;
+  const rawRange = clone(raw.range ?? {});
+  const mergedRange = hasMeaningfulRange(rawRange) ? rawRange : clone(fallbackProfile?.range ?? {});
+  const rawTarget = normalizeTarget(raw.target ?? {});
+  const mergedTarget = mergeTargetWithFallback(rawTarget, fallbackProfile?.target ?? {});
+  const mergedSave = mergeSaveWithFallback(raw.save ?? {}, fallbackProfile?.save ?? {});
+  const rawDuration = clone(raw.duration ?? {});
+  const mergedDuration = hasMeaningfulDuration(rawDuration) ? rawDuration : clone(fallbackProfile?.duration ?? {});
+  const damageOnSave = compactText(raw.damage?.onSave ?? raw.damageOnSave ?? "")
+    || compactText(fallbackProfile?.damageOnSave ?? "");
+  const healing = clone(raw.healing ?? fallbackProfile?.healing ?? {});
+  return {
+    name: String(document.name ?? spellName).trim() || spellName,
+    type: compactText(raw.type).toLowerCase() || "save",
+    level: Number(document.system?.level ?? resolution.match?.spellLevel ?? 0),
+    range: mergedRange,
+    target: mergedTarget,
+    save: mergedSave,
+    damageOnSave,
+    damageParts: mergedDamageParts,
+    healing,
+    duration: mergedDuration,
+    img: String(document.img ?? resolution.match?.img ?? "").trim(),
+    supportsScaling: supportsScalingFromDamageParts(mergedDamageParts) || supportsScalingFromHealing(healing)
+  };
+}
+
 const SPELL_LIBRARY = Object.freeze([
+  Object.freeze({
+    name: "Command",
+    level: 1,
+    tags: Object.freeze([]),
+    save: { ability: "wis" },
+    damageParts: Object.freeze([]),
+    range: { value: 60, units: "ft" },
+    target: {
+      affects: { count: "1", type: "creature", special: "One creature within range" },
+      prompt: true
+    }
+  }),
   Object.freeze({
     name: "Thunderwave",
     level: 1,
     tags: Object.freeze(["thunder"]),
     save: { ability: "con" },
-    damageParts: Object.freeze([{ number: 2, denomination: 8, bonus: "", types: Object.freeze(["thunder"]) }]),
+    damageParts: Object.freeze([{
+      number: 2,
+      denomination: 8,
+      bonus: "",
+      types: Object.freeze(["thunder"]),
+      scaling: Object.freeze({ mode: "whole", number: 1, formula: "" })
+    }]),
     range: { units: "self" },
     target: {
       template: { count: "1", type: "cube", size: 15, units: "ft" },
@@ -36,7 +228,13 @@ const SPELL_LIBRARY = Object.freeze([
     level: 2,
     tags: Object.freeze(["thunder"]),
     save: { ability: "con" },
-    damageParts: Object.freeze([{ number: 3, denomination: 8, bonus: "", types: Object.freeze(["thunder"]) }]),
+    damageParts: Object.freeze([{
+      number: 3,
+      denomination: 8,
+      bonus: "",
+      types: Object.freeze(["thunder"]),
+      scaling: Object.freeze({ mode: "whole", number: 1, formula: "" })
+    }]),
     range: { value: 60, units: "ft" },
     target: {
       template: { count: "1", type: "sphere", size: 10, units: "ft" },
@@ -49,7 +247,13 @@ const SPELL_LIBRARY = Object.freeze([
     level: 1,
     tags: Object.freeze(["fire"]),
     save: { ability: "dex" },
-    damageParts: Object.freeze([{ number: 3, denomination: 6, bonus: "", types: Object.freeze(["fire"]) }]),
+    damageParts: Object.freeze([{
+      number: 3,
+      denomination: 6,
+      bonus: "",
+      types: Object.freeze(["fire"]),
+      scaling: Object.freeze({ mode: "whole", number: 1, formula: "" })
+    }]),
     range: { units: "self" },
     target: {
       template: { count: "1", type: "cone", size: 15, units: "ft" },
@@ -62,7 +266,13 @@ const SPELL_LIBRARY = Object.freeze([
     level: 3,
     tags: Object.freeze(["fire"]),
     save: { ability: "dex" },
-    damageParts: Object.freeze([{ number: 8, denomination: 6, bonus: "", types: Object.freeze(["fire"]) }]),
+    damageParts: Object.freeze([{
+      number: 8,
+      denomination: 6,
+      bonus: "",
+      types: Object.freeze(["fire"]),
+      scaling: Object.freeze({ mode: "whole", number: 1, formula: "" })
+    }]),
     range: { value: 150, units: "ft" },
     target: {
       template: { count: "1", type: "sphere", size: 20, units: "ft" },
@@ -75,7 +285,13 @@ const SPELL_LIBRARY = Object.freeze([
     level: 3,
     tags: Object.freeze(["lightning"]),
     save: { ability: "dex" },
-    damageParts: Object.freeze([{ number: 8, denomination: 6, bonus: "", types: Object.freeze(["lightning"]) }]),
+    damageParts: Object.freeze([{
+      number: 8,
+      denomination: 6,
+      bonus: "",
+      types: Object.freeze(["lightning"]),
+      scaling: Object.freeze({ mode: "whole", number: 1, formula: "" })
+    }]),
     range: { units: "self" },
     target: {
       template: { count: "1", type: "line", size: 100, width: 5, units: "ft" },
@@ -89,7 +305,7 @@ const SPELL_LIBRARY = Object.freeze([
     tags: Object.freeze(["cold", "bludgeoning"]),
     save: { ability: "dex" },
     damageParts: Object.freeze([
-      { number: 2, denomination: 8, bonus: "", types: Object.freeze(["bludgeoning"]) },
+      { number: 2, denomination: 8, bonus: "", types: Object.freeze(["bludgeoning"]), scaling: Object.freeze({ mode: "whole", number: 1, formula: "" }) },
       { number: 4, denomination: 6, bonus: "", types: Object.freeze(["cold"]) }
     ]),
     range: { value: 300, units: "ft" },
@@ -104,7 +320,13 @@ const SPELL_LIBRARY = Object.freeze([
     level: 5,
     tags: Object.freeze(["cold"]),
     save: { ability: "con" },
-    damageParts: Object.freeze([{ number: 8, denomination: 8, bonus: "", types: Object.freeze(["cold"]) }]),
+    damageParts: Object.freeze([{
+      number: 8,
+      denomination: 8,
+      bonus: "",
+      types: Object.freeze(["cold"]),
+      scaling: Object.freeze({ mode: "whole", number: 1, formula: "" })
+    }]),
     range: { units: "self" },
     target: {
       template: { count: "1", type: "cone", size: 60, units: "ft" },
@@ -118,13 +340,108 @@ const SPELL_LIBRARY = Object.freeze([
     tags: Object.freeze(["fire", "radiant"]),
     save: { ability: "dex" },
     damageParts: Object.freeze([
-      { number: 4, denomination: 6, bonus: "", types: Object.freeze(["fire"]) },
-      { number: 4, denomination: 6, bonus: "", types: Object.freeze(["radiant"]) }
+      { number: 4, denomination: 6, bonus: "", types: Object.freeze(["fire"]), scaling: Object.freeze({ mode: "whole", number: 1, formula: "" }) },
+      { number: 4, denomination: 6, bonus: "", types: Object.freeze(["radiant"]), scaling: Object.freeze({ mode: "whole", number: 1, formula: "" }) }
     ]),
     range: { value: 60, units: "ft" },
     target: {
       template: { count: "1", type: "cylinder", size: 10, height: 40, units: "ft" },
       affects: { type: "creature", special: "Creatures in the 10-foot-radius, 40-foot-high cylinder" },
+      prompt: true
+    }
+  }),
+  Object.freeze({
+    name: "Clairvoyance",
+    level: 3,
+    tags: Object.freeze([]),
+    range: { value: 1, units: "mi" },
+    duration: { value: 10, units: "minute", concentration: true },
+    target: {
+      affects: { count: "1", type: "space", special: "A location within range" },
+      prompt: true
+    }
+  }),
+  Object.freeze({
+    name: "Fog Cloud",
+    level: 1,
+    tags: Object.freeze([]),
+    range: { value: 120, units: "ft" },
+    duration: { value: 1, units: "hour", concentration: true },
+    target: {
+      template: { count: "1", type: "sphere", size: 20, units: "ft" },
+      affects: { type: "space", special: "A 20-foot-radius sphere of fog" },
+      prompt: true
+    }
+  }),
+  Object.freeze({
+    name: "Sleet Storm",
+    level: 3,
+    tags: Object.freeze(["cold"]),
+    range: { value: 150, units: "ft" },
+    duration: { value: 1, units: "minute", concentration: true },
+    target: {
+      template: { count: "1", type: "cylinder", size: 40, height: 20, units: "ft" },
+      affects: { type: "space", special: "A 40-foot-radius, 20-foot-high cylinder of sleet and freezing rain" },
+      prompt: true
+    }
+  }),
+  Object.freeze({
+    name: "Misty Step",
+    level: 2,
+    tags: Object.freeze([]),
+    range: { value: 30, units: "ft" },
+    duration: { units: "inst", concentration: false },
+    target: {
+      affects: { count: "1", type: "space", special: "An unoccupied space you can see within range" },
+      prompt: true
+    }
+  }),
+  Object.freeze({
+    name: "Invisibility",
+    level: 2,
+    tags: Object.freeze([]),
+    range: { units: "touch" },
+    duration: { value: 1, units: "hour", concentration: true },
+    target: {
+      affects: { count: "1", type: "creature", special: "A creature you touch" },
+      prompt: true
+    }
+  }),
+  Object.freeze({
+    name: "Cure Wounds",
+    level: 1,
+    tags: Object.freeze(["healing"]),
+    range: { units: "touch" },
+    duration: { units: "inst", concentration: false },
+    target: {
+      affects: { count: "1", type: "creature", special: "A creature you touch" },
+      prompt: true
+    },
+    healing: Object.freeze({
+      number: 1,
+      denomination: 8,
+      bonus: "@mod",
+      types: Object.freeze(["healing"]),
+      scaling: Object.freeze({ mode: "whole", number: 1, formula: "" })
+    })
+  }),
+  Object.freeze({
+    name: "Moonbeam",
+    level: 2,
+    tags: Object.freeze(["radiant"]),
+    save: { ability: "con" },
+    damageParts: Object.freeze([{
+      number: 2,
+      denomination: 10,
+      bonus: "",
+      types: Object.freeze(["radiant"]),
+      scaling: Object.freeze({ mode: "whole", number: 1, formula: "" })
+    }]),
+    range: { value: 120, units: "ft" },
+    duration: { value: 1, units: "minute", concentration: true },
+    target: {
+      template: { count: "1", type: "cylinder", size: 5, height: 40, units: "ft" },
+      affects: { type: "creature", special: "Creatures in the moonbeam's area" },
       prompt: true
     }
   })
@@ -221,18 +538,640 @@ function isSpellChoiceMechanic(mechanic) {
   return /\bspell/.test(text) && (/\bchoice\b/.test(text) || /\bcharges?\b/.test(text));
 }
 
-function buildSaveActivity(itemName, spellProfile) {
+function buildSaveActivity(itemName, spellProfile, metadata = null) {
+  const source = metadata ?? spellProfile;
   return {
     activityId: stableId(`${itemName} ${spellProfile.name}`),
     activityName: `Cast ${spellProfile.name}`,
     activationType: "action",
-    chargeCost: spellProfile.level,
+    chargeCost: source.level,
+    chargeScaling: supportsScalingFromDamageParts(source.damageParts)
+      ? { allowed: true, max: "@item.uses.value", mode: "amount", formula: "" }
+      : undefined,
     chatFlavor: `Cast ${spellProfile.name} using this item's charges.`,
-    range: clone(spellProfile.range),
-    target: clone(spellProfile.target),
-    save: clone(spellProfile.save),
-    damageOnSave: "half",
-    damageParts: clone(spellProfile.damageParts)
+    range: {
+      ...clone(source.range ?? spellProfile.range),
+      override: true
+    },
+    target: {
+      ...normalizeTarget(source.target ?? spellProfile.target),
+      override: true,
+      prompt: true
+    },
+    save: clone(source.save ?? spellProfile.save),
+    duration: clone(source.duration),
+    damageOnSave: source.damageOnSave || spellProfile.damageOnSave || "half",
+    damageParts: clone(source.damageParts ?? spellProfile.damageParts),
+    ...(source.img ? { activityImg: source.img } : {})
+  };
+}
+
+function activitySpellName(activityName) {
+  const normalized = compactText(activityName);
+  const castMatch = normalized.match(/^Cast\s+(.+)$/i);
+  const candidate = compactText(castMatch?.[1] ?? normalized)
+    .replace(/\s*\(\d+\s*charge(?:s)?\)\s*$/i, "")
+    .replace(/\s+\d+\/\d+\s*$/i, "");
+  const exact = SPELL_LIBRARY.find(profile => profile.name.toLowerCase() === candidate.toLowerCase());
+  if (exact) return exact.name;
+  const embedded = SPELL_LIBRARY.find(profile => new RegExp(`\\b${profile.name.replace(/\s+/g, "\\s+")}\\b`, "i").test(candidate));
+  return embedded?.name ?? candidate;
+}
+
+function spellProfileForActivity(activityName) {
+  const spellName = activitySpellName(activityName).toLowerCase();
+  return SPELL_LIBRARY.find(profile => profile.name.toLowerCase() === spellName) ?? null;
+}
+
+function explicitSpellChargeCost(request, spellName) {
+  const escaped = compactText(spellName).replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+");
+  const direct = compactText(request).match(new RegExp(`(?:costs?|spend|expend(?:s)?|uses?)\\s*(\\d+)\\s*charges?[^.]{0,120}${escaped}\\b`, "i"))?.[1];
+  if (direct) return Number(direct);
+  const trailing = compactText(request).match(new RegExp(`${escaped}[^.]{0,80}(?:costs?|for|using|use)\\s*(\\d+)\\s*charges?`, "i"))?.[1];
+  if (trailing) return Number(trailing);
+  return null;
+}
+
+function usesSharedCharges(spec, request) {
+  if (/\bcharges?\b/i.test(compactText(request))) return true;
+  const max = Number(spec?.uses?.max ?? 0);
+  return Number.isFinite(max) && max > 1 && /\bcast\b/i.test(compactText(request));
+}
+
+async function spellMetadataForActivity(activityName, options = {}) {
+  const aliasedProfile = spellProfileForActivityOrAlias(activityName, options.request);
+  const resolvedName = aliasedProfile?.name ?? activitySpellName(activityName);
+  const documentMetadata = await spellDocumentMetadata(resolvedName, options);
+  if (documentMetadata) {
+    return {
+      name: documentMetadata.name,
+      level: documentMetadata.level,
+      profile: documentMetadata,
+      supportsScaling: Boolean(documentMetadata.supportsScaling)
+    };
+  }
+  const profile = aliasedProfile ?? spellProfileForActivity(activityName);
+  if (profile) {
+    return {
+      name: profile.name,
+      level: profile.level,
+      profile,
+      supportsScaling: Boolean(profile.damageParts?.some?.(part => part?.scaling?.mode) || profile.healing?.scaling?.mode)
+    };
+  }
+  const resolveSpell = options.resolveSpell;
+  if (typeof resolveSpell !== "function") return null;
+  const resolution = await resolveSpell(resolvedName);
+  if (resolution?.status !== "compatible") return null;
+  const level = Number(resolution.match?.spellLevel ?? 0);
+  if (!Number.isFinite(level) || level < 1) return null;
+  return {
+    name: resolvedName,
+    level,
+    profile: null,
+    supportsScaling: false
+  };
+}
+
+function repeatedSpellCount(request, spellName) {
+  const normalizedRequest = compactText(request).toLowerCase();
+  const normalizedSpellName = compactText(spellName).toLowerCase();
+  const escaped = normalizedSpellName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+");
+  const pluralized = escaped.replace(/(\w+)$/, "$1s?");
+  const wordCounts = { once: 1, one: 1, twice: 2, two: 2, thrice: 3, three: 3, four: 4 };
+
+  const directWord = normalizedRequest.match(new RegExp(`\\b(once|twice|thrice|one|two|three|four|\\d+)\\s+${pluralized}\\b`, "i"))?.[1];
+  if (directWord) return Number(wordCounts[directWord] ?? directWord);
+
+  const castTimes = normalizedRequest.match(new RegExp(`\\bcast\\s+${escaped}\\s+(once|twice|thrice|\\d+)\\s+times?\\b`, "i"))?.[1];
+  if (castTimes) return Number(wordCounts[castTimes] ?? castTimes);
+
+  const atOnce = normalizedRequest.match(new RegExp(`\\b(\\d+)\\s+${pluralized}\\b(?=[^.]{0,40}\\b(?:at once|all at once|simultaneously|consecutively)\\b)`, "i"))?.[1];
+  if (atOnce) return Number(atOnce);
+
+  return 1;
+}
+
+function sameDamageType(left = {}, right = {}) {
+  const leftTypes = Array.isArray(left.types) ? left.types : [];
+  const rightTypes = Array.isArray(right.types) ? right.types : [];
+  return leftTypes.length === rightTypes.length && leftTypes.every((type, index) => type === rightTypes[index]);
+}
+
+function activityLooksLikeScaledDuplicate(activity, spellProfile, repeatedCount) {
+  if (repeatedCount <= 1) return false;
+  if (!Array.isArray(activity?.damageParts) || activity.damageParts.length !== spellProfile.damageParts.length) return false;
+  return activity.damageParts.every((part, index) => {
+    const profilePart = spellProfile.damageParts[index];
+    return Number(part?.denomination) === Number(profilePart?.denomination)
+      && sameDamageType(part, profilePart)
+      && Number(part?.number) === Number(profilePart?.number) * repeatedCount;
+  });
+}
+
+function normalizedSpellActivity(activity, spellProfile, repeatedCount = 1, suffix = "", metadata = null) {
+  const source = metadata ?? spellProfile;
+  const next = clone(activity);
+  next.activityName = suffix ? `Cast ${spellProfile.name} ${suffix}` : `Cast ${spellProfile.name}`;
+  next.range = {
+    ...clone(source.range ?? spellProfile.range),
+    override: true
+  };
+  next.target = {
+    ...normalizeTarget(source.target ?? spellProfile.target),
+    override: true,
+    prompt: true
+  };
+  next.save = {
+    ...clone(source.save ?? spellProfile.save),
+    ...(activity?.save?.dc ? { dc: activity.save.dc } : {}),
+    ...(activity?.save?.dc?.formula ? { dc: Number(activity.save.dc.formula) || undefined } : {})
+  };
+  if (!next.save?.ability) next.save = clone(source.save ?? spellProfile.save);
+  next.save = ensureSaveDc(next.save);
+  next.duration = clone(source.duration ?? next.duration);
+  if (source.img) next.activityImg = source.img;
+  if (!Array.isArray(next.damageParts) || activityLooksLikeScaledDuplicate(activity, spellProfile, repeatedCount)) {
+    next.damageParts = clone(source.damageParts ?? spellProfile.damageParts);
+  }
+  next.damageOnSave = source.damageOnSave || spellProfile.damageOnSave || next.damageOnSave;
+  return next;
+}
+
+function normalizedUtilitySpellActivity(activity, spellProfile, metadata = null) {
+  const source = metadata ?? spellProfile;
+  const next = clone(activity);
+  next.activityName = spellActivityDisplayName(activity, spellProfile.name);
+  next.range = {
+    ...clone(source.range ?? spellProfile.range),
+    override: true
+  };
+  next.target = {
+    ...normalizeTarget(source.target ?? spellProfile.target),
+    override: true,
+    prompt: true
+  };
+  if (source.duration) next.duration = clone(source.duration);
+  if (source.img) next.activityImg = source.img;
+  if (source.healing && Object.keys(source.healing).length) next.healing = clone(source.healing);
+  else delete next.healing;
+  return next;
+}
+
+function spellAliasFromRequest(request, spellName) {
+  const escaped = compactText(spellName).replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+");
+  const source = String(request ?? "");
+  const patterns = [
+    new RegExp(`(?:^|[\\n.;])\\s*\\d+\\s*charges?:\\s*([^\\n.:]{2,80})[.:]\\s*cast\\s+${escaped}\\b`, "im"),
+    new RegExp(`(?:^|[\\n.;])\\s*([^\\n.:]{2,80})[.:]\\s*cast\\s+${escaped}\\b`, "im")
+  ];
+  for (const pattern of patterns) {
+    const alias = compactText(source.match(pattern)?.[1] ?? "");
+    if (alias && alias.toLowerCase() !== spellName.toLowerCase()) return alias;
+  }
+  return "";
+}
+
+function requestedSpellAliases(request) {
+  const aliases = new Map();
+  for (const profile of SPELL_LIBRARY) {
+    const alias = spellAliasFromRequest(request, profile.name);
+    if (alias) aliases.set(alias.toLowerCase(), profile.name);
+  }
+  return aliases;
+}
+
+function spellProfileForActivityOrAlias(activityName, request = "") {
+  const direct = spellProfileForActivity(activityName);
+  if (direct) return direct;
+  const alias = requestedSpellAliases(request).get(compactText(activityName).toLowerCase());
+  return alias ? spellProfileForActivity(alias) : null;
+}
+
+function spellActivityDisplayName(activity, spellName, request = "") {
+  const alias = spellAliasFromRequest(request, spellName);
+  if (alias) return alias;
+  const current = compactText(activity?.activityName);
+  if (current && current.toLowerCase() !== `cast ${spellName}`.toLowerCase() && activitySpellName(current).toLowerCase() === spellName.toLowerCase()) {
+    return current;
+  }
+  return `Cast ${spellName}`;
+}
+
+function plannedNativeSpellNames(plan) {
+  const names = [];
+  for (const feature of plan?.native ?? []) {
+    if (feature?.type !== "spell") continue;
+    const name = compactText(feature.label).replace(/^System spell:\s*/i, "");
+    if (name && !names.some(existing => existing.toLowerCase() === name.toLowerCase())) names.push(name);
+  }
+  return names;
+}
+
+function isGenericSpellPlaceholder(activity = {}) {
+  const name = compactText(activity.activityName);
+  return /^(?:utility|spell|save|activity)\s*\d+$/i.test(name);
+}
+
+function metadataSpellProfile(name, metadata = {}) {
+  return {
+    name: compactText(metadata.name) || name,
+    type: compactText(metadata.type),
+    level: Number(metadata.level ?? 0),
+    range: clone(metadata.range ?? {}),
+    target: clone(metadata.target ?? {}),
+    save: clone(metadata.save ?? {}),
+    duration: clone(metadata.duration ?? {}),
+    damageOnSave: compactText(metadata.damageOnSave),
+    damageParts: clone(metadata.damageParts ?? []),
+    healing: clone(metadata.healing ?? {})
+  };
+}
+
+function isSaveLikeSpell(metadata = {}) {
+  return compactText(metadata.type).toLowerCase() === "save"
+    || Array.isArray(metadata.damageParts) && metadata.damageParts.length > 0
+    || Boolean(metadata.save?.ability);
+}
+
+function spellActivityExists(spec, spellName) {
+  const target = compactText(spellName).toLowerCase();
+  return ["activities", "saveActivities", "utilityActivities", "attackActivities"]
+    .flatMap(listName => Array.isArray(spec?.[listName]) ? spec[listName] : [])
+    .some(activity => activitySpellName(activity?.activityName).toLowerCase() === target);
+}
+
+function takeGenericSpellPlaceholder(spec) {
+  for (const listName of ["utilityActivities", "saveActivities", "activities"]) {
+    const activities = Array.isArray(spec[listName]) ? spec[listName] : [];
+    const index = activities.findIndex(isGenericSpellPlaceholder);
+    if (index >= 0) return { listName, index, activity: activities[index] };
+  }
+  return null;
+}
+
+async function reconcilePlannedSrdSpellActivities(spec, plan, request, options = {}) {
+  const spellNames = plannedNativeSpellNames(plan);
+  if (!spellNames.length) return { applied: false, spec, assumptions: [] };
+
+  const next = clone(spec);
+  let applied = false;
+  const assumptions = [];
+  const references = Array.isArray(next.systemReferences) ? [...next.systemReferences] : [];
+
+  for (const spellName of spellNames) {
+    if (spellActivityExists(next, spellName)) continue;
+
+    const metadata = await spellDocumentMetadata(spellName, options);
+    if (!metadata) continue;
+    const profile = metadataSpellProfile(spellName, metadata);
+    const placeholder = takeGenericSpellPlaceholder(next);
+    const saveLike = isSaveLikeSpell(metadata);
+    const existing = placeholder?.activity ?? {};
+    const activity = saveLike
+      ? normalizedSpellActivity(existing, profile, 1, "", metadata)
+      : normalizedUtilitySpellActivity(existing, profile, metadata);
+
+    if (placeholder) {
+      next[placeholder.listName] = next[placeholder.listName].filter((_, index) => index !== placeholder.index);
+    }
+    const destination = saveLike ? "saveActivities" : "utilityActivities";
+    next[destination] = [...(Array.isArray(next[destination]) ? next[destination] : []), activity];
+
+    const resolution = typeof options.resolveSpell === "function" ? await options.resolveSpell(spellName) : null;
+    if (resolution?.status === "compatible" && !references.some(reference => reference?.uuid === resolution.match?.uuid)) {
+      references.push({
+        kind: "spell",
+        name: metadata.name,
+        label: "System spell",
+        uuid: resolution.match.uuid,
+        packLabel: resolution.match.pack.label,
+        documentType: resolution.match.documentType,
+        message: `${metadata.name} from ${resolution.match.pack.label}`
+      });
+    }
+    assumptions.push(`${placeholder ? "Replaced a generic activity with" : "Added"} compatible SRD ${metadata.name} activity from the request.`);
+    applied = true;
+  }
+
+  if (references.length) next.systemReferences = references;
+  return { applied, spec: next, assumptions: [...new Set(assumptions)] };
+}
+
+function dedupeRecognizedSpellActivities(spec, request) {
+  const next = clone(spec);
+  let applied = false;
+  const assumptions = [];
+
+  for (const listName of ["saveActivities", "activities"]) {
+    const activities = Array.isArray(next[listName]) ? [...next[listName]] : [];
+    if (!activities.length) continue;
+
+    const bySpell = new Map();
+    const passthrough = [];
+    for (const activity of activities) {
+      const spellProfile = spellProfileForActivity(activity?.activityName) ?? spellProfileForActivityOrAlias(activity?.activityName, request);
+      if (!spellProfile) {
+        passthrough.push(activity);
+        continue;
+      }
+      if (repeatedSpellCount(request, spellProfile.name) > 1) {
+        passthrough.push(activity);
+        continue;
+      }
+      const key = spellProfile.name.toLowerCase();
+      const prior = bySpell.get(key);
+      if (!prior || activityMechanicalScore(activity) > activityMechanicalScore(prior)) {
+        bySpell.set(key, activity);
+      }
+    }
+
+    const deduped = [...passthrough, ...bySpell.values()].map(activity => {
+      const spellProfile = spellProfileForActivity(activity?.activityName) ?? spellProfileForActivityOrAlias(activity?.activityName, request);
+      if (!spellProfile) return activity;
+      const normalizedName = spellActivityDisplayName(activity, spellProfile.name, request);
+      if (activity.activityName === normalizedName) return activity;
+      applied = true;
+      return {
+        ...activity,
+        activityName: normalizedName
+      };
+    });
+
+    if (deduped.length !== activities.length) {
+      applied = true;
+      assumptions.push("Collapsed duplicate named spell activities into a single SRD-compatible activity.");
+    }
+    next[listName] = deduped;
+  }
+
+  const utilityActivities = Array.isArray(next.utilityActivities) ? [...next.utilityActivities] : [];
+  if (utilityActivities.length) {
+    const bySpell = new Map();
+    const passthrough = [];
+    for (const activity of utilityActivities) {
+      const spellProfile = spellProfileForActivity(activity?.activityName) ?? spellProfileForActivityOrAlias(activity?.activityName, request);
+      if (!spellProfile) {
+        passthrough.push(activity);
+        continue;
+      }
+      const key = spellProfile.name.toLowerCase();
+      const prior = bySpell.get(key);
+      if (!prior || activityMechanicalScore(activity) > activityMechanicalScore(prior)) {
+        bySpell.set(key, activity);
+      }
+    }
+
+    const deduped = [...passthrough, ...bySpell.values()].map(activity => {
+      const spellProfile = spellProfileForActivity(activity?.activityName) ?? spellProfileForActivityOrAlias(activity?.activityName, request);
+      if (!spellProfile) return activity;
+      const normalizedName = spellActivityDisplayName(activity, spellProfile.name, request);
+      if (activity.activityName === normalizedName) return activity;
+      applied = true;
+      return {
+        ...activity,
+        activityName: normalizedName
+      };
+    });
+
+    if (deduped.length !== utilityActivities.length) {
+      applied = true;
+      assumptions.push("Collapsed duplicate utility spell activities into a single SRD-compatible activity.");
+    }
+    next.utilityActivities = deduped;
+  }
+
+  return { applied, spec: next, assumptions };
+}
+
+function applyForgeSpecDefaults(spec) {
+  const next = clone(spec);
+  let applied = false;
+  const assumptions = [];
+
+  if (specNeedsDefaultMagicalBonus(next)) {
+    next.magicalBonus = "1";
+    applied = true;
+    assumptions.push("No magical bonus was supplied; used +1 by default.");
+  }
+
+  if (next.save) {
+    const repaired = ensureSaveDc(next.save);
+    if (Number(repaired.dc) !== Number(next.save?.dc)) {
+      next.save = repaired;
+      applied = true;
+    }
+  }
+
+  if (next.conditionOnHit?.save) {
+    const repaired = ensureSaveDc(next.conditionOnHit.save);
+    if (Number(repaired.dc) !== Number(next.conditionOnHit.save?.dc)) {
+      next.conditionOnHit = {
+        ...next.conditionOnHit,
+        save: repaired
+      };
+      applied = true;
+    }
+  }
+
+  for (const listName of ["activities", "saveActivities", "utilityActivities", "attackActivities"]) {
+    if (!Array.isArray(next[listName])) continue;
+    next[listName] = next[listName].map(activity => {
+      if (!activity?.save) return activity;
+      const repaired = ensureSaveDc(activity.save);
+      if (Number(repaired.dc) === Number(activity.save?.dc)) return activity;
+      applied = true;
+      return {
+        ...activity,
+        save: repaired
+      };
+    });
+  }
+
+  if (applied) assumptions.push(`Unspecified save DCs default to ${DEFAULT_SAVE_DC}.`);
+  return { applied, spec: next, assumptions: [...new Set(assumptions)] };
+}
+
+async function applyDefaultLeveledSpellCharges(spec, request, options = {}) {
+  if (!usesSharedCharges(spec, request)) return { applied: false, spec, assumptions: [] };
+
+  const next = clone(spec);
+  let applied = false;
+  const assumptions = [];
+  const listNames = ["activities", "saveActivities", "utilityActivities"];
+
+  for (const listName of listNames) {
+    const activities = Array.isArray(next[listName]) ? [...next[listName]] : [];
+    if (!activities.length) continue;
+    const repaired = [];
+
+    for (const activity of activities) {
+      const metadata = await spellMetadataForActivity(activity?.activityName, { ...options, request });
+      if (!metadata) {
+        repaired.push(activity);
+        continue;
+      }
+
+      const explicitCost = explicitSpellChargeCost(request, metadata.name);
+      const desiredCost = explicitCost ?? metadata.level;
+      const normalized = clone(activity);
+      if (Number(normalized.chargeCost ?? 0) !== desiredCost) {
+        normalized.chargeCost = desiredCost;
+        applied = true;
+      }
+      if (metadata.supportsScaling) {
+        const scaling = normalized.chargeScaling ?? {};
+        if (scaling.allowed !== true || scaling.max !== "@item.uses.value" || scaling.mode !== "amount") {
+          normalized.chargeScaling = { allowed: true, max: "@item.uses.value", mode: "amount", formula: "" };
+          applied = true;
+        }
+      }
+      repaired.push(normalized);
+      if (explicitCost == null && desiredCost === metadata.level) {
+        assumptions.push(`${metadata.name} defaults to ${metadata.level} ${metadata.level === 1 ? "charge" : "charges"} because it is a level ${metadata.level} spell.`);
+      }
+    }
+
+    next[listName] = repaired;
+  }
+
+  if (!applied) return { applied: false, spec, assumptions: [] };
+  return { applied: true, spec: next, assumptions: [...new Set(assumptions)] };
+}
+
+async function repairNamedSrdSpellActivities(spec, request, options = {}) {
+  const next = clone(spec);
+  let applied = false;
+  const assumptions = [];
+  const listNames = ["saveActivities", "activities"];
+
+  for (const listName of listNames) {
+    const sourceActivities = Array.isArray(next[listName]) ? [...next[listName]] : [];
+    if (!sourceActivities.length) continue;
+
+    const repaired = [];
+    for (const activity of sourceActivities) {
+      const spellProfile = spellProfileForActivity(activity?.activityName) ?? spellProfileForActivityOrAlias(activity?.activityName, request);
+      if (!spellProfile) {
+        repaired.push(activity);
+        continue;
+      }
+      const metadata = await spellDocumentMetadata(spellProfile.name, options);
+
+      const count = repeatedSpellCount(request, spellProfile.name);
+      const missingTemplate = !compactText(activity?.target?.template?.type) || !activity?.target?.template?.size;
+      const missingRange = !compactText(activity?.range?.units) && !activity?.range?.value;
+      const missingSave = !compactText(activity?.save?.ability) || !activity?.save?.dc;
+
+      if (count > 1) {
+        for (let index = 0; index < count; index += 1) {
+          const suffix = `${index + 1}/${count}`;
+          const normalized = normalizedSpellActivity(activity, spellProfile, count, suffix, metadata);
+          normalized.activityId = stableId(`${next.name} ${spellProfile.name} ${suffix}`);
+          normalized.activityName = `${spellActivityDisplayName(activity, spellProfile.name, request)} ${suffix}`;
+          repaired.push(normalized);
+        }
+        applied = true;
+        assumptions.push(`Interpreted repeated ${spellProfile.name} request as ${count} consecutive casts using separate activities.`);
+        continue;
+      }
+
+      if (missingTemplate || missingRange || missingSave) {
+        const normalized = normalizedSpellActivity(activity, spellProfile, 1, "", metadata);
+        normalized.activityName = spellActivityDisplayName(activity, spellProfile.name, request);
+        repaired.push(normalized);
+        applied = true;
+        assumptions.push(`Applied compatible SRD ${spellProfile.name} targeting details to the generated activity.`);
+        continue;
+      }
+
+      repaired.push({
+        ...activity,
+        activityName: spellActivityDisplayName(activity, spellProfile.name, request)
+      });
+    }
+
+    next[listName] = repaired;
+  }
+
+  const sourceUtilities = Array.isArray(next.utilityActivities) ? [...next.utilityActivities] : [];
+  if (sourceUtilities.length) {
+    const repairedUtilities = [];
+    const promotedSaveActivities = Array.isArray(next.saveActivities) ? [...next.saveActivities] : [];
+
+    for (const activity of sourceUtilities) {
+      const spellProfile = spellProfileForActivity(activity?.activityName) ?? spellProfileForActivityOrAlias(activity?.activityName, request);
+      if (!spellProfile) {
+        repairedUtilities.push(activity);
+        continue;
+      }
+
+      const metadata = await spellDocumentMetadata(spellProfile.name, options);
+      const sourceType = compactText(metadata?.type).toLowerCase() || (spellProfile.save || spellProfile.damageParts?.length ? "save" : "utility");
+      const shouldPromoteToSave = sourceType === "save"
+        || Boolean(spellProfile.save)
+        || Boolean(spellProfile.damageParts?.length);
+      const shouldPromoteToHeal = sourceType === "heal" || Boolean(spellProfile.healing);
+
+      if (shouldPromoteToSave) {
+        const count = repeatedSpellCount(request, spellProfile.name);
+        if (count > 1) {
+          for (let index = 0; index < count; index += 1) {
+            const suffix = `${index + 1}/${count}`;
+            const normalized = normalizedSpellActivity(activity, spellProfile, count, suffix, metadata);
+            normalized.activityId = stableId(`${next.name} ${spellProfile.name} ${suffix}`);
+            normalized.activityName = `${spellActivityDisplayName(activity, spellProfile.name, request)} ${suffix}`;
+            promotedSaveActivities.push(normalized);
+          }
+          assumptions.push(`Interpreted repeated ${spellProfile.name} request as ${count} consecutive casts using separate activities.`);
+        } else {
+          const normalized = normalizedSpellActivity(activity, spellProfile, 1, "", metadata);
+          normalized.activityName = spellActivityDisplayName(activity, spellProfile.name, request);
+          promotedSaveActivities.push(normalized);
+          assumptions.push(`Promoted ${spellProfile.name} into a structured spell activity using SRD targeting data.`);
+        }
+        applied = true;
+        continue;
+      }
+
+      if (shouldPromoteToHeal) {
+        repairedUtilities.push(normalizedUtilitySpellActivity({
+          ...activity,
+          activityName: spellActivityDisplayName(activity, spellProfile.name, request)
+        }, spellProfile, metadata));
+        assumptions.push(`Promoted ${spellProfile.name} into a structured healing activity using SRD targeting data.`);
+        applied = true;
+        continue;
+      }
+
+      const missingTemplate = !compactText(activity?.target?.template?.type) || !activity?.target?.template?.size;
+      const missingRange = !compactText(activity?.range?.units) && !activity?.range?.value;
+      const missingDuration = !activity?.duration?.units && activity?.duration?.value == null;
+      if (missingTemplate || missingRange || missingDuration) {
+        repairedUtilities.push(normalizedUtilitySpellActivity({
+          ...activity,
+          activityName: spellActivityDisplayName(activity, spellProfile.name, request)
+        }, spellProfile, metadata));
+        assumptions.push(`Applied compatible SRD ${spellProfile.name} utility targeting details to the generated activity.`);
+        applied = true;
+        continue;
+      }
+
+      repairedUtilities.push({
+        ...activity,
+        activityName: spellActivityDisplayName(activity, spellProfile.name, request)
+      });
+    }
+
+    next.utilityActivities = repairedUtilities;
+    next.saveActivities = promotedSaveActivities;
+  }
+
+  if (!applied) return { applied: false, spec };
+  return {
+    applied: true,
+    spec: next,
+    assumptions: [...new Set(assumptions)]
   };
 }
 
@@ -250,7 +1189,8 @@ async function autoSelectSrdChoiceSpells(spec, request, options = {}) {
   for (const profile of rankedSpellProfiles(tags)) {
     const resolution = await resolveSpell(profile.name);
     if (resolution?.status !== "compatible") continue;
-    chosen.push({ profile, resolution });
+    const metadata = await spellDocumentMetadata(profile.name, options);
+    chosen.push({ profile, resolution, metadata });
     if (chosen.length >= requestedCount) break;
   }
 
@@ -269,6 +1209,11 @@ async function autoSelectSrdChoiceSpells(spec, request, options = {}) {
     ...(Array.isArray(next.saveActivities) ? next.saveActivities : []),
     ...chosen.map(({ profile }) => buildSaveActivity(next.name, profile))
   ];
+  next.saveActivities = next.saveActivities.map(activity => {
+    const spellName = activitySpellName(activity.activityName);
+    const chosenEntry = chosen.find(entry => entry.profile.name === spellName);
+    return chosenEntry ? buildSaveActivity(next.name, chosenEntry.profile, chosenEntry.metadata) : activity;
+  });
   next.systemReferences = [
     ...(Array.isArray(next.systemReferences) ? next.systemReferences : []),
     ...chosen.map(({ profile, resolution }) => ({
@@ -296,8 +1241,13 @@ async function autoSelectSrdChoiceSpells(spec, request, options = {}) {
 
 export {
   SPELL_LIBRARY,
+  applyForgeSpecDefaults,
+  applyDefaultLeveledSpellCharges,
   autoSelectSrdChoiceSpells,
+  dedupeRecognizedSpellActivities,
   inferDamageTags,
   parseChargeMax,
+  reconcilePlannedSrdSpellActivities,
+  repairNamedSrdSpellActivities,
   requestedSpellChoiceCount
 };
