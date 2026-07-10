@@ -5,6 +5,7 @@ const rifle = compileItemRequest("Make a rifle that does fire damage");
 assert.equal(rifle.specs[0].kind, "weaponExtraDamage");
 assert.equal(rifle.specs[0].extraDamageParts[0].denomination, 4);
 assert.deepEqual(rifle.specs[0].extraDamageParts[0].types, ["fire"]);
+assert.equal(rifle.specs[0].magicalBonus, "1");
 
 const ring = compileItemRequest(`
 Ring of Steadfast Warding
@@ -35,6 +36,12 @@ assert.equal(wand.specs[0].kind, "chargedSaveDamage");
 assert.equal(wand.specs[0].target.template.type, "cube");
 assert.equal(wand.specs[0].target.template.size, 15);
 assert.equal(wand.specs[0].uses.recovery[0].formula, "1d6 + 1");
+
+const unspecifiedDcWand = compileItemRequest(`
+Stormglass Wand
+Rare wand requiring attunement. As an action, unleash a 15-foot cone that forces a Constitution save or takes 4d8 thunder damage.
+`);
+assert.equal(unspecifiedDcWand.specs[0].save?.dc, 15);
 
 const summon = compileItemRequest("Create a rare item that summons a friendly wolf once per long rest.");
 assert.equal(summon.specs[0].kind, "nativeSummon");
@@ -168,4 +175,4 @@ assert.deepEqual(stormfireSpec.saveActivities[0].save, { ability: "dex", dc: 18 
 assert.deepEqual(stormfireSpec.saveActivities[0].damageParts.map(part => part.types[0]), ["fire", "radiant"]);
 assert.equal(stormfireSpec.uses.recovery[0].period, "dawn");
 
-export const testedRequestCount = 14;
+export const testedRequestCount = 15;

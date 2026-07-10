@@ -33,6 +33,26 @@ function compact(value) {
   return String(value ?? "").replace(/\s+/g, " ").trim();
 }
 
+function normalizeMagicalBonus(value, fallback = "") {
+  const normalized = compact(value);
+  if (!normalized) return fallback;
+  if (/^(?:true|false|null|undefined|nan)$/i.test(normalized)) return fallback;
+  if (!/^[+-]?\d+$/.test(normalized)) {
+    const numeric = Number(normalized);
+    if (!Number.isFinite(numeric)) return fallback;
+    return String(Math.trunc(numeric));
+  }
+  const unsigned = normalized.startsWith("+") ? normalized.slice(1) : normalized;
+  return unsigned === "-0" ? "0" : unsigned;
+}
+
+function normalizeWeight(value, fallback = 0) {
+  const source = value && typeof value === "object" ? value.value : value;
+  if (source === "" || source == null) return fallback;
+  const numeric = Number(source);
+  return Number.isFinite(numeric) && numeric >= 0 ? numeric : fallback;
+}
+
 function specSearchText(spec = {}) {
   return [
     spec.name,
@@ -81,10 +101,9 @@ function inferArmorProfile(spec = {}) {
 }
 
 function armorBonusValue(spec = {}, profile = inferArmorProfile(spec)) {
-  const explicit = compact(spec.magicalBonus);
-  if (explicit) return explicit;
-  if (!profile.isShield && Number(spec.armorValue) > 0 && Number(spec.armorValue) <= 5) return String(spec.armorValue);
-  return compact(spec.armorValue) || "1";
+  const explicit = normalizeMagicalBonus(spec.magicalBonus);
+  if (explicit && explicit !== "0") return explicit;
+  return "1";
 }
 
 export {
@@ -92,6 +111,8 @@ export {
   armorBonusValue,
   inferArmorProfile,
   isImplementCategory,
+  normalizeMagicalBonus,
   normalizeItemDocumentType,
+  normalizeWeight,
   safeItemIcon
 };

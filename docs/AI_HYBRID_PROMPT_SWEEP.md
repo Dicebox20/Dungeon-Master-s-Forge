@@ -6,6 +6,27 @@ This file is a live-AI stress pack for hybrid items that deliberately mix suppor
 
 These prompts are not meant to be clean one-pattern examples. They are meant to expose routing and normalization failures when one item request combines mechanics that previously worked in isolation.
 
+## Coverage Rule
+
+When running this sweep repeatedly, do not keep reusing the same small set of base items.
+
+Rotate across a broad spread of item chassis so the hybrid tests also exercise base-item recovery and weapon/armor normalization:
+
+- simple melee weapons
+- martial melee weapons
+- finesse weapons
+- heavy weapons
+- polearms
+- simple ranged weapons
+- martial ranged weapons
+- shields
+- light armor
+- medium armor
+- heavy armor
+- caster gear such as staffs, wands, rods, helms, rings, and amulets
+
+Prefer changing the physical base item while keeping the mixed-mechanics pressure high. A good sweep should vary both the mechanic family mix and the underlying equipment chassis.
+
 ## Hybrid Sweep
 
 ## 1. Weapon + Summon

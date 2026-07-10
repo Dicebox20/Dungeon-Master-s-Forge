@@ -1,4 +1,20 @@
-const SYSTEM_CONTENT_FIELDS = Object.freeze(["name", "type", "system.type.value"]);
+import { normalizeWeight } from "./equipment-normalization.js";
+
+const SYSTEM_CONTENT_FIELDS = Object.freeze([
+  "name",
+  "type",
+  "system.type.value",
+  "system.type.baseItem",
+  "system.level",
+  "system.rarity",
+  "system.properties",
+  "system.damage.base",
+  "system.damage.versatile",
+  "system.range",
+  "system.mastery",
+  "system.weight",
+  "img"
+]);
 
 const CONTENT_KIND_CONFIG = Object.freeze({
   spell: Object.freeze({
@@ -43,6 +59,9 @@ const SYSTEM_CONTENT_DIAGNOSTIC_CASES = Object.freeze([
   Object.freeze({ name: "Wand of Wonder Effects", kind: "rollTable" })
 ]);
 
+let liveNonMagicalWeaponCatalogue = null;
+let liveNonMagicalEquipmentCatalogue = null;
+
 function normalizeLookupName(value) {
   return String(value ?? "").trim().replace(/\s+/g, " ").toLowerCase();
 }
@@ -81,6 +100,91 @@ function packSystemVersion(pack) {
 
 function itemTypeForEntry(entry = {}) {
   return String(entry.type ?? entry.system?.type?.value ?? "").trim().toLowerCase();
+}
+
+function documentSource(document = {}) {
+  return typeof document?.toObject === "function" ? document.toObject() : document;
+}
+
+function collectionValues(value) {
+  if (Array.isArray(value)) return value;
+  if (value instanceof Set) return [...value];
+  if (typeof value?.values === "function") return [...value.values()];
+  if (typeof value?.[Symbol.iterator] === "function") return [...value];
+  return [];
+}
+
+function cloneData(value) {
+  return value == null ? value : JSON.parse(JSON.stringify(value));
+}
+
+function documentPropertySet(document) {
+  const source = documentSource(document);
+  return new Set(collectionValues(source?.system?.properties).map(value => String(value).trim().toLowerCase()).filter(Boolean));
+}
+
+function documentRarity(document) {
+  return String(documentSource(document)?.system?.rarity ?? "").trim().toLowerCase();
+}
+
+function isMundaneSystemDocument(document) {
+  const properties = documentPropertySet(document);
+  if (properties.has("mgc")) return false;
+  const rarity = documentRarity(document);
+  return !rarity || rarity === "common";
+}
+
+function isNonMagicalWeaponDocument(document) {
+  const source = documentSource(document);
+  if (String(source?.type ?? "").trim().toLowerCase() !== "weapon") return false;
+  if (!String(source?.system?.type?.baseItem ?? "").trim()) return false;
+  return isMundaneSystemDocument(document);
+}
+
+function nonMagicalWeaponProfileFromDocument(document) {
+  if (!isNonMagicalWeaponDocument(document)) return null;
+  const source = documentSource(document);
+  const system = source.system ?? {};
+  return {
+    name: String(source.name ?? "").trim(),
+    baseItem: String(system.type?.baseItem ?? "").trim(),
+    weaponType: String(system.type?.value ?? "").trim(),
+    damage: {
+      base: cloneData(system.damage?.base ?? {}),
+      versatile: cloneData(system.damage?.versatile ?? {})
+    },
+    properties: collectionValues(system.properties).map(value => String(value).trim()).filter(Boolean),
+    range: cloneData(system.range ?? {}),
+    mastery: String(system.mastery ?? "").trim(),
+    weight: normalizeWeight(system.weight, null),
+    img: String(source.img ?? "").trim(),
+    sourceUuid: String(document?.uuid ?? source.uuid ?? "").trim()
+  };
+}
+
+function isNonMagicalEquipmentDocument(document) {
+  const source = documentSource(document);
+  if (String(source?.type ?? "").trim().toLowerCase() !== "equipment") return false;
+  if (!String(source?.system?.type?.baseItem ?? "").trim()) return false;
+  return isMundaneSystemDocument(document);
+}
+
+function nonMagicalEquipmentProfileFromDocument(document) {
+  if (!isNonMagicalEquipmentDocument(document)) return null;
+  const source = documentSource(document);
+  const system = source.system ?? {};
+  return {
+    name: String(source.name ?? "").trim(),
+    itemType: "equipment",
+    equipmentType: String(system.type?.value ?? "").trim(),
+    baseItem: String(system.type?.baseItem ?? "").trim(),
+    armorValue: Number(system.armor?.value ?? 0) || 0,
+    armorDex: system.armor?.dex ?? null,
+    strength: system.strength ?? null,
+    weight: normalizeWeight(system.weight, null),
+    img: String(source.img ?? "").trim(),
+    sourceUuid: String(document?.uuid ?? source.uuid ?? "").trim()
+  };
 }
 
 function isExactNameMatch(candidateName, requestedName) {
@@ -143,9 +247,12 @@ async function readPackIndex(pack) {
 
 function candidateSummary(pack, entry, kind) {
   return {
+    entryId: String(entry._id ?? "").trim(),
     uuid: `Compendium.${packCollection(pack)}.${entry._id}`,
     name: String(entry.name ?? "").trim(),
+    img: String(entry.img ?? "").trim(),
     kind,
+    spellLevel: kind === "spell" ? Number(entry.system?.level ?? 0) : null,
     documentType: packDocumentName(pack) || "Item",
     itemType: itemTypeForEntry(entry),
     pack: {
@@ -164,6 +271,27 @@ function candidateSummary(pack, entry, kind) {
     },
     rank: modernityScore(pack, kind)
   };
+}
+
+function findPackByCollection(collection, options = {}) {
+  const target = String(collection ?? "").trim().toLowerCase();
+  if (!target) return null;
+  const packs = Array.from(options.packs ?? globalThis.game?.packs ?? []);
+  return packs.find(pack => packCollection(pack).toLowerCase() === target) ?? null;
+}
+
+async function resolveDocumentFromMatch(match, options = {}) {
+  const collection = String(match?.pack?.collection ?? "").trim();
+  const entryId = String(match?.entryId ?? "").trim();
+  if (!collection || !entryId) return null;
+  const pack = findPackByCollection(collection, options);
+  if (!pack || typeof pack.getDocument !== "function") return null;
+  return pack.getDocument(entryId);
+}
+
+async function resolveSystemDocument(resolution, options = {}) {
+  if (resolution?.status !== "compatible") return null;
+  return resolveDocumentFromMatch(resolution.match, options);
 }
 
 function finalizeResolution(name, kind, candidates) {
@@ -242,6 +370,111 @@ async function resolveEquipmentByName(name, options = {}) {
   return resolveSystemContentByName(name, "equipment", options);
 }
 
+async function buildSystemNonMagicalWeaponCatalogue(packs) {
+  const profiles = [];
+  for (const pack of packs) {
+    if (!isSystemOwnedDnd5ePack(pack) || !packLikelySupportsKind(pack, "equipment")) continue;
+    if (typeof pack.getDocuments !== "function") continue;
+    const documents = await pack.getDocuments();
+    for (const document of documents) {
+      const profile = nonMagicalWeaponProfileFromDocument(document);
+      if (!profile) continue;
+      profiles.push({
+        ...profile,
+        pack: {
+          collection: packCollection(pack),
+          label: packLabel(pack)
+        },
+        rank: modernityScore(pack, "equipment")
+      });
+    }
+  }
+
+  const byBaseItem = new Map();
+  for (const profile of profiles) {
+    const key = normalizeLookupName(profile.baseItem || profile.name);
+    const existing = byBaseItem.get(key);
+    if (!existing || profile.rank > existing.rank) byBaseItem.set(key, profile);
+  }
+  return Object.freeze([...byBaseItem.values()].sort((left, right) => left.name.localeCompare(right.name)));
+}
+
+async function buildSystemNonMagicalEquipmentCatalogue(packs) {
+  const profiles = [];
+  for (const pack of packs) {
+    if (!isSystemOwnedDnd5ePack(pack) || !packLikelySupportsKind(pack, "equipment")) continue;
+    if (typeof pack.getDocuments !== "function") continue;
+    const documents = await pack.getDocuments();
+    for (const document of documents) {
+      const profile = nonMagicalEquipmentProfileFromDocument(document);
+      if (!profile) continue;
+      profiles.push({
+        ...profile,
+        pack: {
+          collection: packCollection(pack),
+          label: packLabel(pack)
+        },
+        rank: modernityScore(pack, "equipment")
+      });
+    }
+  }
+
+  const byBaseItem = new Map();
+  for (const profile of profiles) {
+    const key = normalizeLookupName(profile.baseItem || profile.name);
+    const existing = byBaseItem.get(key);
+    if (!existing || profile.rank > existing.rank) byBaseItem.set(key, profile);
+  }
+  return Object.freeze([...byBaseItem.values()].sort((left, right) => left.name.localeCompare(right.name)));
+}
+
+async function listSystemNonMagicalWeapons(options = {}) {
+  if (options.packs) return buildSystemNonMagicalWeaponCatalogue(Array.from(options.packs));
+  if (!liveNonMagicalWeaponCatalogue) {
+    liveNonMagicalWeaponCatalogue = buildSystemNonMagicalWeaponCatalogue(Array.from(globalThis.game?.packs ?? []))
+      .catch(error => {
+        liveNonMagicalWeaponCatalogue = null;
+        throw error;
+      });
+  }
+  return liveNonMagicalWeaponCatalogue;
+}
+
+async function listSystemNonMagicalEquipment(options = {}) {
+  if (options.packs) return buildSystemNonMagicalEquipmentCatalogue(Array.from(options.packs));
+  if (!liveNonMagicalEquipmentCatalogue) {
+    liveNonMagicalEquipmentCatalogue = buildSystemNonMagicalEquipmentCatalogue(Array.from(globalThis.game?.packs ?? []))
+      .catch(error => {
+        liveNonMagicalEquipmentCatalogue = null;
+        throw error;
+      });
+  }
+  return liveNonMagicalEquipmentCatalogue;
+}
+
+function textIncludesBaseProfile(text, profile) {
+  const normalized = normalizeLookupName(text);
+  const candidates = [profile.name, profile.baseItem]
+    .map(normalizeLookupName)
+    .filter(Boolean)
+    .sort((left, right) => right.length - left.length);
+  return candidates.some(candidate => new RegExp(`(^|[^a-z0-9])${candidate.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?=$|[^a-z0-9])`, "i").test(normalized));
+}
+
+async function findSystemNonMagicalWeaponForText(text, options = {}) {
+  const profiles = await listSystemNonMagicalWeapons(options);
+  return profiles
+    .filter(profile => textIncludesBaseProfile(text, profile))
+    .sort((left, right) => right.name.length - left.name.length)[0] ?? null;
+}
+
+async function findSystemNonMagicalEquipmentForText(text, options = {}) {
+  const profiles = await listSystemNonMagicalEquipment(options);
+  return profiles
+    .filter(profile => textIncludesBaseProfile(text, profile))
+    .sort((left, right) => right.name.length - left.name.length)[0] ?? null;
+}
+
 async function resolveActorByName(name, options = {}) {
   return resolveSystemContentByName(name, "actor", options);
 }
@@ -295,9 +528,18 @@ export {
   candidateSummary,
   entryMatchesKind,
   finalizeResolution,
+  findSystemNonMagicalEquipmentForText,
+  findSystemNonMagicalWeaponForText,
+  findPackByCollection,
   isExactNameMatch,
+  isNonMagicalEquipmentDocument,
+  isNonMagicalWeaponDocument,
   isSystemOwnedDnd5ePack,
+  listSystemNonMagicalEquipment,
+  listSystemNonMagicalWeapons,
   modernityScore,
+  nonMagicalEquipmentProfileFromDocument,
+  nonMagicalWeaponProfileFromDocument,
   normalizeLookupName,
   packCollection,
   packDocumentName,
@@ -305,10 +547,12 @@ export {
   packLikelySupportsKind,
   readPackIndex,
   resolveActorByName,
+  resolveDocumentFromMatch,
   resolveEquipmentByName,
   resolveMonsterFeatureByName,
   resolveRollTableByName,
   resolveSpellByName,
+  resolveSystemDocument,
   resolveSystemContentByName,
   runSystemContentDiagnostics
 };

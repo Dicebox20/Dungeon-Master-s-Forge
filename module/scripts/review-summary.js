@@ -1,4 +1,4 @@
-import { inferArmorProfile, safeItemIcon } from "./equipment-normalization.js";
+import { inferArmorProfile, normalizeMagicalBonus, safeItemIcon } from "./equipment-normalization.js";
 
 const KIND_LABELS = Object.freeze({
   artifactWeaponHybrid: "Hybrid artifact",
@@ -147,6 +147,7 @@ function effectChangeText(change) {
 function activityText(activity) {
   const details = [];
   if (activity.chargeCost) details.push(`${activity.chargeCost} ${activity.chargeCost === 1 ? "charge" : "charges"}`);
+  if (activity.chargeScaling?.allowed) details.push("upcasts with extra charges");
   if (activity.attackType) {
     const ability = activity.ability && activity.ability !== "spellcasting"
       ? ABILITY_LABELS[activity.ability] ?? titleCase(activity.ability)
@@ -209,9 +210,10 @@ function summarizeSpec(spec, context = {}) {
   let activityCount = 0;
 
   const armorProfile = spec.kind === "shieldArmorBonus" ? inferArmorProfile(spec) : null;
-  if (spec.kind === "shieldArmorBonus" && spec.armorValue) add(`${armorProfile?.isShield ? "Shield" : "Armor"} bonus ${signedBonus(spec.magicalBonus || spec.armorValue)} AC`);
+  const magicalBonus = normalizeMagicalBonus(spec.magicalBonus);
+  if (spec.kind === "shieldArmorBonus" && spec.armorValue) add(`${armorProfile?.isShield ? "Shield" : "Armor"} bonus ${signedBonus(magicalBonus || "1")} AC`);
   else if (spec.armorValue) add(`Base AC ${spec.armorValue}`);
-  if (spec.magicalBonus) add(`${signedBonus(spec.magicalBonus)} magic bonus`);
+  if (magicalBonus && spec.kind !== "shieldArmorBonus") add(`${signedBonus(magicalBonus)} magic bonus`);
 
   const baseDamage = damagePartText(spec.damage?.base);
   if (baseDamage) add(`Attack: ${baseDamage}`);

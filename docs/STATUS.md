@@ -1,15 +1,18 @@
 # Dungeon Master's Forge Release Status
 
-Updated: 2026-07-03
+Updated: 2026-07-09
 
 ## Publish Candidate
 
-- Package-identity migration candidate: `2.23.0`
+- Stable release candidate: `2.23.1`
+- Current tester release: `2.23.1-test.3`
 - Module manifest target: `module/module.json`
-- Release ZIP: `releases/dungeon-masters-forge-v2-2.23.0.zip`
-- Release ZIP SHA-256: `8AB3F080D219B5A36C3E2812CD3037461BFA9AFDA9DFB557CEFF4263525101D9`
+- Release ZIP: `releases/dungeon-masters-forge-v2-2.23.1.zip`
+- Release ZIP SHA-256: `07D6A3DA23E77E8FBE37F5F5D5E36CECB1B81C03E8FA00B2C3E87D675F916462`
 - Manifest URL target: `https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/main/module/module.json`
-- Download URL target: `https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/main/releases/dungeon-masters-forge-v2-2.23.0.zip`
+- Download URL target: `https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/main/releases/dungeon-masters-forge-v2-2.23.1.zip`
+
+Historical validation notes below still mention earlier `2.23.0-test.*` smoke passes where that was the active tester lane at the time.
 
 ## Release-Prep Pass
 

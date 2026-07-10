@@ -667,12 +667,9 @@
 
 .codex-forge-approval {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 8px;
   padding: 12px 12px;
-  position: sticky;
-  bottom: 0;
-  z-index: 1;
   border: 1px solid rgb(208 180 129 / 16%);
   border-left: 3px solid #e5a15d;
   border-radius: 6px;
@@ -682,13 +679,70 @@
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 3%);
 }
 
+.codex-forge-approval-footer {
+  justify-content: flex-start;
+}
+
 .codex-forge-approval input {
-  flex: 0 0 auto;
-  margin-top: 2px;
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+  cursor: pointer;
 }
 
 .codex-forge-approval:has(input:disabled) {
   opacity: 0.55;
+}
+
+.codex-forge-approval-box {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  inline-size: 18px;
+  block-size: 18px;
+  border: 1px solid rgb(229 161 93 / 58%);
+  border-radius: 4px;
+  background: rgb(10 12 14 / 88%);
+  color: transparent;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 5%);
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease, box-shadow 120ms ease;
+}
+
+.codex-forge-approval input:checked + .codex-forge-approval-box {
+  background: linear-gradient(180deg, rgb(179 49 45 / 96%), rgb(126 25 24 / 96%));
+  border-color: rgb(245 190 120 / 88%);
+  color: #fff6e7;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 22%),
+    0 0 0 1px rgb(179 49 45 / 18%);
+}
+
+.codex-forge-approval-box i {
+  opacity: 0;
+  transform: scale(0.75);
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.codex-forge-approval input:checked + .codex-forge-approval-box i {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.codex-forge-approval input:focus-visible {
+  outline: 2px solid rgb(229 161 93 / 88%);
+  outline-offset: 2px;
+}
+
+.codex-forge-approval-text {
+  color: #f1e7da;
+  font-weight: 600;
 }
 
 .codex-forge-review-summary[hidden] {
@@ -1277,6 +1331,16 @@
 .codex-forge-settings-shell > .form-footer button {
   flex: 0 0 auto;
   min-width: 150px;
+  color: #f6ebe2;
+  font-weight: 700;
+  border: 1px solid rgb(229 161 93 / 60%);
+  background: linear-gradient(180deg, rgb(70 31 27 / 96%), rgb(37 22 25 / 98%));
+}
+
+.codex-forge-settings-shell > .form-footer button:hover,
+.codex-forge-settings-shell > .form-footer button:focus-visible {
+  border-color: rgb(229 161 93 / 86%);
+  background: linear-gradient(180deg, rgb(88 38 31 / 98%), rgb(49 25 27 / 99%));
 }
 
 .codex-forge-settings-provider-status {

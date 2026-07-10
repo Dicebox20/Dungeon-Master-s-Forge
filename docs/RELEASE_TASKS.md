@@ -32,14 +32,15 @@ Updated: 2026-07-03
 ## Needed Before project Promotion
 
 1. Review [PROJECT_LAUNCH_CHECKLIST.md](./PROJECT_LAUNCH_CHECKLIST.md) and keep it aligned with the real release state.
-2. Keep README language explicit about the difference between the hosted Free Forge tester lane and the stable public release.
-3. Keep project copy explicit about the real hosted limits, current staging/launch status, and fallback Bring Your Own API support.
-4. Gather at least one clean screenshot of:
+2. Review [FOUNDRY_SUBMISSION_BRIEF.md](./FOUNDRY_SUBMISSION_BRIEF.md) and keep the staff-facing answers aligned with the real release state.
+3. Keep README language explicit about the difference between the hosted Free Forge tester lane and the stable public release.
+4. Keep project copy explicit about the real hosted limits, current staging/launch status, and fallback Bring Your Own API support.
+5. Gather at least one clean screenshot of:
    - the split Description/Result workflow
    - a successful generated item in Foundry
-5. Confirm the public repo is the clean surface you want people to see first.
-6. Point a permanent project-owned hostname at the official Droplet and repeat the public smoke test through that hostname.
-7. Complete every remaining requirement in [FREE_TIER_DEPLOYMENT.md](./FREE_TIER_DEPLOYMENT.md) before enabling Hosted Forge in the public module.
+6. Confirm the public repo is the clean surface you want people to see first.
+7. Point a permanent project-owned hostname at the official Droplet and repeat the public smoke test through that hostname.
+8. Complete every remaining requirement in [FREE_TIER_DEPLOYMENT.md](./FREE_TIER_DEPLOYMENT.md) before enabling Hosted Forge in the public module.
 
 ## Optional Hosted Support Improvements
 

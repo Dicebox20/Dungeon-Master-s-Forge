@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Added the `2.23.1-test.13` tester build for the latest hybrid repair pass, including named save activity recovery, alias-aware SRD spell reuse, improved summon fallback actors, and dual-summon recovery for Frostwave-style prompts.
 - Added the `2.23.0-test.4` tester build for opt-in anonymous error reports and SRD spell auto-selection on supported charge-spell item requests.
 - Added a hosted-service `/v1/forge/report-error` route and a Foundry consent toggle that uploads redacted module errors with item review notes.
 - Added module-side SRD spell auto-selection for supported "spells of your choice" requests so compatible weapons and equipment can attach real save activities instead of unresolved empty slots.

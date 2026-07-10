@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const script = await readFile(new URL("../scripts/dungeon-masters-forge.js", import.meta.url), "utf8");
+const forgeEngine = await readFile(new URL("../scripts/forge-engine.js", import.meta.url), "utf8");
 const styles = await readFile(new URL("../styles/dungeon-masters-forge.css", import.meta.url), "utf8");
 const settingsTemplate = await readFile(new URL("../templates/forge-settings.hbs", import.meta.url), "utf8");
 
@@ -54,6 +55,11 @@ assert.match(script, /Checking remote service status/);
 assert.match(script, /providerConnectionDetailText/);
 assert.match(script, /action: "settings"/);
 assert.match(styles, /\.dungeon-masters-forge \.form-footer \[data-action="settings"\]/);
+assert.match(script, /async function prepareSpecsForForge\(input, requestText = ""\)/);
+assert.match(script, /function syncPreparedSpecs\(dialog, form, specs\)/);
+assert.match(script, /const preparedCompilation = compilationWithPreparedSpecs\(compilation, validation\.specs\);/);
+assert.match(script, /const preparedRawSpecs = syncPreparedSpecs\(dialog, button\.form, validation\.specs\);/);
+assert.ok((script.match(/const specs = await prepareSpecsForForge\(input, requestText\);/g) ?? []).length >= 2);
 assert.doesNotMatch(script, /dungeonMastersForgeSettings/);
 assert.match(script, /const form = root instanceof HTMLFormElement \? root : root\?\.querySelector\?\.\("form"\)/);
 assert.ok((script.match(/const form = root instanceof HTMLFormElement \? root : root\?\.querySelector\?\.\("form"\)/g) ?? []).length >= 3);
@@ -63,8 +69,16 @@ assert.match(settingsTemplate, /Use only on a trusted computer/);
 assert.match(script, /this\._codexProviderConnection = await checkProviderConnection\(providerState\);\s*await persistProviderState\(providerState\);/);
 assert.match(script, /function applyHostedDefaultProvider\(\)/);
 assert.match(script, /networkProviderConfiguration/);
+assert.match(styles, /\.codex-forge-approval-box/);
+assert.match(styles, /\.codex-forge-approval input:checked \+ \.codex-forge-approval-box/);
+assert.match(script, /codex-forge-approval-footer/);
+assert.match(script, /minimizable: true/);
+assert.match(styles, /\.codex-forge-settings-shell > \.form-footer button[\s\S]*color: #f6ebe2/);
+assert.match(forgeEngine, /function compactText\(value\)/);
+assert.match(forgeEngine, /override: Boolean\(hasExplicitRange \|\| range\.override === true\)/);
+assert.match(forgeEngine, /override: Boolean\(hasTemplate \|\| hasAffects \|\| target\.override === true\)/);
 assert.doesNotMatch(script, /planningTier/);
 assert.doesNotMatch(script, /tierReview/);
 assert.doesNotMatch(settingsTemplate, /Planning tier/);
 
-export const testedUsabilityContractCount = 62;
+export const testedUsabilityContractCount = 73;

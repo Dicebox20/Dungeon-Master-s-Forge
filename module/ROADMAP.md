@@ -31,7 +31,22 @@
 - Source UUID provenance and compatibility reporting without importing compendium documents. Implemented in V2.19.
 - Prefer system-native SRD spell activity shapes for exact-name spellcasting items when Foundry's DND5e schema can safely support it, mirroring the useful parts of dragging a spell onto an item and then applying reviewed item-specific overrides.
 - Add charge-scaled spell item support where shared-charge items default each spell's charge cost to the spell level, with extra charge spend preserved as upcast/scaling review data.
+- Prefer available SRD spells before creating placeholder spell utilities when a prompt requests unnamed spells "of your choice"; surface review notes when no safe SRD match is available.
+- Refine SRD-native item art reuse so previews and created items prefer valid system content images and never request `/undefined`.
 - Expand native resolution to actors, monster features, and roll tables after Spell and Equipment validation is proven.
+
+## In Progress: Release Submission Readiness
+
+- Prepare the public package for Foundry's AI Tools category as a user-prompted runtime item creation tool, not a rules replacement or bundled content pack.
+- Prepare a staff-facing submission brief that explains DMF's runtime AI usage, review-before-create safety model, hosted-vs-BYO provider lanes, and why the package belongs in the `AI Tools` category.
+- Clean test manifest URLs so `testing/module.json` no longer points at legacy `codex/package-id-migration` branch paths for `manifest`, `download`, `readme`, or `changelog`.
+- Prepare a stable release manifest and GitHub release zip before public Foundry submission.
+- Confirm final package description is human-written and explains that the Dungeon Master writes the idea, reviews the result, and approves creation.
+- Prepare a human-authored Foundry listing packet: short description, long description, support links, screenshots, demo prompts, known limitations, and moderation/abuse wording.
+- Confirm installation from the final manifest in a clean Foundry world.
+- Confirm module folder/id alignment, compatibility values, release zip structure, README links, CHANGELOG links, and package metadata.
+- Use real screenshots for the official Foundry listing and avoid generated promotional board images as official package media.
+- Create public demo videos that show the prompt, preview, approval, created item sheet, details, activities, effects, charges, rolls, chat output, and review notes.
 
 ## Implemented: Usability V1
 
@@ -61,6 +76,29 @@
 - Server-side secrets, usage limits, logging controls, and abuse protection.
 - Optional item-image generation after text generation is stable.
 - Opt-in remote error report uploads to the hosted Droplet, with explicit GM consent, API-key redaction, prompt/item/world-data exclusion by default, request limits, and retention controls.
+- Fix Bring Your Own API so client-provided provider credentials bypass hosted public/free-tier monthly quotas and do not count against hosted free-tier limits.
+- Add clear separate errors for rejected BYO provider credentials and exhausted hosted free-tier quotas when no BYO credential is present.
+- Confirm health and diagnostics output clearly distinguish hosted/free-tier mode from private/BYO behavior.
+- Reject or downgrade abusive or impossible requests, such as mass-casting hundreds of spells at once, instead of blindly creating unsafe item data.
+
+## In Progress: Item Family Regression Coverage
+
+- Continue testing all 14 Forge item families: `weaponExtraDamage`, `chargedSaveDamage`, `passiveEffectEquipment`, `chargedHealing`, `weaponConditionOnHit`, `shieldArmorBonus`, `multiActivityStaff`, `nativeEnchant`, `nativeSummon`, `nativeMultiProfileSummon`, `casterUtilityEquipment`, `equipmentPowerSuite`, `legendaryEquipmentSuite`, and `artifactWeaponHybrid`.
+- Rotate mixed-item tests across simple melee weapons, martial melee weapons, ranged weapons, polearms, finesse weapons, heavy weapons, shields, light armor, medium armor, heavy armor, caster gear, consumables, summons, and enchantments.
+- Keep duplicate failed-test entries when they represent unresolved bugs or release blockers.
+
+## Release Blockers From Testing
+
+- Fix preview image fallback so missing images use a valid fallback icon or omit the image, and never request `/undefined`.
+- Fix activity creation failures caused by missing `kind` values; infer or repair obvious families before rejecting model output.
+- Fix armor-vs-shield routing so plate, leather, breastplate, chain mail, scale mail, and similar armor requests are not created as shields unless the prompt explicitly says shield.
+- Fix wand/rod/staff mapping so charged caster implements preserve wand, rod, or staff identity while using valid Foundry DND5e item document types.
+- Fix area target mapping for cones, lines, spheres, radius effects, and cubes so activity target data is written into Foundry data instead of description-only notes.
+- Fix `weaponConditionOnHit` outputs that omit base weapon damage; repair known base damage from weapon name/type before item creation.
+- Fix single-use consumed healing items so potions can consume correctly without invalid recovery data.
+- Recheck selective save advantage active-effect syntax for malformed save roll terms, including Constitution and Dexterity save advantage.
+- Keep forced movement automation as a reviewed/manual mechanic until a reliable and safe automation path is proven.
+- Improve single charged save/damage routing so one-power wands do not get misclassified as multi-activity staves requiring multiple activities.
 
 ## Planned: Midi-QOL Compatibility
 
@@ -81,6 +119,19 @@
 - Add early supporter item-icon image generation as an optional premium pass that can create bespoke item icons for generated items without changing the portable mechanical output.
 - Generate safe transfer/return utilities for mechanics such as pocket dimensions, cursed keys, Maze variants, banishment-style realm effects, and similar isolated-scene powers.
 - Keep all realm-transfer features opt-in, clearly labeled as advanced automation, and separate from the portable baseline item output.
+
+## Documentation And Community Launch Tasks
+
+- Add install instructions for test and release manifests.
+- Add "Instructions to set up Bring Your Own API" with plain-language guidance.
+- Document the difference between endpoint, Forge-compatible service, and provider credential.
+- Explain that private provider credentials should not be shared in chats, screenshots, videos, logs, GitHub, Reddit, Discord, or other public places.
+- Document that custom and local endpoints must speak the Dungeon Master's Forge compile contract; local model support is not plug-and-play unless an adapter returns the Forge format reliably.
+- Document supported item families, known limitations, review notes, Foundry AI Tools policy framing, roadmap, changelog, and FAQ.
+- Prepare a project launch packet that stays honest about launch-day scope: Free tier is real access, early supporter is support-first, and project access controls are not active yet.
+- Prepare a Foundry staff handoff packet with compliance notes, install links, smoke-test notes, and the exact hosted-service behavior expected during review.
+- Add public links for project, Ko-fi, YouTube, X/Twitter, Threads, Instagram, Reddit, and Discord when launch materials are finalized.
+- Track future GitHub issue conversion with labels such as `bug`, `release-blocker`, `byo-api`, `item-mapping`, `documentation`, `testing`, `foundry-policy`, and `marketing`.
 
 ## Deferred Automation
 

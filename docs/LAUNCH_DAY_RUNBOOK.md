@@ -6,10 +6,10 @@ This runbook promotes the verified Free Forge tester channel to the stable Found
 
 ## Current Baseline
 
-- Stable module: `2.21.12`
-- Tester module: `2.23.0-test.2`
-- AI service: `1.6.0`
-- Free Forge allowance: 20 generation requests per client per calendar month
+- Stable module: current public release candidate
+- Tester module: latest verified tester build
+- AI service: current hosted service release
+- Free Forge allowance: 20 generation requests per client per calendar month unless intentionally changed for tester validation
 - Stable manifest: `module/module.json`
 - Tester manifest: `testing/module.json`
 
@@ -40,7 +40,7 @@ Never place the OpenAI key, quota hash secret, or private environment file in Gi
 
 1. Copy the verified tester module into a new stable candidate directory.
 2. Replace the temporary hosted endpoint with the permanent HTTPS compile endpoint.
-3. Choose the stable version, expected to be `2.22.0` unless testing requires another candidate.
+3. Choose the stable version for the candidate being promoted and make sure `module.json`, `scripts/versioning.js`, release ZIP name, and changelog all agree.
 4. Change the embedded manifest and download URLs from the testing branch to the stable `main` paths.
 5. Run every module test from source and from an independently extracted ZIP.
 6. Run capabilities and one live generation through the packaged Hosted Forge adapter.
@@ -90,6 +90,14 @@ Publish only the launch-day tiers:
 - **early supporter:** **Thank you for your support.** No additional product gate at launch
 
 Link project visitors to the GitHub README, stable manifest, known limitations, and bug-report template. Avoid advertising access control checks, image generation, scene transfer, or other roadmap features as available.
+
+## 6. Foundry Staff Submission Pass
+
+1. Re-read `docs/FOUNDRY_SUBMISSION_BRIEF.md`.
+2. Confirm the final package media is human-authored and current.
+3. Confirm the package description and README explain that generation happens only at runtime in response to a GM prompt.
+4. Confirm the listing belongs in the `AI Tools` category.
+5. Keep the install links, screenshots, demo prompts, and support links identical across Foundry and project surfaces.
 
 ## First 24 Hours
 

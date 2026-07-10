@@ -1,6 +1,6 @@
 # Remote Provider Contract
 
-Dungeon Master's Forge remote providers use schema version `1.0`. Bring Your Own API uses this contract for live compilation against a user-configured endpoint. Free Forge uses the same contract with a credential-free HTTPS endpoint embedded in an explicitly enabled release. The stable `2.21.12` source configuration remains disabled, while the temporary `2.23.0-test.1` migration channel enables it for hosted testing. The contract is also available through `forge.providerContract` for local development and mocked integration tests.
+Dungeon Master's Forge remote providers use schema version `1.0`. Bring Your Own API uses this contract for live compilation against a user-configured endpoint. Free Forge uses the same contract with a credential-free HTTPS endpoint embedded in an explicitly enabled release. Stable public builds should keep Hosted Forge conservative until the hosted lane is re-verified, while tester or hosted-preview builds may enable it for validation. The contract is also available through `forge.providerContract` for local development and mocked integration tests.
 
 ## Endpoint Rules
 
