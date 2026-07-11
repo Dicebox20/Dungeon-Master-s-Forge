@@ -77,8 +77,10 @@ assert.match(styles, /\.codex-forge-settings-shell > \.form-footer button[\s\S]*
 assert.match(forgeEngine, /function compactText\(value\)/);
 assert.match(forgeEngine, /override: Boolean\(hasExplicitRange \|\| range\.override === true\)/);
 assert.match(forgeEngine, /override: Boolean\(hasTemplate \|\| hasAffects \|\| target\.override === true\)/);
+assert.match(forgeEngine, /function activityConsumption\(chargeCost = 1, scaling = \{\}\)[\s\S]*spellSlot: false/);
+assert.match(forgeEngine, /function activityConsumptionNone\(\)[\s\S]*spellSlot: false/);
 assert.doesNotMatch(script, /planningTier/);
 assert.doesNotMatch(script, /tierReview/);
 assert.doesNotMatch(settingsTemplate, /Planning tier/);
 
-export const testedUsabilityContractCount = 73;
+export const testedUsabilityContractCount = 75;

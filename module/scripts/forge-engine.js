@@ -144,7 +144,7 @@ async function runCodexItemForge(FORGE, ITEMS, { validateOnly = false } = {}) {
         allowed: allowScaling,
         max: allowScaling ? String(scaling.max ?? "@item.uses.value") : ""
       },
-      spellSlot: true,
+      spellSlot: false,
       targets: [
         {
           type: "itemUses",
@@ -815,7 +815,7 @@ async function runCodexItemForge(FORGE, ITEMS, { validateOnly = false } = {}) {
   function activityConsumptionNone() {
     return {
       scaling: { allowed: false, max: "" },
-      spellSlot: true,
+      spellSlot: false,
       targets: []
     };
   }
@@ -1716,6 +1716,11 @@ ui.notifications.info(ITEM_NAME + " light toggled on.");
 
     if (spec.toggleLight) {
       const activity = makeToggleLightActivity(created, spec, spec.toggleLight);
+      updateData[`system.activities.${activity._id}`] = activity;
+    }
+
+    for (const activitySpec of spec.attackActivities ?? []) {
+      const activity = makeAttackActivity(created, spec, activitySpec);
       updateData[`system.activities.${activity._id}`] = activity;
     }
 

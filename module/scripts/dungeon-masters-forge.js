@@ -49,6 +49,7 @@ import { normalizeWeight, safeItemIcon } from "./equipment-normalization.js";
 import { applyFeaturePlanToSpec, planItemFeatures } from "./feature-planner.js";
 import { sanitizeForgeSpec } from "./forge-spec-integrity.js";
 import { repairHybridSpecFromRequest } from "./hybrid-activity-repair.js";
+import { buildLayeredItemBlueprint } from "./item-blueprint.js";
 import { applyDefaultLeveledSpellCharges, applyForgeSpecDefaults, autoSelectSrdChoiceSpells, dedupeRecognizedSpellActivities, reconcilePlannedSrdSpellActivities, repairNamedSrdSpellActivities } from "./srd-spell-enrichment.js";
 import { applyFallbackActivityArt, applySpellActivityArt, applySystemEquipmentArt } from "./system-art-enrichment.js";
 import {
@@ -288,13 +289,50 @@ function normalizeSpecs(input) {
   return specs;
 }
 
+function requestedAttunementState(requestText = "") {
+  const text = String(requestText ?? "").trim();
+  if (!text) return null;
+  if (/\b(?:does not require attunement|no attunement|attunement\s*:\s*(?:not required|no|none))\b/i.test(text)) return "";
+  if (/\b(?:requires? attunement|required by|attunement\s*:\s*required)\b/i.test(text)) return "required";
+  return null;
+}
+
+function alignSpecAttunementToRequest(spec, requestText = "") {
+  if (!spec || typeof spec !== "object" || Array.isArray(spec)) return { applied: false, spec };
+  const requested = requestedAttunementState(requestText);
+  if (requested == null) {
+    if (!String(spec.attunement ?? "").trim()) return { applied: false, spec };
+    return {
+      applied: true,
+      spec: {
+        ...spec,
+        attunement: ""
+      },
+      assumption: "No attunement requirement was supplied; cleared model-added attunement."
+    };
+  }
+  if (String(spec.attunement ?? "").trim() === requested) return { applied: false, spec };
+  return {
+    applied: true,
+    spec: {
+      ...spec,
+      attunement: requested
+    },
+    assumption: requested
+      ? "Aligned attunement with the request."
+      : "Removed attunement because the request explicitly said it was not required."
+  };
+}
+
 function repairSpecsForValidation(specs, requestText = "") {
   return specs.map(spec => {
     const repairContext = [requestText, spec.description].filter(Boolean).join("\n");
     const repaired = repairHybridSpecFromRequest(spec, repairContext);
     const defaulted = applyForgeSpecDefaults(repaired.spec);
     const deduped = dedupeRecognizedSpellActivities(defaulted.spec, repairContext);
-    return deduped.spec;
+    const blueprinted = buildLayeredItemBlueprint(deduped.spec, repairContext);
+    const attunementAligned = alignSpecAttunementToRequest(blueprinted.spec, requestText);
+    return attunementAligned.spec;
   });
 }
 
@@ -1233,7 +1271,9 @@ async function enrichCompilationWithSrdSpellChoices(compilation) {
       resolveSpell: resolveSpellByName,
       resolveSpellDocument: resolution => resolveSystemDocument(resolution)
     });
-    const sanitized = sanitizeForgeSpec(charged.spec);
+    const blueprinted = buildLayeredItemBlueprint(charged.spec, compilation.request);
+    const attunementAligned = alignSpecAttunementToRequest(blueprinted.spec, compilation.request);
+    const sanitized = sanitizeForgeSpec(attunementAligned.spec);
     specs.push(sanitized.spec);
     if (planned.applied) applied = true;
     if (repairedHybrid.applied) {
@@ -1276,6 +1316,18 @@ async function enrichCompilationWithSrdSpellChoices(compilation) {
       applied = true;
       for (const assumption of charged.assumptions ?? []) {
         if (!assumptions.includes(assumption)) assumptions.push(assumption);
+      }
+    }
+    if (blueprinted.applied) {
+      applied = true;
+      for (const assumption of blueprinted.assumptions ?? []) {
+        if (!assumptions.includes(assumption)) assumptions.push(assumption);
+      }
+    }
+    if (attunementAligned.applied) {
+      applied = true;
+      if (attunementAligned.assumption && !assumptions.includes(attunementAligned.assumption)) {
+        assumptions.push(attunementAligned.assumption);
       }
     }
     if (sanitized.applied) {
@@ -1363,6 +1415,9 @@ function renderCompilationReport(dialog, compilation) {
     : "";
   const unresolvedCount = compilation.unresolvedMechanics?.length ?? 0;
   const warningCount = compilation.warnings?.length ?? 0;
+  const normalizationNote = compilation.normalization?.changed
+    ? "Request normalized into a structured Forge brief before compilation."
+    : "";
   report.hidden = false;
   report.innerHTML = `
     <div class="codex-forge-compile-head">
@@ -1394,6 +1449,7 @@ function renderCompilationReport(dialog, compilation) {
       }
     </div>
     ${connectionDetail ? `<small>${escapeHTML(connectionDetail)}</small>` : ""}
+    ${normalizationNote ? `<small>${escapeHTML(normalizationNote)}</small>` : ""}
   `;
 }
 
@@ -1996,7 +2052,7 @@ async function openForge() {
               }
             });
             const compilation = await enrichCompilationWithSrdSpellChoices(remoteCompilation);
-            const validation = await validateSpecs(compilation.specs, request);
+            const validation = await validateSpecs(compilation.specs, compilation.request ?? request);
             const preparedCompilation = compilationWithPreparedSpecs(compilation, validation.specs);
             const rawSpecs = JSON.stringify(validation.specs, null, 2);
             formControl(button.form, "specs").value = rawSpecs;
@@ -2075,6 +2131,7 @@ async function openForge() {
         callback: async (_event, button, dialog) => {
           try {
             const { request, rawSpecs, specs, approved, provider, config } = readDialogForm(button.form);
+            const compileRequest = dialog._codexCompilation?.request ?? request;
             if (!approved) {
               showDialogView(button.form, "review");
               setStatus(dialog, "warning", "Review the generated specs and check the approval box before creation.");
@@ -2082,7 +2139,7 @@ async function openForge() {
               return;
             }
             setStatus(dialog, "working", "Creating approved world documents...");
-            const validation = await validateSpecs(specs, request);
+            const validation = await validateSpecs(specs, compileRequest);
             if (provider.configuration.unresolvedPolicy === "block" && validation.unresolvedMechanicCount) {
               setStatus(dialog, "warning", `${validation.unresolvedMechanicCount} unresolved mechanic${validation.unresolvedMechanicCount === 1 ? " blocks" : "s block"} item creation under the selected policy.`);
               return;
@@ -2094,7 +2151,7 @@ async function openForge() {
               saveDialogState(preparedRawSpecs, config, provider),
               game.settings.set(MODULE_ID, "lastRequest", request)
             ]);
-            const result = await createFromSpecs(validation.specs, config, request);
+            const result = await createFromSpecs(validation.specs, config, compileRequest);
             const actorText = result.actors.length ? ` and ${result.actors.length} summon actor${result.actors.length === 1 ? "" : "s"}` : "";
             const unresolvedCount = validation.specs.reduce((total, spec) => total + (spec.unresolvedMechanics?.length ?? 0), 0);
             const unresolvedText = unresolvedCount

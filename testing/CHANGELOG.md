@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added the `2.23.1-test.15` tester build. Named spell activities now clear stale legacy unmapped-spell review records once the template pipeline has preserved a real Foundry activity.
+- Added the `2.23.1-test.14` tester build with the first layered item blueprint pass. It maps generic generated activities into typed Foundry activities, derives item-level resource pools before rendering charged powers, removes generic shadows of named spell activities, and preserves hybrid spell attacks in the weapon renderer.
 - Added the `2.23.1-test.13` tester build for the latest hybrid repair pass, including named save activity recovery, alias-aware SRD spell reuse, improved summon fallback actors, and dual-summon recovery for Frostwave-style prompts.
 - Added the `2.23.0-test.4` tester build for opt-in anonymous error reports and SRD spell auto-selection on supported charge-spell item requests.
 - Added a hosted-service `/v1/forge/report-error` route and a Foundry consent toggle that uploads redacted module errors with item review notes.

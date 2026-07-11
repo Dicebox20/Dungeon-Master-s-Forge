@@ -13,10 +13,17 @@ assert.ok(plan.manual.some(entry => entry.label === "Unavailable system spell: T
 assert.ok(plan.manual.some(entry => entry.label === "Conditional summon"));
 assert.ok(plan.manual.some(entry => entry.label === "Shared conditional-use limit"));
 
+const localFallbackPlan = await planItemFeatures(
+  "Create a shortbow that can cast Ray of Sickness once per day.",
+  { resolveSpell: async () => ({ status: "not-found" }) }
+);
+
+assert.ok(localFallbackPlan.native.some(entry => entry.label === "Deterministic local spell: Ray of Sickness"));
+
 const planned = applyFeaturePlanToSpec({ name: "Tidebreaker Sovereign" }, plan);
 assert.equal(planned.applied, true);
 assert.equal(planned.spec.unresolvedMechanics.length, 3);
 assert.ok(planned.spec.unresolvedMechanics.every(entry => /^[A-Za-z0-9]{16}$/.test(entry.id)));
 assert.equal(applyFeaturePlanToSpec(planned.spec, plan).applied, false);
 
-export const testedFeaturePlannerCases = 8;
+export const testedFeaturePlannerCases = 9;
