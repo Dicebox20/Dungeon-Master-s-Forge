@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Added the `2.23.1-test.16` tester build. Simple weapon-plus-spell hybrids now preserve the activity chooser by blocking Midi's one-attack-plus-one-rider auto-merge path, and layered briefs now recognize explicit `Spell:` fields so SRD spell activities survive normalization.
 - Added the `2.23.1-test.15` tester build. Named spell activities now clear stale legacy unmapped-spell review records once the template pipeline has preserved a real Foundry activity.
 - Added the `2.23.1-test.14` tester build with the first layered item blueprint pass. It maps generic generated activities into typed Foundry activities, derives item-level resource pools before rendering charged powers, removes generic shadows of named spell activities, and preserves hybrid spell attacks in the weapon renderer.
 - Added the `2.23.1-test.13` tester build for the latest hybrid repair pass, including named save activity recovery, alias-aware SRD spell reuse, improved summon fallback actors, and dual-summon recovery for Frostwave-style prompts.

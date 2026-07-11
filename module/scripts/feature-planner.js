@@ -15,10 +15,19 @@ function stableFeatureId(label) {
   return `${base}${suffix}`.padEnd(16, "0").slice(0, 16);
 }
 
+function requestClauses(request) {
+  return String(request ?? "")
+    .replace(/\r\n?/g, "\n")
+    .split(/\n+|(?<=[.;])\s+/)
+    .map(value => compactText(value))
+    .filter(Boolean);
+}
+
 function namedSpellRequests(request) {
   const names = new Set();
-  const pattern = /\bcast\s+([^.;]+)/gi;
-  for (const match of String(request ?? "").matchAll(pattern)) {
+  const source = String(request ?? "");
+  const pattern = /\bcast\s+([^.;\n]+)/gi;
+  for (const match of source.matchAll(pattern)) {
     for (const candidate of String(match[1]).split(/\s*,\s*|\s+(?:and|or)\s+/i)) {
       const name = compactText(candidate
         .replace(/^(?:and|or)\s+/i, "")
@@ -26,6 +35,14 @@ function namedSpellRequests(request) {
         .replace(/\b\d+\s+times?\b.*$/i, "")
         .replace(/\bonce per\b.*$/i, "")
         .replace(/\b(?:from|using|with|at|for|by)\b.*$/i, ""));
+      if (/^[A-Z][A-Za-z]*(?:\s+(?:of|the|[A-Z][A-Za-z]*))*$/.test(name)) names.add(name);
+    }
+  }
+
+  const fieldPattern = /^\s*Spell\s*:\s*(.+?)\s*$/gim;
+  for (const match of source.matchAll(fieldPattern)) {
+    for (const candidate of String(match[1]).split(/\s*[;,/]\s*|\s+\band\b\s+/i)) {
+      const name = compactText(candidate);
       if (/^[A-Z][A-Za-z]*(?:\s+(?:of|the|[A-Z][A-Za-z]*))*$/.test(name)) names.add(name);
     }
   }
@@ -37,9 +54,10 @@ function feature(type, status, label, requestedText, handling = "") {
 }
 
 async function planItemFeatures(request, options = {}) {
-  const text = compactText(request);
+  const rawText = String(request ?? "");
+  const text = compactText(rawText);
   const features = [];
-  const clauses = text.split(/(?<=[.;])\s+/).filter(Boolean);
+  const clauses = requestClauses(rawText);
   const clauseFor = pattern => clauses.find(clause => pattern.test(clause)) ?? text;
 
   if (/\b(?:weapon|dagger|sword|axe|glaive|trident|bow|crossbow|staff|mace|hammer|spear|whip)\b/i.test(text)) {
@@ -59,7 +77,7 @@ async function planItemFeatures(request, options = {}) {
   }
 
   const resolveSpell = options.resolveSpell;
-  for (const spellName of namedSpellRequests(text)) {
+  for (const spellName of namedSpellRequests(rawText)) {
     let resolution = null;
     try {
       resolution = typeof resolveSpell === "function" ? await resolveSpell(spellName) : null;

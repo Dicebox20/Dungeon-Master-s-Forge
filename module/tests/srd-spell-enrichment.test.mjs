@@ -372,6 +372,39 @@ assert.equal(plannedAttackSpellActivity.spec.attackActivities[0].activityName, "
 assert.equal(plannedAttackSpellActivity.spec.attackActivities[0].attackType, "ranged");
 assert.equal(plannedAttackSpellActivity.spec.attackActivities[0].damageParts[0].types[0], "poison");
 
+const layeredBriefPlannedSpell = await reconcilePlannedSrdSpellActivities({
+  kind: "artifactWeaponHybrid",
+  name: "Flameforce Dagger",
+  attackActivities: [],
+  saveActivities: [],
+  utilityActivities: []
+}, {
+  native: [
+    { type: "spell", label: "System spell: Burning Hands" }
+  ]
+}, `Complexity layer 1 - Base chassis
+Base item: Dagger
+Magical bonus: +1
+
+Complexity layer 2 - Passive riders
+Extra hit damage: 1d6 fire; 1d6 force
+
+Complexity layer 3 - Resource model
+Spell usage: once per day
+
+Complexity layer 4 - Named activities
+Spell: Burning Hands
+Spell save DC: 15`, {
+  resolveSpell: async name => compatibleSpell(name),
+  resolveSpellDocument
+});
+
+assert.equal(layeredBriefPlannedSpell.applied, true);
+assert.equal(layeredBriefPlannedSpell.spec.saveActivities.length, 1);
+assert.equal(layeredBriefPlannedSpell.spec.saveActivities[0].activityName, "Cast Burning Hands");
+assert.equal(layeredBriefPlannedSpell.spec.saveActivities[0].target.template.type, "cone");
+assert.equal(layeredBriefPlannedSpell.spec.saveActivities[0].save.dc, 15);
+
 const repairedStaffActivity = await repairNamedSrdSpellActivities({
   kind: "multiActivityStaff",
   name: "Staff of Elemental Fury",
