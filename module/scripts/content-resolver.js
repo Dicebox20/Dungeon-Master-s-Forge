@@ -371,42 +371,27 @@ async function resolveEquipmentByName(name, options = {}) {
 }
 
 async function buildSystemNonMagicalWeaponCatalogue(packs) {
-  const profiles = [];
-  for (const pack of packs) {
-    if (!isSystemOwnedDnd5ePack(pack) || !packLikelySupportsKind(pack, "equipment")) continue;
-    if (typeof pack.getDocuments !== "function") continue;
-    const documents = await pack.getDocuments();
-    for (const document of documents) {
-      const profile = nonMagicalWeaponProfileFromDocument(document);
-      if (!profile) continue;
-      profiles.push({
-        ...profile,
-        pack: {
-          collection: packCollection(pack),
-          label: packLabel(pack)
-        },
-        rank: modernityScore(pack, "equipment")
-      });
-    }
-  }
-
-  const byBaseItem = new Map();
-  for (const profile of profiles) {
-    const key = normalizeLookupName(profile.baseItem || profile.name);
-    const existing = byBaseItem.get(key);
-    if (!existing || profile.rank > existing.rank) byBaseItem.set(key, profile);
-  }
-  return Object.freeze([...byBaseItem.values()].sort((left, right) => left.name.localeCompare(right.name)));
+  return buildBestRankedSystemCatalogue(packs, {
+    kind: "equipment",
+    profileFromDocument: nonMagicalWeaponProfileFromDocument
+  });
 }
 
 async function buildSystemNonMagicalEquipmentCatalogue(packs) {
+  return buildBestRankedSystemCatalogue(packs, {
+    kind: "equipment",
+    profileFromDocument: nonMagicalEquipmentProfileFromDocument
+  });
+}
+
+async function buildBestRankedSystemCatalogue(packs, { kind, profileFromDocument }) {
   const profiles = [];
   for (const pack of packs) {
-    if (!isSystemOwnedDnd5ePack(pack) || !packLikelySupportsKind(pack, "equipment")) continue;
+    if (!isSystemOwnedDnd5ePack(pack) || !packLikelySupportsKind(pack, kind)) continue;
     if (typeof pack.getDocuments !== "function") continue;
     const documents = await pack.getDocuments();
     for (const document of documents) {
-      const profile = nonMagicalEquipmentProfileFromDocument(document);
+      const profile = profileFromDocument(document);
       if (!profile) continue;
       profiles.push({
         ...profile,
@@ -414,7 +399,7 @@ async function buildSystemNonMagicalEquipmentCatalogue(packs) {
           collection: packCollection(pack),
           label: packLabel(pack)
         },
-        rank: modernityScore(pack, "equipment")
+        rank: modernityScore(pack, kind)
       });
     }
   }

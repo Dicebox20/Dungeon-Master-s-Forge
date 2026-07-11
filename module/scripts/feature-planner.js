@@ -1,3 +1,5 @@
+import { localSpellProfileByName } from "./srd-spell-enrichment.js";
+
 function compactText(value) {
   return String(value ?? "").replace(/\s+/g, " ").trim();
 }
@@ -20,6 +22,9 @@ function namedSpellRequests(request) {
     for (const candidate of String(match[1]).split(/\s*,\s*|\s+(?:and|or)\s+/i)) {
       const name = compactText(candidate
         .replace(/^(?:and|or)\s+/i, "")
+        .replace(/\b(?:once|twice|thrice)\b.*$/i, "")
+        .replace(/\b\d+\s+times?\b.*$/i, "")
+        .replace(/\bonce per\b.*$/i, "")
         .replace(/\b(?:from|using|with|at|for|by)\b.*$/i, ""));
       if (/^[A-Z][A-Za-z]*(?:\s+(?:of|the|[A-Z][A-Za-z]*))*$/.test(name)) names.add(name);
     }
@@ -63,6 +68,8 @@ async function planItemFeatures(request, options = {}) {
     }
     if (resolution?.status === "compatible") {
       features.push(feature("spell", "native", `System spell: ${spellName}`, clauseFor(new RegExp(`\\b${spellName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i"))));
+    } else if (localSpellProfileByName(spellName)) {
+      features.push(feature("spell", "native", `Deterministic local spell: ${spellName}`, clauseFor(new RegExp(`\\b${spellName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i"))));
     } else {
       features.push(feature(
         "spell",

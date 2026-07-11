@@ -82,6 +82,14 @@ assert.equal(localResult.providerMode, "offline");
 assert.equal(localResult.providerConfiguration.unresolvedPolicy, "review");
 assert.equal(localResult.specs[0].kind, "weaponExtraDamage");
 
+const normalizedLocal = await compileWithProvider("Create a dagger that deals an additional 1d6 fire damage, 1d6 force damage, gives +1 to attack rolls, and can cast Burning Hands once per day.", {
+  providerId: LOCAL_PROVIDER_ID,
+  configuration: { unresolvedPolicy: "review" }
+});
+assert.equal(normalizedLocal.normalization.changed, true);
+assert.match(normalizedLocal.request, /Spell: Burning Hands/);
+assert.match(normalizedLocal.request, /Base item: Dagger/);
+
 await assert.rejects(
   compileWithProvider("Make a dagger", { providerId: "missing-provider" }),
   /Unknown Forge provider/
@@ -116,6 +124,7 @@ assert.equal(remoteResult.specs[0].name, "Remote Fire Dagger");
 assert.equal(remoteResult.providerConfiguration.apiToken, "[redacted]");
 assert.equal(remoteRequest.url, byoConfiguration.endpoint);
 assert.equal(JSON.parse(remoteRequest.init.body).context.supportedKinds.length, 14);
+assert.match(JSON.parse(remoteRequest.init.body).request, /Create a magical dagger\./);
 assert.equal(JSON.stringify(remoteResult).includes("private-token"), false);
 
 const preflightRequests = [];
@@ -188,4 +197,4 @@ if (getProvider(HOSTED_PROVIDER_ID).available) {
 }
 
 export const testedProviderCount = providers.length;
-export const testedProviderConfigurationCases = 29;
+export const testedProviderConfigurationCases = 30;

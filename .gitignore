@@ -6,5 +6,8 @@ ai-service/.env
 ai-service/service.pid
 ai-service/*.log
 
+outputs/
+testing/installed-backups/
+
 *.tmp
 *.bak

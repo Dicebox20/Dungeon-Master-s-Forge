@@ -184,6 +184,47 @@ const fakeSpellDocuments = {
       }]
     }
   },
+  "Ray Of Sickness": {
+    name: "Ray of Sickness",
+    img: "systems/dnd5e/icons/svg/spells/ray-of-sickness.webp",
+    system: {
+      level: 1,
+      activities: [{
+        type: "attack",
+        range: { value: 60, units: "ft" },
+        target: {
+          affects: { count: "1", type: "creature", special: "One creature within range" },
+          prompt: true
+        },
+        attack: { type: { value: "ranged", classification: "spell" } },
+        damage: {
+          parts: [{ number: 2, denomination: 8, bonus: "", types: ["poison"], scaling: { mode: "whole", number: 1, formula: "" } }]
+        }
+      }]
+    }
+  },
+  "Ice Knife": {
+    name: "Ice Knife",
+    img: "systems/dnd5e/icons/svg/spells/ice-knife.webp",
+    system: {
+      level: 1,
+      activities: [{
+        type: "attack",
+        range: { value: 60, units: "ft" },
+        target: {
+          affects: { count: "1", type: "creature", special: "One creature within range" },
+          prompt: true
+        },
+        attack: { type: { value: "ranged", classification: "spell" } },
+        damage: {
+          parts: [
+            { number: 1, denomination: 10, bonus: "", types: ["piercing"], scaling: { mode: "", number: 1, formula: "" } },
+            { number: 2, denomination: 6, bonus: "", types: ["cold"], scaling: { mode: "whole", number: 1, formula: "" } }
+          ]
+        }
+      }]
+    }
+  },
   "Fog Cloud": {
     name: "Fog Cloud",
     img: "systems/dnd5e/icons/svg/spells/fog-cloud.webp",
@@ -309,6 +350,28 @@ assert.equal(plannedGenericSpellActivities.spec.saveActivities[0].activityName, 
 assert.equal(plannedGenericSpellActivities.spec.saveActivities[0].target.template.type, "sphere");
 assert.equal(plannedGenericSpellActivities.spec.systemReferences.length, 2);
 
+const plannedAttackSpellActivity = await reconcilePlannedSrdSpellActivities({
+  kind: "artifactWeaponHybrid",
+  name: "Shortbow of Shadow and Venom",
+  utilityActivities: [
+    { activityId: "GenericUtility001", activityName: "Utility 1" }
+  ]
+}, {
+  native: [
+    { type: "spell", label: "Deterministic local spell: Ray of Sickness" }
+  ]
+}, "A shortbow that can cast Ray of Sickness once per day.", {
+  resolveSpell: async () => ({ status: "not-found" }),
+  resolveSpellDocument
+});
+
+assert.equal(plannedAttackSpellActivity.applied, true);
+assert.equal(plannedAttackSpellActivity.spec.utilityActivities.length, 0);
+assert.equal(plannedAttackSpellActivity.spec.attackActivities.length, 1);
+assert.equal(plannedAttackSpellActivity.spec.attackActivities[0].activityName, "Cast Ray of Sickness");
+assert.equal(plannedAttackSpellActivity.spec.attackActivities[0].attackType, "ranged");
+assert.equal(plannedAttackSpellActivity.spec.attackActivities[0].damageParts[0].types[0], "poison");
+
 const repairedStaffActivity = await repairNamedSrdSpellActivities({
   kind: "multiActivityStaff",
   name: "Staff of Elemental Fury",
@@ -370,6 +433,25 @@ assert.equal(promotedUtilitySpell.spec.utilityActivities.length, 0);
 assert.equal(promotedUtilitySpell.spec.saveActivities.length, 1);
 assert.equal(promotedUtilitySpell.spec.saveActivities[0].target.template.type, "line");
 assert.equal(promotedUtilitySpell.spec.saveActivities[0].range.units, "self");
+
+const promotedAttackSpell = await repairNamedSrdSpellActivities({
+  kind: "artifactWeaponHybrid",
+  name: "Staff of Frostlight",
+  utilityActivities: [{
+    activityId: "StaffIceKnife001",
+    activityName: "Cast Ice Knife",
+    chargeCost: 1
+  }]
+}, "Create a quarterstaff that can cast Ice Knife once per day.", {
+  resolveSpell: async () => ({ status: "not-found" }),
+  resolveSpellDocument
+});
+
+assert.equal(promotedAttackSpell.applied, true);
+assert.equal(promotedAttackSpell.spec.utilityActivities.length, 0);
+assert.equal(promotedAttackSpell.spec.attackActivities.length, 1);
+assert.equal(promotedAttackSpell.spec.attackActivities[0].activityName, "Cast Ice Knife");
+assert.equal(promotedAttackSpell.spec.attackActivities[0].attackClassification, "spell");
 
 const enrichedFogCloudUtility = await repairNamedSrdSpellActivities({
   kind: "artifactWeaponHybrid",
@@ -438,6 +520,24 @@ assert.equal(defaultCharges.spec.utilityActivities[0].chargeCost, 3);
 assert.equal(defaultCharges.spec.saveActivities[0].chargeCost, 3);
 assert.equal(defaultCharges.spec.saveActivities[0].chargeScaling.allowed, true);
 assert.equal(defaultCharges.spec.saveActivities[0].chargeScaling.max, "@item.uses.value");
+
+const defaultAttackSpellCharges = await applyDefaultLeveledSpellCharges({
+  kind: "artifactWeaponHybrid",
+  name: "Venom Bow",
+  uses: { max: "5", recovery: [] },
+  attackActivities: [{
+    activityId: "VenomBowRay0001",
+    activityName: "Cast Ray of Sickness",
+    chargeCost: 0,
+    damageParts: [{ number: 2, denomination: 8, bonus: "", types: ["poison"] }]
+  }]
+}, "A bow with 5 charges that casts Ray of Sickness.", {
+  resolveSpell: async () => ({ status: "not-found" }),
+  resolveSpellDocument
+});
+
+assert.equal(defaultAttackSpellCharges.applied, true);
+assert.equal(defaultAttackSpellCharges.spec.attackActivities[0].chargeCost, 1);
 
 const duplicateCommand = dedupeRecognizedSpellActivities({
   kind: "artifactWeaponHybrid",
@@ -550,4 +650,4 @@ assert.equal(repairedSleetStorm.applied, true);
 assert.equal(repairedSleetStorm.spec.utilityActivities[0].target.template.type, "cylinder");
 assert.equal(repairedSleetStorm.spec.utilityActivities[0].range.value, 150);
 
-export const testedSrdSpellEnrichmentCases = 30;
+export const testedSrdSpellEnrichmentCases = 33;

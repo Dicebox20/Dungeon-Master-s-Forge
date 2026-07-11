@@ -1,6 +1,7 @@
 import { compileItemRequest } from "./request-compiler.js";
 import { requestRemoteCapabilities, requestRemoteCompilation } from "./provider-contract.js";
 import { HOSTED_FORGE_RELEASE_CONFIG, normalizeHostedReleaseConfig } from "./hosted-release-config.js";
+import { normalizeItemRequest } from "./request-normalization.js";
 
 const LOCAL_PROVIDER_ID = "local-rules";
 const HOSTED_PROVIDER_ID = "hosted-forge";
@@ -201,6 +202,8 @@ function networkProviderConfiguration(providerId, configuration = {}) {
 }
 
 async function compileWithProvider(request, options = {}) {
+  const normalization = normalizeItemRequest(request);
+  const compileRequest = normalization.normalizedRequest;
   const providerId = options.providerId ?? DEFAULT_PROVIDER_ID;
   const provider = getProvider(providerId);
   if (!provider) throw new Error(`Unknown Forge provider "${providerId}".`);
@@ -231,7 +234,7 @@ async function compileWithProvider(request, options = {}) {
       model: connection.model,
       token: connection.apiToken,
       unresolvedPolicy: connection.unresolvedPolicy,
-      request,
+      request: compileRequest,
       context: {
         ...options.context,
         supportedKinds: capabilities?.compatibleKinds ?? requestedKinds
@@ -242,6 +245,9 @@ async function compileWithProvider(request, options = {}) {
     });
     return {
       ...result,
+      originalRequest: normalization.originalRequest,
+      normalizedRequest: compileRequest,
+      normalization,
       providerCapabilities: capabilities,
       providerConfiguration: {
         ...partitioned.diagnostics,
@@ -255,7 +261,10 @@ async function compileWithProvider(request, options = {}) {
   }
 
   return {
-    ...compileItemRequest(request),
+    ...compileItemRequest(compileRequest),
+    originalRequest: normalization.originalRequest,
+    normalizedRequest: compileRequest,
+    normalization,
     provider: provider.id,
     providerLabel: provider.label,
     providerMode: provider.mode,

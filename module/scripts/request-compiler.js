@@ -1,7 +1,9 @@
+import { splitItemRequests } from "./request-normalization.js";
+
 const COMPILER_VERSION = "2.4.0";
 const DEFAULT_SAVE_DC = 15;
 
-const KNOWN_CASTING_SPELLS = /\b(?:clairvoyance|command|ice\s+storm|cone\s+of\s+cold|flame\s+strike)\b/i;
+const KNOWN_CASTING_SPELLS = /\b(?:clairvoyance|command|ice\s+storm|cone\s+of\s+cold|flame\s+strike|burning\s+hands|thunderwave|ice\s+knife|ray\s+of\s+sickness)\b/i;
 
 const DAMAGE_TYPES = [
   "acid", "bludgeoning", "cold", "fire", "force", "lightning", "necrotic",
@@ -205,28 +207,6 @@ function firstTitleLine(request) {
   const line = request.split(/\r?\n/).map(value => value.trim()).find(Boolean) ?? "";
   if (!line || line.includes(":") || line.length > 80 || /^(make|create|build|design)\b/i.test(line)) return "";
   return line;
-}
-
-function splitItemRequests(request) {
-  const normalized = String(request ?? "").replace(/\r\n?/g, "\n").trim();
-  if (!normalized) throw new Error("Describe an item before compiling.");
-
-  const separated = normalized
-    .split(/^\s*(?:---+|===+)\s*$/m)
-    .map(value => value.trim())
-    .filter(Boolean);
-  if (separated.length > 1) return separated;
-
-  const lines = normalized.split("\n");
-  const itemNameLines = lines
-    .map((line, index) => (/^\s*(?:[-*]\s*)?item name\s*:\s*\S/i.test(line) ? index : -1))
-    .filter(index => index >= 0);
-  if (itemNameLines.length < 2) return [normalized];
-
-  return itemNameLines.map((start, index) => {
-    const end = itemNameLines[index + 1] ?? lines.length;
-    return lines.slice(start, end).join("\n").trim();
-  }).filter(Boolean);
 }
 
 function detectWeapon(text) {
@@ -1101,6 +1081,7 @@ function compileOne(request) {
 
 function compileItemRequest(request) {
   const requests = splitItemRequests(request);
+  if (!requests.length) throw new Error("Describe an item before compiling.");
   const results = requests.map((itemRequest, index) => {
     try {
       return compileOne(itemRequest);

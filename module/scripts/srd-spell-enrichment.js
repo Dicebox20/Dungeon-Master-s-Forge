@@ -147,13 +147,30 @@ function supportsScalingFromHealing(healing = {}) {
 async function spellDocumentMetadata(spellName, options = {}) {
   const resolveSpell = options.resolveSpell;
   const resolveSpellDocument = options.resolveSpellDocument;
-  if (typeof resolveSpell !== "function" || typeof resolveSpellDocument !== "function") return null;
-  const fallbackProfile = SPELL_LIBRARY.find(profile => profile.name.toLowerCase() === compactText(spellName).toLowerCase()) ?? null;
+  const fallbackProfile = localSpellProfileByName(spellName);
+  const fallbackMetadata = () => fallbackProfile ? {
+    name: fallbackProfile.name,
+    type: compactText(fallbackProfile.type),
+    level: Number(fallbackProfile.level ?? 0),
+    range: clone(fallbackProfile.range ?? {}),
+    target: clone(fallbackProfile.target ?? {}),
+    save: clone(fallbackProfile.save ?? {}),
+    damageOnSave: compactText(fallbackProfile.damageOnSave),
+    damageParts: clone(fallbackProfile.damageParts ?? []),
+    healing: clone(fallbackProfile.healing ?? {}),
+    duration: clone(fallbackProfile.duration ?? {}),
+    img: compactText(fallbackProfile.img),
+    attackType: compactText(fallbackProfile.attackType),
+    attackClassification: compactText(fallbackProfile.attackClassification),
+    supportsScaling: supportsScalingFromDamageParts(fallbackProfile.damageParts ?? []) || supportsScalingFromHealing(fallbackProfile.healing ?? {})
+  } : null;
+
+  if (typeof resolveSpell !== "function" || typeof resolveSpellDocument !== "function") return fallbackMetadata();
 
   const resolution = await resolveSpell(spellName);
-  if (resolution?.status !== "compatible") return null;
+  if (resolution?.status !== "compatible") return fallbackMetadata();
   const document = await resolveSpellDocument(resolution);
-  if (!document) return null;
+  if (!document) return fallbackMetadata();
 
   const activity = activityList(document.system?.activities).find(candidate => {
     const type = compactText(candidate?.type).toLowerCase();
@@ -187,11 +204,62 @@ async function spellDocumentMetadata(spellName, options = {}) {
     healing,
     duration: mergedDuration,
     img: String(document.img ?? resolution.match?.img ?? "").trim(),
+    attackType: compactText(raw.attack?.type?.value ?? fallbackProfile?.attackType),
+    attackClassification: compactText(raw.attack?.type?.classification ?? fallbackProfile?.attackClassification),
     supportsScaling: supportsScalingFromDamageParts(mergedDamageParts) || supportsScalingFromHealing(healing)
   };
 }
 
 const SPELL_LIBRARY = Object.freeze([
+  Object.freeze({
+    name: "Ray of Sickness",
+    type: "attack",
+    level: 1,
+    tags: Object.freeze(["poison"]),
+    range: { value: 60, units: "ft" },
+    target: {
+      affects: { count: "1", type: "creature", special: "One creature within range" },
+      prompt: true
+    },
+    attackType: "ranged",
+    attackClassification: "spell",
+    damageParts: Object.freeze([{
+      number: 2,
+      denomination: 8,
+      bonus: "",
+      types: Object.freeze(["poison"]),
+      scaling: Object.freeze({ mode: "whole", number: 1, formula: "" })
+    }])
+  }),
+  Object.freeze({
+    name: "Ice Knife",
+    type: "attack",
+    level: 1,
+    tags: Object.freeze(["cold", "piercing"]),
+    range: { value: 60, units: "ft" },
+    target: {
+      affects: { count: "1", type: "creature", special: "One creature within range" },
+      prompt: true
+    },
+    attackType: "ranged",
+    attackClassification: "spell",
+    damageParts: Object.freeze([
+      {
+        number: 1,
+        denomination: 10,
+        bonus: "",
+        types: Object.freeze(["piercing"]),
+        scaling: Object.freeze({ mode: "", number: 1, formula: "" })
+      },
+      {
+        number: 2,
+        denomination: 6,
+        bonus: "",
+        types: Object.freeze(["cold"]),
+        scaling: Object.freeze({ mode: "whole", number: 1, formula: "" })
+      }
+    ])
+  }),
   Object.freeze({
     name: "Command",
     level: 1,
@@ -446,6 +514,11 @@ const SPELL_LIBRARY = Object.freeze([
     }
   })
 ]);
+
+function localSpellProfileByName(name) {
+  const normalized = compactText(name).toLowerCase();
+  return SPELL_LIBRARY.find(profile => profile.name.toLowerCase() === normalized) ?? null;
+}
 
 const ACTIVITY_CAPABLE_KINDS = new Set([
   "weaponExtraDamage",
@@ -718,6 +791,32 @@ function normalizedUtilitySpellActivity(activity, spellProfile, metadata = null)
   return next;
 }
 
+function normalizedAttackSpellActivity(activity, spellProfile, metadata = null, request = "") {
+  const source = metadata ?? spellProfile;
+  const next = clone(activity);
+  next.activityName = spellActivityDisplayName(activity, spellProfile.name, request);
+  next.activationType = next.activationType ?? "action";
+  next.range = {
+    ...clone(source.range ?? spellProfile.range),
+    override: true
+  };
+  next.target = {
+    ...normalizeTarget(source.target ?? spellProfile.target),
+    override: true,
+    prompt: true
+  };
+  next.ability = compactText(next.ability) || "spellcasting";
+  next.attackType = compactText(next.attackType) || compactText(source.attackType) || "ranged";
+  next.attackClassification = compactText(next.attackClassification) || compactText(source.attackClassification) || "spell";
+  next.attackBonus = compactText(next.attackBonus) || "@prof";
+  next.duration = clone(source.duration ?? next.duration);
+  if (source.img) next.activityImg = source.img;
+  if (!Array.isArray(next.damageParts) || !next.damageParts.length) {
+    next.damageParts = clone(source.damageParts ?? spellProfile.damageParts);
+  }
+  return next;
+}
+
 function spellAliasFromRequest(request, spellName) {
   const escaped = compactText(spellName).replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+");
   const source = String(request ?? "");
@@ -762,7 +861,7 @@ function plannedNativeSpellNames(plan) {
   const names = [];
   for (const feature of plan?.native ?? []) {
     if (feature?.type !== "spell") continue;
-    const name = compactText(feature.label).replace(/^System spell:\s*/i, "");
+    const name = compactText(feature.label).replace(/^(?:System|Deterministic local) spell:\s*/i, "");
     if (name && !names.some(existing => existing.toLowerCase() === name.toLowerCase())) names.push(name);
   }
   return names;
@@ -784,7 +883,9 @@ function metadataSpellProfile(name, metadata = {}) {
     duration: clone(metadata.duration ?? {}),
     damageOnSave: compactText(metadata.damageOnSave),
     damageParts: clone(metadata.damageParts ?? []),
-    healing: clone(metadata.healing ?? {})
+    healing: clone(metadata.healing ?? {}),
+    attackType: compactText(metadata.attackType),
+    attackClassification: compactText(metadata.attackClassification)
   };
 }
 
@@ -792,6 +893,12 @@ function isSaveLikeSpell(metadata = {}) {
   return compactText(metadata.type).toLowerCase() === "save"
     || Array.isArray(metadata.damageParts) && metadata.damageParts.length > 0
     || Boolean(metadata.save?.ability);
+}
+
+function isAttackLikeSpell(metadata = {}) {
+  return compactText(metadata.type).toLowerCase() === "attack"
+    || Boolean(compactText(metadata.attackType))
+    || Boolean(compactText(metadata.attackClassification));
 }
 
 function spellActivityExists(spec, spellName) {
@@ -827,15 +934,18 @@ async function reconcilePlannedSrdSpellActivities(spec, plan, request, options =
     const profile = metadataSpellProfile(spellName, metadata);
     const placeholder = takeGenericSpellPlaceholder(next);
     const saveLike = isSaveLikeSpell(metadata);
+    const attackLike = isAttackLikeSpell(metadata);
     const existing = placeholder?.activity ?? {};
-    const activity = saveLike
-      ? normalizedSpellActivity(existing, profile, 1, "", metadata)
-      : normalizedUtilitySpellActivity(existing, profile, metadata);
+    const activity = attackLike
+      ? normalizedAttackSpellActivity(existing, profile, metadata, request)
+      : saveLike
+        ? normalizedSpellActivity(existing, profile, 1, "", metadata)
+        : normalizedUtilitySpellActivity(existing, profile, metadata);
 
     if (placeholder) {
       next[placeholder.listName] = next[placeholder.listName].filter((_, index) => index !== placeholder.index);
     }
-    const destination = saveLike ? "saveActivities" : "utilityActivities";
+    const destination = attackLike ? "attackActivities" : saveLike ? "saveActivities" : "utilityActivities";
     next[destination] = [...(Array.isArray(next[destination]) ? next[destination] : []), activity];
 
     const resolution = typeof options.resolveSpell === "function" ? await options.resolveSpell(spellName) : null;
@@ -998,7 +1108,7 @@ async function applyDefaultLeveledSpellCharges(spec, request, options = {}) {
   const next = clone(spec);
   let applied = false;
   const assumptions = [];
-  const listNames = ["activities", "saveActivities", "utilityActivities"];
+  const listNames = ["activities", "attackActivities", "saveActivities", "utilityActivities"];
 
   for (const listName of listNames) {
     const activities = Array.isArray(next[listName]) ? [...next[listName]] : [];
@@ -1043,7 +1153,7 @@ async function repairNamedSrdSpellActivities(spec, request, options = {}) {
   const next = clone(spec);
   let applied = false;
   const assumptions = [];
-  const listNames = ["saveActivities", "activities"];
+  const listNames = ["saveActivities", "activities", "attackActivities"];
 
   for (const listName of listNames) {
     const sourceActivities = Array.isArray(next[listName]) ? [...next[listName]] : [];
@@ -1098,6 +1208,7 @@ async function repairNamedSrdSpellActivities(spec, request, options = {}) {
   if (sourceUtilities.length) {
     const repairedUtilities = [];
     const promotedSaveActivities = Array.isArray(next.saveActivities) ? [...next.saveActivities] : [];
+    const promotedAttackActivities = Array.isArray(next.attackActivities) ? [...next.attackActivities] : [];
 
     for (const activity of sourceUtilities) {
       const spellProfile = spellProfileForActivity(activity?.activityName) ?? spellProfileForActivityOrAlias(activity?.activityName, request);
@@ -1111,7 +1222,18 @@ async function repairNamedSrdSpellActivities(spec, request, options = {}) {
       const shouldPromoteToSave = sourceType === "save"
         || Boolean(spellProfile.save)
         || Boolean(spellProfile.damageParts?.length);
+      const shouldPromoteToAttack = sourceType === "attack" || Boolean(compactText(metadata?.attackType) || compactText(spellProfile.attackType));
       const shouldPromoteToHeal = sourceType === "heal" || Boolean(spellProfile.healing);
+
+      if (shouldPromoteToAttack) {
+        promotedAttackActivities.push(normalizedAttackSpellActivity({
+          ...activity,
+          activityName: spellActivityDisplayName(activity, spellProfile.name, request)
+        }, spellProfile, metadata, request));
+        assumptions.push(`Promoted ${spellProfile.name} into a structured spell attack using SRD targeting data.`);
+        applied = true;
+        continue;
+      }
 
       if (shouldPromoteToSave) {
         const count = repeatedSpellCount(request, spellProfile.name);
@@ -1165,6 +1287,7 @@ async function repairNamedSrdSpellActivities(spec, request, options = {}) {
 
     next.utilityActivities = repairedUtilities;
     next.saveActivities = promotedSaveActivities;
+    next.attackActivities = promotedAttackActivities;
   }
 
   if (!applied) return { applied: false, spec };
@@ -1246,6 +1369,7 @@ export {
   autoSelectSrdChoiceSpells,
   dedupeRecognizedSpellActivities,
   inferDamageTags,
+  localSpellProfileByName,
   parseChargeMax,
   reconcilePlannedSrdSpellActivities,
   repairNamedSrdSpellActivities,
