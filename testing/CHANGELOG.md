@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Added the `2.23.1-test.17` tester build. Multi-stage SRD spell activities now disambiguate their labels so split spells like Ice Knife no longer appear as duplicate identical buttons in the final item activity list.
 - Added the `2.23.1-test.16` tester build. Simple weapon-plus-spell hybrids now preserve the activity chooser by blocking Midi's one-attack-plus-one-rider auto-merge path, and layered briefs now recognize explicit `Spell:` fields so SRD spell activities survive normalization.
 - Added the `2.23.1-test.15` tester build. Named spell activities now clear stale legacy unmapped-spell review records once the template pipeline has preserved a real Foundry activity.
 - Added the `2.23.1-test.14` tester build with the first layered item blueprint pass. It maps generic generated activities into typed Foundry activities, derives item-level resource pools before rendering charged powers, removes generic shadows of named spell activities, and preserves hybrid spell attacks in the weapon renderer.

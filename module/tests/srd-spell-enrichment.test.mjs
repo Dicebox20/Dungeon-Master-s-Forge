@@ -486,6 +486,23 @@ assert.equal(promotedAttackSpell.spec.attackActivities.length, 1);
 assert.equal(promotedAttackSpell.spec.attackActivities[0].activityName, "Cast Ice Knife");
 assert.equal(promotedAttackSpell.spec.attackActivities[0].attackClassification, "spell");
 
+const disambiguatedIceKnifePhases = dedupeRecognizedSpellActivities({
+  kind: "artifactWeaponHybrid",
+  name: "Staff of Frostlight",
+  attackActivities: [{
+    activityId: "StaffIceKnifeAtk",
+    activityName: "Cast Ice Knife"
+  }],
+  saveActivities: [{
+    activityId: "StaffIceKnifeSav",
+    activityName: "Ice Knife"
+  }]
+}, "Create a quarterstaff that can cast Ice Knife once per day.");
+
+assert.equal(disambiguatedIceKnifePhases.applied, true);
+assert.equal(disambiguatedIceKnifePhases.spec.attackActivities[0].activityName, "Cast Ice Knife");
+assert.equal(disambiguatedIceKnifePhases.spec.saveActivities[0].activityName, "Ice Knife Burst");
+
 const enrichedFogCloudUtility = await repairNamedSrdSpellActivities({
   kind: "artifactWeaponHybrid",
   name: "Frostwave Trident",
