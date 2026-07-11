@@ -20,10 +20,34 @@ const localFallbackPlan = await planItemFeatures(
 
 assert.ok(localFallbackPlan.native.some(entry => entry.label === "Deterministic local spell: Ray of Sickness"));
 
+const layeredBrief = `
+Complexity layer 1 - Base chassis
+Base item: Dagger
+Magical bonus: +1
+
+Complexity layer 2 - Passive riders
+Extra hit damage: 1d6 fire; 1d6 force
+
+Complexity layer 3 - Resource model
+Spell usage: once per day
+
+Complexity layer 4 - Named activities
+Spell: Burning Hands
+Spell save DC: 15
+`;
+
+assert.deepEqual(namedSpellRequests(layeredBrief), ["Burning Hands"]);
+
+const layeredPlan = await planItemFeatures(layeredBrief, {
+  resolveSpell: async name => ({ status: name === "Burning Hands" ? "compatible" : "not-found" })
+});
+
+assert.ok(layeredPlan.native.some(entry => entry.label === "System spell: Burning Hands"));
+
 const planned = applyFeaturePlanToSpec({ name: "Tidebreaker Sovereign" }, plan);
 assert.equal(planned.applied, true);
 assert.equal(planned.spec.unresolvedMechanics.length, 3);
 assert.ok(planned.spec.unresolvedMechanics.every(entry => /^[A-Za-z0-9]{16}$/.test(entry.id)));
 assert.equal(applyFeaturePlanToSpec(planned.spec, plan).applied, false);
 
-export const testedFeaturePlannerCases = 9;
+export const testedFeaturePlannerCases = 12;

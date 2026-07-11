@@ -8,6 +8,25 @@
 import { MODULE_ID, readForgeFlags } from "./package-identity.js";
 import { armorBonusValue, inferArmorProfile, isImplementCategory, normalizeItemDocumentType, normalizeMagicalBonus, normalizeWeight, safeItemIcon } from "./equipment-normalization.js";
 
+const CHOOSER_ACTIVITY_LISTS = Object.freeze(["attackActivities", "saveActivities", "utilityActivities", "activities"]);
+
+function itemHasExplicitActivityChoices(spec = {}) {
+  return CHOOSER_ACTIVITY_LISTS.some(listName => Array.isArray(spec?.[listName]) && spec[listName].length > 0)
+    || Boolean(spec?.toggleLight)
+    || Array.isArray(spec?.summonProfiles) && spec.summonProfiles.length > 0
+    || Boolean(spec?.summonActivity);
+}
+
+function forceExplicitChoiceOnAttack(activity = {}) {
+  return foundry.utils.mergeObject(foundry.utils.deepClone(activity), {
+    otherActivityId: "none",
+    otherActivityUuid: "",
+    midiProperties: {
+      triggeredActivityId: "none"
+    }
+  }, { inplace: false });
+}
+
 async function runCodexItemForge(FORGE, ITEMS, { validateOnly = false } = {}) {
   function makeIdentifier(name) {
     return name
@@ -302,7 +321,9 @@ async function runCodexItemForge(FORGE, ITEMS, { validateOnly = false } = {}) {
           parts: (spec.extraDamageParts ?? []).map(damageData)
         }
       }, { inplace: true });
-      updateData[`system.activities.${attack.id}`] = attackData;
+      updateData[`system.activities.${attack.id}`] = itemHasExplicitActivityChoices(spec)
+        ? forceExplicitChoiceOnAttack(attackData)
+        : attackData;
     }
 
     for (const activitySpec of spec.attackActivities ?? []) {
@@ -1083,7 +1104,7 @@ ${activitySpec.macroCommand}
   function makeAttackActivity(item, spec, activitySpec) {
     const AttackActivity = CONFIG.DND5E.activityTypes.attack.documentClass;
     const activity = new AttackActivity({}, { parent: item }).toObject();
-    return foundry.utils.mergeObject(activity, {
+    const activityData = foundry.utils.mergeObject(activity, {
       _id: assertActivityId(activitySpec.activityId),
       type: "attack",
       name: activitySpec.activityName ?? `Attack with ${spec.name}`,
@@ -1125,6 +1146,17 @@ ${activitySpec.macroCommand}
         requireMagic: activitySpec.requireMagic ?? true
       }
     }, { inplace: false });
+    return itemHasExplicitActivityChoices({
+      attackActivities: [activitySpec],
+      saveActivities: spec.saveActivities,
+      utilityActivities: spec.utilityActivities,
+      activities: spec.activities,
+      toggleLight: spec.toggleLight,
+      summonProfiles: spec.summonProfiles,
+      summonActivity: spec.summonActivity
+    })
+      ? forceExplicitChoiceOnAttack(activityData)
+      : activityData;
   }
 
   function patchWeaponBaseAttack(created, spec, updateData) {
@@ -1143,7 +1175,9 @@ ${activitySpec.macroCommand}
         parts: (spec.extraDamageParts ?? []).map(damageData)
       }
     }, { inplace: true });
-    updateData[`system.activities.${attack.id}`] = attackData;
+    updateData[`system.activities.${attack.id}`] = itemHasExplicitActivityChoices(spec)
+      ? forceExplicitChoiceOnAttack(attackData)
+      : attackData;
   }
 
   async function createCasterUtilityEquipment(spec, folder, actorFolder) {
@@ -1709,7 +1743,9 @@ ui.notifications.info(ITEM_NAME + " light toggled on.");
           parts: (spec.extraDamageParts ?? []).map(damageData)
         }
       }, { inplace: true });
-      updateData[`system.activities.${attack.id}`] = attackData;
+      updateData[`system.activities.${attack.id}`] = itemHasExplicitActivityChoices(spec)
+        ? forceExplicitChoiceOnAttack(attackData)
+        : attackData;
     } else {
       ui.notifications.warn(`${spec.name} was created, but no weapon attack activity was found to patch.`);
     }
@@ -2079,4 +2115,4 @@ for (const target of targets) {
   };
 }
 
-export { runCodexItemForge };
+export { forceExplicitChoiceOnAttack, itemHasExplicitActivityChoices, runCodexItemForge };
