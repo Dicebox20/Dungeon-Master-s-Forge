@@ -857,6 +857,20 @@ function spellActivityDisplayName(activity, spellName, request = "") {
   return `Cast ${spellName}`;
 }
 
+const MULTI_STAGE_SPELL_SUFFIXES = Object.freeze({
+  "Ice Knife": Object.freeze({
+    saveActivities: "Burst"
+  })
+});
+
+function spellPhaseDisplayName(activity, spellName, listName, request = "") {
+  const base = spellActivityDisplayName(activity, spellName, request);
+  const suffix = MULTI_STAGE_SPELL_SUFFIXES[spellName]?.[listName];
+  if (!suffix) return base;
+  const stem = compactText(base).replace(/^Cast\s+/i, "");
+  return `${stem} ${suffix}`.trim();
+}
+
 function plannedNativeSpellNames(plan) {
   const names = [];
   for (const feature of plan?.native ?? []) {
@@ -999,7 +1013,7 @@ function dedupeRecognizedSpellActivities(spec, request) {
     const deduped = [...passthrough, ...bySpell.values()].map(activity => {
       const spellProfile = spellProfileForActivity(activity?.activityName) ?? spellProfileForActivityOrAlias(activity?.activityName, request);
       if (!spellProfile) return activity;
-      const normalizedName = spellActivityDisplayName(activity, spellProfile.name, request);
+      const normalizedName = spellPhaseDisplayName(activity, spellProfile.name, listName, request);
       if (activity.activityName === normalizedName) return activity;
       applied = true;
       return {
@@ -1035,7 +1049,7 @@ function dedupeRecognizedSpellActivities(spec, request) {
     const deduped = [...passthrough, ...bySpell.values()].map(activity => {
       const spellProfile = spellProfileForActivity(activity?.activityName) ?? spellProfileForActivityOrAlias(activity?.activityName, request);
       if (!spellProfile) return activity;
-      const normalizedName = spellActivityDisplayName(activity, spellProfile.name, request);
+      const normalizedName = spellPhaseDisplayName(activity, spellProfile.name, "utilityActivities", request);
       if (activity.activityName === normalizedName) return activity;
       applied = true;
       return {
@@ -1049,6 +1063,21 @@ function dedupeRecognizedSpellActivities(spec, request) {
       assumptions.push("Collapsed duplicate utility spell activities into a single SRD-compatible activity.");
     }
     next.utilityActivities = deduped;
+  }
+
+  const attackActivities = Array.isArray(next.attackActivities) ? [...next.attackActivities] : [];
+  if (attackActivities.length) {
+    next.attackActivities = attackActivities.map(activity => {
+      const spellProfile = spellProfileForActivity(activity?.activityName) ?? spellProfileForActivityOrAlias(activity?.activityName, request);
+      if (!spellProfile) return activity;
+      const normalizedName = spellPhaseDisplayName(activity, spellProfile.name, "attackActivities", request);
+      if (activity.activityName === normalizedName) return activity;
+      applied = true;
+      return {
+        ...activity,
+        activityName: normalizedName
+      };
+    });
   }
 
   return { applied, spec: next, assumptions };
