@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Added the `2.23.1-test.18` tester build. Preview and review notes now drop stale spell-family warnings once a working SRD spell activity has actually been preserved on the item, reducing false manual-review noise for simple prompt hybrids.
 - Added the `2.23.1-test.17` tester build. Multi-stage SRD spell activities now disambiguate their labels so split spells like Ice Knife no longer appear as duplicate identical buttons in the final item activity list.
 - Added the `2.23.1-test.16` tester build. Simple weapon-plus-spell hybrids now preserve the activity chooser by blocking Midi's one-attack-plus-one-rider auto-merge path, and layered briefs now recognize explicit `Spell:` fields so SRD spell activities survive normalization.
 - Added the `2.23.1-test.15` tester build. Named spell activities now clear stale legacy unmapped-spell review records once the template pipeline has preserved a real Foundry activity.

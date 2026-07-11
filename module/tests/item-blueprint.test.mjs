@@ -82,4 +82,39 @@ assert.equal(genericActivityPayload.spec.saveActivities.length, 1);
 assert.equal(genericActivityPayload.spec.saveActivities[0].chargeCost, 1);
 assert.equal(genericActivityPayload.spec.uses.max, "1");
 
+const resolvedWeaponSpellWarnings = buildLayeredItemBlueprint({
+  kind: "artifactWeaponHybrid",
+  name: "Emberspark Dagger",
+  baseItem: "dagger",
+  uses: { max: "1", recovery: [{ period: "lr", type: "recoverAll", formula: "" }] },
+  saveActivities: [{
+    activityId: "EmberBurning001",
+    activityName: "Burning Hands",
+    save: { ability: "dex", dc: 15 },
+    damageParts: [{ number: 3, denomination: 6, bonus: "", types: ["fire"] }]
+  }],
+  unresolvedMechanics: [
+    {
+      id: "DailySpellUsage01",
+      category: "tableAdjudication",
+      label: "Daily spell usage integration",
+      requestedText: "Spell usage: once per day",
+      reason: "This item family does not natively express a once-per-day spell cast tied to a weapon attack and a separate save activity in a single supported schema without table-specific adjudication.",
+      handling: "Track the daily casting limit at the table or add a dedicated charge-to-activity linkage if your Forge configuration supports it.",
+      resolved: false
+    },
+    {
+      id: "SpellSaveDc01",
+      category: "unmappedSpell",
+      label: "Burning Hands",
+      requestedText: "Spell: Burning Hands",
+      reason: "weaponExtraDamage does not support spell activities or save-based spell casting.",
+      handling: "Move to a casterUtilityEquipment, equipmentPowerSuite, or multiActivityStaff spec if spell activity is required.",
+      resolved: false
+    }
+  ]
+}, "Create a dagger that can cast Burning Hands once per day.");
+
+assert.equal(resolvedWeaponSpellWarnings.spec.unresolvedMechanics, undefined);
+
 console.log("item-blueprint tests passed");

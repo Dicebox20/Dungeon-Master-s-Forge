@@ -172,7 +172,41 @@ function stripItemPrefix(message, itemName) {
   return message.startsWith(prefix) ? message.slice(prefix.length).trim() : message;
 }
 
-function compilationNotes(compilation, itemName, itemCount) {
+function namedSpellActivityNames(spec = {}) {
+  const names = [];
+  const addFromActivity = activity => {
+    const name = String(activity?.activityName ?? "").trim();
+    const castMatch = name.match(/^Cast\s+(.+)$/i);
+    if (castMatch) {
+      names.push(castMatch[1].trim());
+      return;
+    }
+    if (!name || /^attack with\b/i.test(name) || /^summon\b/i.test(name) || /^(?:triggered power|secondary effect|utility\s+\d+|save\s+\d+)$/i.test(name)) return;
+    names.push(name);
+  };
+  for (const activity of [
+    ...(spec.activities ?? []),
+    ...(spec.utilityActivities ?? []),
+    ...(spec.saveActivities ?? []),
+    ...(spec.attackActivities ?? [])
+  ]) addFromActivity(activity);
+  return uniqueStrings(names);
+}
+
+function uniqueStrings(values) {
+  return [...new Set((values ?? []).filter(Boolean))];
+}
+
+function suppressResolvedSpellCompilationNote(message, spec = {}) {
+  const spellNames = namedSpellActivityNames(spec);
+  if (!spellNames.length) return false;
+  const text = String(message ?? "").toLowerCase();
+  const mentionsResolvedSpell = spellNames.some(spellName => text.includes(spellName.toLowerCase()));
+  const staleResolvedSpellNote = /partially represented|different item family|table handling|table adjudication|named activity placeholder|does not support spell activities|no supported spell-save activity field|cannot encode spell save dcs or spellcasting activities|remains unresolved|fully charge-bound/i.test(text);
+  return mentionsResolvedSpell || staleResolvedSpellNote;
+}
+
+function compilationNotes(compilation, spec, itemName, itemCount) {
   if (!compilation) return [];
   const groups = [
     ["assumption", "Assumption", compilation.assumptions],
@@ -185,6 +219,7 @@ function compilationNotes(compilation, itemName, itemCount) {
       const prefixed = /^\[[^\]]+\]/.test(message);
       if (prefixed && !message.startsWith(`[${itemName}]`)) continue;
       if (!prefixed && itemCount > 1) continue;
+      if (suppressResolvedSpellCompilationNote(message, spec)) continue;
       notes.push({ state, label, message: stripItemPrefix(message, itemName) });
     }
   }
@@ -294,7 +329,7 @@ function summarizeSpec(spec, context = {}) {
     handling: reference.uuid || ""
   }));
   const notes = [
-    ...compilationNotes(context.compilation, spec.name, context.itemCount ?? 1),
+    ...compilationNotes(context.compilation, spec, spec.name, context.itemCount ?? 1),
     ...tierReviewNotes(context.tierReview, spec.name),
     ...references,
     ...unresolved
