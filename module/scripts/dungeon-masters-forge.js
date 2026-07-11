@@ -1416,7 +1416,7 @@ function renderCompilationReport(dialog, compilation) {
   const unresolvedCount = compilation.unresolvedMechanics?.length ?? 0;
   const warningCount = compilation.warnings?.length ?? 0;
   const normalizationNote = compilation.normalization?.changed
-    ? "Request normalized into a structured Forge brief before compilation."
+    ? "Request normalized into a layered Forge brief before compilation."
     : "";
   report.hidden = false;
   report.innerHTML = `
