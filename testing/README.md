@@ -20,7 +20,7 @@ This is a temporary testing channel. Its hosted endpoint and update path may cha
 
 ## Build
 
-- Version: `2.23.1-test.17`
-- Archive SHA-256: `87FC51A806C95B6E32BD07E97CB0A511CD257429353CC210B288DBC0B7EDAF82`
+- Version: `2.23.1-test.18`
+- Archive SHA-256: `920B42CE06B46326136C21D7CAD21042B78AFB3906ED5AA771C26DC2A2180939`
 - Core module and AI-service regression ring: passing locally
 - Live service: `1.6.0` with bounded invalid-output retry and structured request-id errors

@@ -91,4 +91,33 @@ const referenced = buildReviewSummaries([{
 assert.deepEqual(referenced.notes.filter(note => note.state === "reference").map(note => note.label), ["System equipment"]);
 assert.equal(referenced.notes.find(note => note.state === "reference")?.handling, "Compendium.dnd5e.equipment24.phbwepLongsword0");
 
+const resolvedSpellWarnings = buildReviewSummaries([{
+  kind: "artifactWeaponHybrid",
+  name: "Stormforged Longsword",
+  description: "A longsword with Thunderwave.",
+  rarity: "rare",
+  damage: { base: { number: 1, denomination: 8, bonus: "@mod", types: ["slashing"] }, versatile: { number: null, denomination: null, bonus: "", types: [] } },
+  attackActivities: [],
+  utilityActivities: [],
+  saveActivities: [{
+    activityId: "Stormwave001",
+    activityName: "Cast Thunderwave",
+    save: { ability: "con", dc: 15 },
+    damageParts: [{ number: 2, denomination: 8, bonus: "", types: ["thunder"] }],
+    target: { template: { type: "cube", size: 15, units: "ft" }, affects: { type: "creature" }, prompt: true },
+    range: { units: "self" }
+  }]
+}], {
+  assumptions: [],
+  warnings: [
+    "[Stormforged Longsword] The request mixes a weapon with a spell activity; this spec preserves the weapon chassis and rider damage, but Thunderwave remains unresolved.",
+    "[Stormforged Longsword] weaponExtraDamage cannot encode spell save DCs or spellcasting activities."
+  ],
+  deferred: [
+    "[Stormforged Longsword] Thunderwave spell activity and its DC 15 save are deferred for table handling or for conversion to a spell-granting item family."
+  ]
+})[0];
+
+assert.equal(resolvedSpellWarnings.notes.some(note => /Thunderwave remains unresolved|spell save DCs or spellcasting activities|deferred for table handling/i.test(note.message)), false);
+
 export const testedReviewSummaryCount = 24;

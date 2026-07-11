@@ -28,6 +28,20 @@ function isNamedSpellActivity(activity) {
   return /^cast\s+.+/i.test(compactText(activity?.activityName));
 }
 
+function spellNameFromActivity(activity) {
+  const name = compactText(activity?.activityName);
+  const castMatch = name.match(/^Cast\s+(.+)$/i);
+  if (castMatch) return compactText(castMatch[1]);
+  if (!name || /^attack with\b/i.test(name) || /^summon\b/i.test(name) || GENERIC_ACTIVITY_NAME.test(name)) return "";
+  return name;
+}
+
+function namedSpellActivityNames(spec) {
+  return [...new Set(allActivities(spec)
+    .map(({ activity }) => spellNameFromActivity(activity))
+    .filter(Boolean))];
+}
+
 function numericUseMax(value) {
   const numeric = Number(value);
   return Number.isFinite(numeric) && numeric > 0 ? numeric : 0;
@@ -168,12 +182,17 @@ function promoteWeaponHybrid(spec) {
 function clearResolvedActivityWarnings(spec) {
   const next = clone(spec);
   if (!Array.isArray(next.unresolvedMechanics)) return { changed: false, spec: next };
-  const hasNamedSpell = allActivities(next).some(({ activity }) => isNamedSpellActivity(activity));
-  if (!hasNamedSpell) return { changed: false, spec: next };
+  const spellNames = namedSpellActivityNames(next);
+  if (!spellNames.length) return { changed: false, spec: next };
   const before = next.unresolvedMechanics.length;
   next.unresolvedMechanics = next.unresolvedMechanics.filter(mechanic => {
+    const category = compactText(mechanic?.category).toLowerCase();
     const text = [mechanic?.label, mechanic?.reason, mechanic?.handling].map(compactText).join(" ");
-    return !/(?:spell[- ]cast activity|save-based effect) was not preserved|cannot encode .* spell|activated spell casting is not supported by .* family/i.test(text);
+    const mentionsResolvedSpell = spellNames.some(spellName => text.toLowerCase().includes(spellName.toLowerCase()));
+    const staleResolvedSpellNote = /(?:spell[- ]cast activity|save-based effect) was not preserved|cannot encode .* spell|activated spell casting is not supported by .* family|does not support spell activities|chosen weapon family has no supported spell-save activity field|daily spell usage integration|partially represented/i.test(text);
+    if (mentionsResolvedSpell && ["unmappedspell", "tableadjudication", "spell"].includes(category)) return false;
+    if (staleResolvedSpellNote && ["unmappedspell", "tableadjudication", "spell"].includes(category)) return false;
+    return true;
   });
   if (!next.unresolvedMechanics.length) delete next.unresolvedMechanics;
   return { changed: before !== (next.unresolvedMechanics?.length ?? 0), spec: next };
