@@ -89,6 +89,7 @@ const normalizedLocal = await compileWithProvider("Create a dagger that deals an
 assert.equal(normalizedLocal.normalization.changed, true);
 assert.match(normalizedLocal.request, /Spell: Burning Hands/);
 assert.match(normalizedLocal.request, /Base item: Dagger/);
+assert.match(normalizedLocal.request, /Complexity layer 1 - Base chassis/);
 
 await assert.rejects(
   compileWithProvider("Make a dagger", { providerId: "missing-provider" }),
@@ -124,7 +125,7 @@ assert.equal(remoteResult.specs[0].name, "Remote Fire Dagger");
 assert.equal(remoteResult.providerConfiguration.apiToken, "[redacted]");
 assert.equal(remoteRequest.url, byoConfiguration.endpoint);
 assert.equal(JSON.parse(remoteRequest.init.body).context.supportedKinds.length, 14);
-assert.match(JSON.parse(remoteRequest.init.body).request, /Create a magical dagger\./);
+assert.match(JSON.parse(remoteRequest.init.body).request, /Complexity layer 1 - Base chassis/);
 assert.equal(JSON.stringify(remoteResult).includes("private-token"), false);
 
 const preflightRequests = [];

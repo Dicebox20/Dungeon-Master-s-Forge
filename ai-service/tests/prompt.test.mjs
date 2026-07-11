@@ -53,6 +53,8 @@ test("prompt explains dominant-family handling for hybrid requests", () => {
   assert.match(result, /Emit exactly one supported kind for every spec/);
   assert.match(result, /choose the dominant supported family/);
   assert.match(result, /move unsupported or secondary mechanics into unresolvedMechanics/);
+  assert.match(result, /If the request includes "Complexity layer" sections, they still describe the same item/);
+  assert.match(result, /Build each item from simple to complex in this order whenever possible/);
 });
 
 test("prompt explicitly steers enchant oils and summon actor shape", () => {

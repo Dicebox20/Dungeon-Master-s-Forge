@@ -217,36 +217,45 @@ function detectSaveDc(text, spellNames = []) {
   return spellNames.some(spell => SAVE_SPELLS.has(spell)) ? "15" : "";
 }
 
-function buildCanonicalSummary(chunk, extracted) {
-  const segments = [];
-  const rarityLead = extracted.rarity ? `${/^[aeiou]/i.test(extracted.rarity) ? "an" : "a"} ${extracted.rarity}` : "a magical";
-  if (extracted.baseItem) {
-    const itemNameClause = extracted.name ? ` called ${extracted.name}` : "";
-    segments.push(`Create ${rarityLead} ${extracted.baseItem}${itemNameClause}.`);
+function buildLayeredBrief(chunk, extracted) {
+  const sections = [];
+
+  const baseLines = [];
+  if (extracted.baseItem) baseLines.push(`Base item: ${titleCaseWords(extracted.baseItem)}`);
+  if (extracted.rarity) baseLines.push(`Rarity: ${titleCaseWords(extracted.rarity)}`);
+  if (extracted.attunement === "required") baseLines.push("Attunement: Required");
+  if (extracted.attunement === "none") baseLines.push("Attunement: None");
+  if (extracted.magicalBonus) baseLines.push(`Magical bonus: +${extracted.magicalBonus}`);
+  if (baseLines.length) {
+    sections.push(["Complexity layer 1 - Base chassis", ...baseLines].join("\n"));
   }
-  if (extracted.magicalBonus && extracted.baseItem) {
-    segments.push(`It is a +${extracted.magicalBonus} magical ${extracted.baseItem}.`);
-  }
+
+  const riderLines = [];
   if (extracted.damageParts.length) {
-    const damageText = extracted.damageParts
-      .map(part => `${part.number}d${part.denomination}${part.bonus ? ` ${part.bonus}` : ""} ${part.type.toLowerCase()} damage`)
-      .join(" and ");
-    segments.push(`On a hit, it deals an extra ${damageText}.`);
+    riderLines.push(`Extra hit damage: ${extracted.damageParts.map(part =>
+      `${part.number}d${part.denomination}${part.bonus ? ` ${part.bonus}` : ""} ${part.type.toLowerCase()}`
+    ).join("; ")}`);
   }
-  if (extracted.spellNames.length) {
-    const usageClause = extracted.spellUsage ? ` ${extracted.spellUsage}` : "";
-    segments.push(`It can cast ${extracted.spellNames.join(" and ")}${usageClause}.`);
+  if (riderLines.length) {
+    sections.push(["Complexity layer 2 - Passive riders", ...riderLines].join("\n"));
   }
-  if (extracted.saveDc) {
-    segments.push(`Use DC ${extracted.saveDc} when no spellcasting DC is otherwise specified.`);
+
+  const resourceLines = [];
+  if (extracted.spellUsage) resourceLines.push(`Spell usage: ${extracted.spellUsage}`);
+  if (extracted.chargeSummary) resourceLines.push(`Charges: ${extracted.chargeSummary}`);
+  if (resourceLines.length) {
+    sections.push(["Complexity layer 3 - Resource model", ...resourceLines].join("\n"));
   }
-  if (extracted.chargeSummary) {
-    segments.push(`It has ${extracted.chargeSummary}.`);
+
+  const activityLines = [];
+  if (extracted.spellNames.length) activityLines.push(`Spell: ${extracted.spellNames.join("; ")}`);
+  if (extracted.saveDc) activityLines.push(`Spell save DC: ${extracted.saveDc}`);
+  if (activityLines.length) {
+    sections.push(["Complexity layer 4 - Named activities", ...activityLines].join("\n"));
   }
-  if (extracted.attunement === "required") segments.push("It requires attunement.");
-  if (extracted.attunement === "none") segments.push("It does not require attunement.");
-  if (!segments.length) return compactText(chunk);
-  return segments.join(" ");
+
+  if (!sections.length) return compactText(chunk);
+  return sections.join("\n\n");
 }
 
 function normalizeSingleItemRequest(chunk) {
@@ -265,27 +274,10 @@ function normalizeSingleItemRequest(chunk) {
     attunement: detectAttunement(original, fields)
   };
 
-  const lines = [];
-  if (extracted.name) lines.push(`Item name: ${extracted.name}`);
-  if (extracted.baseItem) lines.push(`Base item: ${titleCaseWords(extracted.baseItem)}`);
-  if (extracted.rarity) lines.push(`Rarity: ${titleCaseWords(extracted.rarity)}`);
-  if (extracted.attunement === "required") lines.push("Attunement: Required");
-  if (extracted.attunement === "none") lines.push("Attunement: None");
-  if (extracted.magicalBonus) lines.push(`Magical bonus: +${extracted.magicalBonus}`);
-  if (extracted.damageParts.length) {
-    lines.push(`Extra hit damage: ${extracted.damageParts.map(part =>
-      `${part.number}d${part.denomination}${part.bonus ? ` ${part.bonus}` : ""} ${part.type.toLowerCase()}`
-    ).join("; ")}`);
-  }
-  if (extracted.spellNames.length) lines.push(`Spell: ${extracted.spellNames.join("; ")}`);
-  if (extracted.spellUsage) lines.push(`Spell usage: ${extracted.spellUsage}`);
-  if (extracted.saveDc) lines.push(`Spell save DC: ${extracted.saveDc}`);
-  if (extracted.chargeSummary) lines.push(`Charges: ${extracted.chargeSummary}`);
-
-  const canonical = buildCanonicalSummary(original, extracted);
-  const normalized = lines.length >= 2
-    ? `${lines.join("\n")}\n\n${canonical}`
-    : canonical;
+  const layeredBrief = buildLayeredBrief(original, extracted);
+  const normalized = extracted.name
+    ? `Item name: ${extracted.name}\n\n${layeredBrief}`
+    : layeredBrief;
   const changed = compactText(normalized) !== compactText(original) && !ITEM_FIELD_PATTERN.test(original);
 
   return {
@@ -303,7 +295,7 @@ function normalizeItemRequest(request) {
   const normalizedRequest = items.map(item => item.normalized).join("\n\n---\n\n").trim();
   const notes = [];
   if (items.some(item => item.changed)) {
-    notes.push("Converted the request into a structured Forge brief before compilation.");
+    notes.push("Converted the request into a layered Forge brief before compilation.");
   }
   if (items.some(item => item.extracted.magicalBonus === "1" && !/\+\s*1\b/.test(item.original))) {
     notes.push("Defaulted missing magical bonus hints to +1 for magical weapon or armor bases.");
