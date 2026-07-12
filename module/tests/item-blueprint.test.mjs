@@ -117,4 +117,30 @@ const resolvedWeaponSpellWarnings = buildLayeredItemBlueprint({
 
 assert.equal(resolvedWeaponSpellWarnings.spec.unresolvedMechanics, undefined);
 
+const resolvedStormforgedWarnings = buildLayeredItemBlueprint({
+  kind: "artifactWeaponHybrid",
+  name: "Stormforged Longsword",
+  baseItem: "longsword",
+  saveActivities: [{
+    activityId: "Stormwave001",
+    activityName: "Cast Thunderwave",
+    save: { ability: "con", dc: 15 },
+    damageParts: [{ number: 2, denomination: 8, bonus: "", types: ["thunder"] }]
+  }],
+  unresolvedMechanics: [
+    {
+      category: "tableAdjudication",
+      label: "Once per long rest spell usage",
+      reason: "This chassis does not support a spell-activation resource model."
+    },
+    {
+      category: "tableAdjudication",
+      label: "Spell save DC 15",
+      reason: "This chassis does not support a separate spell save DC for an activated spell activity."
+    }
+  ]
+}, "Create a longsword that can cast Thunderwave once per long rest with DC 15.");
+
+assert.equal(resolvedStormforgedWarnings.spec.unresolvedMechanics, undefined);
+
 console.log("item-blueprint tests passed");

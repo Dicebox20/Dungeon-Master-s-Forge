@@ -496,6 +496,29 @@ function repairKnownWeaponBase(spec, request) {
   };
 }
 
+function recoverWeaponExtraDamage(spec, request) {
+  if (!SUITE_KINDS.has(spec?.kind) || !spec?.weaponType || !spec?.baseItem) {
+    return { applied: false, spec, assumptions: [] };
+  }
+  if (Array.isArray(spec.extraDamageParts) && spec.extraDamageParts.length) {
+    return { applied: false, spec, assumptions: [] };
+  }
+
+  const clauses = Array.from(String(request ?? "").matchAll(
+    /\b(?:deals?|adds?|gains?)\s+(?:an?\s+)?extra\s+([^.;\n]+?)\s+(?:on\s+(?:each\s+)?hit|whenever[^.;\n]*\bhits?\b)/ig
+  ));
+  const parts = clauses.flatMap(match => parseDamageParts(match[1]));
+  if (!parts.length) return { applied: false, spec, assumptions: [] };
+
+  const next = clone(spec);
+  next.extraDamageParts = parts;
+  return {
+    applied: true,
+    spec: next,
+    assumptions: ["Recovered the weapon's extra damage rider from the request text."]
+  };
+}
+
 function applyHybridDefaults(spec) {
   const next = clone(spec);
   let applied = false;
@@ -1419,6 +1442,7 @@ function repairHybridSpecFromRequest(spec, request) {
     rerouteWeaponHybridKind,
     repairStaffWeaponBase,
     repairKnownWeaponBase,
+    recoverWeaponExtraDamage,
     applyHybridDefaults,
     addNamedSpellActivities,
     addNamedAttackActivities,
