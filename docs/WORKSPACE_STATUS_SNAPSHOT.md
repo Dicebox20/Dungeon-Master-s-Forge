@@ -4,7 +4,7 @@ Updated: 2026-07-01
 
 ## Current Workspace Candidate
 
-- Dungeon Master's Forge V2.21.7 source changes are complete in the workspace and all source tests in `outputs/codex-item-forge/tests` pass.
+- Dungeon Master's Forge V2.21.7 source changes are complete in the workspace and all source tests in the source test directory pass.
 - V2.21.7 keeps the read-only DND5e resolver work from V2.21.5, fixes the live Forge compile path so it can use the active Bring Your Own API draft from the open Forge Settings window, and packages the compact review-note badge polish.
 - The reference AI service normalizer now accepts `pattern` as a live-model alias for Forge `kind`, covering a real live-generation failure mode observed during service smoke testing.
 - Candidate archive: `outputs/dungeon-masters-forge-v2-2.21.7.zip`
@@ -76,7 +76,7 @@ Updated: 2026-07-01
 
 ## Previous Packaged Baseline
 
-- V2.16.0 candidate workspace: `outputs/codex-item-forge`
+- V2.16.0 candidate workspace: archived output directory
 - Archive: `outputs/dungeon-masters-forge-v2-2.16.0.zip`
 - Archive SHA-256: `F13F9A74956D437E6FBAEDFE05848B79A152B2F4973C0DA48B284C18D4F6E87A`
 - V2.16.0 adds explicit optional capabilities discovery, schema and safety validation, shared-family intersection, and remote prompt-version provenance.

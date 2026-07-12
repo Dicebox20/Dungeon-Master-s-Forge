@@ -27,13 +27,13 @@ function forceExplicitChoiceOnAttack(activity = {}) {
   }, { inplace: false });
 }
 
-async function runCodexItemForge(FORGE, ITEMS, { validateOnly = false } = {}) {
+async function runDungeonMastersForge(FORGE, ITEMS, { validateOnly = false } = {}) {
   function makeIdentifier(name) {
     return name
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "")
-      .slice(0, 64) || "codex-item";
+      .slice(0, 64) || "dm_forge-item";
   }
 
   function assertActivityId(id) {
@@ -2139,4 +2139,4 @@ for (const target of targets) {
   };
 }
 
-export { forceExplicitChoiceOnAttack, itemHasExplicitActivityChoices, runCodexItemForge };
+export { forceExplicitChoiceOnAttack, itemHasExplicitActivityChoices, runDungeonMastersForge };

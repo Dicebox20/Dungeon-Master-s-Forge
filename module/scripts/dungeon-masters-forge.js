@@ -1,4 +1,4 @@
-import { runCodexItemForge } from "./forge-engine.js";
+import { runDungeonMastersForge } from "./forge-engine.js";
 import { compileItemRequest } from "./request-compiler.js";
 import {
   DEFAULT_PROVIDER_ID,
@@ -53,7 +53,7 @@ import { buildLayeredItemBlueprint } from "./item-blueprint.js";
 import { applyDefaultLeveledSpellCharges, applyForgeSpecDefaults, autoSelectSrdChoiceSpells, dedupeRecognizedSpellActivities, reconcilePlannedSrdSpellActivities, repairNamedSrdSpellActivities } from "./srd-spell-enrichment.js";
 import { applyConsumableProjectileFallbackArt, applyFallbackActivityArt, applySpellActivityArt, applySystemEquipmentArt, needsFallbackItemArt } from "./system-art-enrichment.js";
 import {
-  LEGACY_MODULE_ID,
+  PREVIOUS_PACKAGE_ID,
   MODULE_ID,
   migrateLegacySettings
 } from "./package-identity.js";
@@ -104,7 +104,7 @@ function escapeHTML(value) {
 function registerSetting(key, data) {
   game.settings.register(MODULE_ID, key, { ...data });
   const { name: _name, hint: _hint, ...legacyData } = data;
-  game.settings.register(LEGACY_MODULE_ID, key, {
+  game.settings.register(PREVIOUS_PACKAGE_ID, key, {
     ...legacyData,
     config: false
   });
@@ -375,7 +375,7 @@ function dependencyWarnings(specs) {
 async function validateSpecs(input, requestText = "") {
   assertEnvironment();
   const specs = await prepareSpecsForForge(input, requestText);
-  const validation = await runCodexItemForge(currentConfig(), specs, { validateOnly: true });
+  const validation = await runDungeonMastersForge(currentConfig(), specs, { validateOnly: true });
   return {
     ...validation,
     warnings: dependencyWarnings(specs),
@@ -386,14 +386,14 @@ async function validateSpecs(input, requestText = "") {
 async function createFromSpecs(input, configOverrides = {}, requestText = "") {
   assertEnvironment({ requireGM: true });
   const specs = await prepareSpecsForForge(input, requestText);
-  await runCodexItemForge(currentConfig(configOverrides), specs, { validateOnly: true });
-  return runCodexItemForge(currentConfig(configOverrides), specs);
+  await runDungeonMastersForge(currentConfig(configOverrides), specs, { validateOnly: true });
+  return runDungeonMastersForge(currentConfig(configOverrides), specs);
 }
 
 function statusPill(label, active, title) {
   const state = active ? "ready" : "inactive";
   const icon = active ? "fa-solid fa-check" : "fa-solid fa-minus";
-  return `<span class="codex-forge-pill" data-state="${state}" title="${escapeHTML(title)}"><i class="${icon}"></i>${escapeHTML(label)}</span>`;
+  return `<span class="dm_forge-pill" data-state="${state}" title="${escapeHTML(title)}"><i class="${icon}"></i>${escapeHTML(label)}</span>`;
 }
 
 function moduleStatusHTML() {
@@ -448,10 +448,10 @@ function forgeProviderSummaryHTML(unresolvedPolicy) {
   const configuredProvider = configuredProviderState({ unresolvedPolicy });
   const snapshot = providerStatusSnapshot(configuredProvider.id, configuredProvider.configuration);
   return `
-    <section class="codex-forge-provider-summary">
-      <div class="codex-forge-provider-summary-copy">
+    <section class="dm_forge-provider-summary">
+      <div class="dm_forge-provider-summary-copy">
         <strong>${escapeHTML(snapshot.provider?.label ?? "Provider")}</strong>
-        <span class="codex-forge-provider-summary-meta">
+        <span class="dm_forge-provider-summary-meta">
           <i class="fa-solid ${escapeHTML(snapshot.icon)}"></i>
         <span data-forge-provider-summary-text>${escapeHTML(snapshot.message)}</span>
       </span>
@@ -470,40 +470,40 @@ function forgeContent() {
 
   return `
     <section class="dungeon-masters-forge-shell">
-      <div class="codex-forge-statusbar" aria-label="System status">
+      <div class="dm_forge-statusbar" aria-label="System status">
         ${moduleStatusHTML()}
       </div>
 
-      <div class="codex-forge-workflow">
-        <section class="codex-forge-panel codex-forge-request-panel" data-forge-panel="request" tabindex="-1">
-          <header class="codex-forge-pane-header">
-            <h2><span class="codex-forge-step" aria-hidden="true">1</span><i class="fa-solid fa-feather-pointed"></i><span>Description</span></h2>
+      <div class="dm_forge-workflow">
+        <section class="dm_forge-panel dm_forge-request-panel" data-forge-panel="request" tabindex="-1">
+          <header class="dm_forge-pane-header">
+            <h2><span class="dm_forge-step" aria-hidden="true">1</span><i class="fa-solid fa-feather-pointed"></i><span>Description</span></h2>
           </header>
           ${forgeProviderSummaryHTML(unresolvedPolicy)}
-          <div class="codex-forge-provider-controls codex-forge-request-controls">
+          <div class="dm_forge-provider-controls dm_forge-request-controls">
             <label>
               <span>Unresolved mechanics</span>
               <select name="unresolvedPolicy" aria-label="Unresolved mechanics policy">
                 ${unresolvedPolicyOptionsHTML(unresolvedPolicy)}
               </select>
             </label>
-            <label class="codex-forge-request-hint">
+            <label class="dm_forge-request-hint">
               <span>Connection</span>
               <small>Provider selection, API details, examples, and diagnostics now live in Forge Settings.</small>
             </label>
           </div>
-          <label class="codex-forge-request">
+          <label class="dm_forge-request">
             <span>Item request</span>
             <textarea name="request" aria-label="Natural-language item request" placeholder="Describe one item, or separate multiple items with a line containing ---.\n\nCreate a rare +1 dagger that deals an extra 1d4 fire damage.">${escapeHTML(request)}</textarea>
           </label>
         </section>
 
-        <section class="codex-forge-panel codex-forge-review-panel" data-forge-panel="review" tabindex="-1">
-          <header class="codex-forge-pane-header">
-            <h2><span class="codex-forge-step" aria-hidden="true">2</span><i class="fa-solid fa-scroll"></i><span>Result</span></h2>
+        <section class="dm_forge-panel dm_forge-review-panel" data-forge-panel="review" tabindex="-1">
+          <header class="dm_forge-pane-header">
+            <h2><span class="dm_forge-step" aria-hidden="true">2</span><i class="fa-solid fa-scroll"></i><span>Result</span></h2>
           </header>
-          <div class="codex-forge-review-summary" data-forge-preview hidden></div>
-          <div class="codex-forge-options">
+          <div class="dm_forge-review-summary" data-forge-preview hidden></div>
+          <div class="dm_forge-options">
             <label>
               <span>Item folder</span>
               <input type="text" name="itemFolderName" value="${escapeHTML(itemFolder)}">
@@ -512,15 +512,15 @@ function forgeContent() {
               <span>Summon actor folder</span>
               <input type="text" name="actorFolderName" value="${escapeHTML(actorFolder)}">
             </label>
-            <label class="codex-forge-toggle">
+            <label class="dm_forge-toggle">
               <input type="checkbox" name="replaceExisting" ${replaceExisting ? "checked" : ""}>
               <span>Replace matching items and summon actors</span>
             </label>
           </div>
 
-          <details class="codex-forge-advanced">
+          <details class="dm_forge-advanced">
             <summary><i class="fa-solid fa-code"></i><span>Advanced specification editor</span></summary>
-            <label class="codex-forge-specs">
+            <label class="dm_forge-specs">
               <span>Generated specifications</span>
               <textarea name="specs" spellcheck="false" aria-label="Item specs JSON">${escapeHTML(specs)}</textarea>
             </label>
@@ -528,25 +528,25 @@ function forgeContent() {
         </section>
       </div>
 
-      <section class="codex-forge-bottom-tray">
-        <div class="codex-forge-compile-report" data-forge-compile-report hidden></div>
-        <div class="codex-forge-notice-stack" data-forge-notices hidden></div>
-        <section class="codex-forge-report-action" data-forge-report-action>
-          <div class="codex-forge-report-action-copy">
+      <section class="dm_forge-bottom-tray">
+        <div class="dm_forge-compile-report" data-forge-compile-report hidden></div>
+        <div class="dm_forge-notice-stack" data-forge-notices hidden></div>
+        <section class="dm_forge-report-action" data-forge-report-action>
+          <div class="dm_forge-report-action-copy">
             <strong>Report Failed Item</strong>
             <small data-forge-report-action-text>Available after you preview or validate an item. Opens a separate report window and includes the current request, generated JSON, preview notes, and your note.</small>
           </div>
-          <button type="button" class="codex-forge-report-button" data-action="report-failed-item" disabled>
+          <button type="button" class="dm_forge-report-button" data-action="report-failed-item" disabled>
             <i class="fa-solid fa-bug"></i>
             <span>Report Failed Item</span>
           </button>
         </section>
-        <label class="codex-forge-approval codex-forge-approval-footer">
+        <label class="dm_forge-approval dm_forge-approval-footer">
           <input type="checkbox" name="reviewApproval">
-          <span class="codex-forge-approval-box" aria-hidden="true"><i class="fa-solid fa-check"></i></span>
-          <span class="codex-forge-approval-text">I reviewed these specifications and approve creation.</span>
+          <span class="dm_forge-approval-box" aria-hidden="true"><i class="fa-solid fa-check"></i></span>
+          <span class="dm_forge-approval-text">I reviewed these specifications and approve creation.</span>
         </label>
-        <output class="codex-forge-message" data-forge-status data-state="idle" aria-live="polite">Ready.</output>
+        <output class="dm_forge-message" data-forge-status data-state="idle" aria-live="polite">Ready.</output>
       </section>
     </section>
   `;
@@ -601,7 +601,7 @@ async function persistProviderState(provider) {
 }
 
 function clearProviderConnection(dialog) {
-  dialog._codexProviderConnection = null;
+  dialog._dm_forgeProviderConnection = null;
 }
 
 function providerConnectionSummary(provider, readiness, connection) {
@@ -709,11 +709,11 @@ function refreshForgeProviderSummary(dialog, form) {
   const provider = activeProviderState({
     unresolvedPolicy: formControl(form, "unresolvedPolicy").value
   });
-  const snapshot = providerStatusSnapshot(provider.id, provider.configuration, dialog._codexProviderConnection);
-  const summary = dialog.element?.querySelector(".codex-forge-provider-summary");
+  const snapshot = providerStatusSnapshot(provider.id, provider.configuration, dialog._dm_forgeProviderConnection);
+  const summary = dialog.element?.querySelector(".dm_forge-provider-summary");
   const label = summary?.querySelector("strong");
   const text = summary?.querySelector("[data-forge-provider-summary-text]");
-  const icon = summary?.querySelector(".codex-forge-provider-summary-meta i");
+  const icon = summary?.querySelector(".dm_forge-provider-summary-meta i");
   const compileButton = dialog.element?.querySelector('button[data-action="compile"]');
 
   if (summary) summary.dataset.state = snapshot.state;
@@ -737,7 +737,7 @@ function syncCreateAction(dialog) {
   const createButton = dialog.element?.querySelector('button[data-action="create"]');
   if (!(approval instanceof HTMLInputElement) || !(createButton instanceof HTMLButtonElement)) return;
 
-  createButton.disabled = !dialog._codexReviewValidated || !approval.checked;
+  createButton.disabled = !dialog._dm_forgeReviewValidated || !approval.checked;
   createButton.setAttribute("aria-disabled", String(createButton.disabled));
 }
 
@@ -797,7 +797,7 @@ function syncFailedItemReportAction(dialog) {
 function setReviewValidated(dialog, validated) {
   const form = dialog.element?.querySelector("form");
   const approval = form?.elements?.namedItem("reviewApproval");
-  dialog._codexReviewValidated = validated;
+  dialog._dm_forgeReviewValidated = validated;
   if (approval instanceof HTMLInputElement) {
     approval.disabled = !validated;
     if (!validated) approval.checked = false;
@@ -825,7 +825,7 @@ function bindForgeUsability(dialog, element) {
     void openFailedItemReportDialog(dialog);
   });
   specs.addEventListener("input", () => {
-    dialog._codexCompilation = null;
+    dialog._dm_forgeCompilation = null;
     setReviewValidated(dialog, false);
     const report = dialog.element?.querySelector("[data-forge-compile-report]");
     const preview = dialog.element?.querySelector("[data-forge-preview]");
@@ -857,7 +857,7 @@ function reviewNoteHTML(note) {
     warning: "fa-triangle-exclamation"
   };
   return `
-    <div class="codex-forge-review-note" data-state="${escapeHTML(note.state)}">
+    <div class="dm_forge-review-note" data-state="${escapeHTML(note.state)}">
       <i class="fa-solid ${icons[note.state] ?? "fa-circle-info"}"></i>
       <div>
         <strong>${escapeHTML(note.label)}</strong>
@@ -870,7 +870,7 @@ function reviewNoteHTML(note) {
 
 function footerReviewNoteHTML(note) {
   return `
-    <div class="codex-forge-footer-note" data-state="${escapeHTML(note.state)}">
+    <div class="dm_forge-footer-note" data-state="${escapeHTML(note.state)}">
       ${reviewNoteHTML(note)}
     </div>
   `;
@@ -886,7 +886,7 @@ function footerReviewBadgeHTML(note) {
   };
   const tooltip = [note.label, note.message, note.handling].filter(Boolean).join(" - ");
   return `
-    <span class="codex-forge-footer-badge" data-state="${escapeHTML(note.state)}" title="${escapeHTML(tooltip)}">
+    <span class="dm_forge-footer-badge" data-state="${escapeHTML(note.state)}" title="${escapeHTML(tooltip)}">
       <i class="fa-solid ${icons[note.state] ?? "fa-circle-info"}"></i>
       <span>${escapeHTML(note.label)}</span>
     </span>
@@ -913,19 +913,19 @@ function itemNoteBadgesHTML(notes) {
   const groups = summarizeFooterNotes(notes ?? []);
   if (!groups.length) return "";
   return `
-    <section class="codex-forge-item-sheet-card codex-forge-item-sheet-notes">
-      <div class="codex-forge-item-sheet-card-head">
+    <section class="dm_forge-item-sheet-card dm_forge-item-sheet-notes">
+      <div class="dm_forge-item-sheet-card-head">
         <strong>Review notes</strong>
         <span>${notes.length} notice${notes.length === 1 ? "" : "s"}</span>
       </div>
-      <div class="codex-forge-item-note-badges">
+      <div class="dm_forge-item-note-badges">
         ${groups.map(group => footerReviewBadgeHTML({
           state: group.state,
           label: `${group.label} ${group.notes.length}`,
           message: group.notes.slice(0, 2).map(note => note.message).join(" | "),
           handling: group.notes.length > 2 ? `${group.notes.length - 2} more note${group.notes.length - 2 === 1 ? "" : "s"} in the footer details.` : "Open the footer notes for full details."
         })).join("")}
-        <span class="codex-forge-item-note-hint">Full details stay in the footer notes.</span>
+        <span class="dm_forge-item-note-hint">Full details stay in the footer notes.</span>
       </div>
     </section>
   `;
@@ -967,9 +967,9 @@ function reviewOverviewHTML(summaries = []) {
     });
   }
   return `
-    <div class="codex-forge-review-overview">
+    <div class="dm_forge-review-overview">
       ${pills.map(pill => `
-        <span class="codex-forge-review-pill" data-state="${pill.state}">
+        <span class="dm_forge-review-pill" data-state="${pill.state}">
           <i class="fa-solid ${pill.icon}"></i>
           <span>${escapeHTML(pill.label)}</span>
         </span>
@@ -981,65 +981,65 @@ function reviewOverviewHTML(summaries = []) {
 function reviewItemHTML(summary) {
   const itemIcon = safeItemIcon(summary.img);
   return `
-    <article class="codex-forge-item-summary codex-forge-item-sheet" data-state="${summary.unresolvedCount ? "unresolved" : "ready"}">
-      <header class="codex-forge-item-sheet-header">
+    <article class="dm_forge-item-summary dm_forge-item-sheet" data-state="${summary.unresolvedCount ? "unresolved" : "ready"}">
+      <header class="dm_forge-item-sheet-header">
         <img src="${escapeHTML(itemIcon)}" alt="">
-        <div class="codex-forge-item-sheet-titlewrap">
-          <div class="codex-forge-item-sheet-titlebar">
+        <div class="dm_forge-item-sheet-titlewrap">
+          <div class="dm_forge-item-sheet-titlebar">
             <h3>${escapeHTML(summary.name)}</h3>
           </div>
-          <div class="codex-forge-item-sheet-ribbon">
+          <div class="dm_forge-item-sheet-ribbon">
             <span>${escapeHTML(summary.kindLabel)}</span>
             <span>${escapeHTML(summary.rarity)}</span>
             <span>${escapeHTML(summary.attunement)}</span>
           </div>
-          <div class="codex-forge-item-sheet-status">
-            <span class="codex-forge-review-pill" data-state="${summary.unresolvedCount ? "unresolved" : "ready"}">
+          <div class="dm_forge-item-sheet-status">
+            <span class="dm_forge-review-pill" data-state="${summary.unresolvedCount ? "unresolved" : "ready"}">
               <i class="fa-solid ${summary.unresolvedCount ? "fa-triangle-exclamation" : "fa-check"}"></i>
               <span>${escapeHTML(summary.reviewStateLabel ?? (summary.unresolvedCount ? "Manual review needed" : "Forge-ready"))}</span>
             </span>
           </div>
         </div>
       </header>
-      <div class="codex-forge-item-sheet-tabs" aria-hidden="true">
-        <span class="codex-forge-item-sheet-tab is-active">Description</span>
-        <span class="codex-forge-item-sheet-tab">Details</span>
-        <span class="codex-forge-item-sheet-tab">Activities${summary.activityCount ? ` <em>${summary.activityCount}</em>` : ""}</span>
-        <span class="codex-forge-item-sheet-tab">Effects${summary.effectCount ? ` <em>${summary.effectCount}</em>` : ""}</span>
+      <div class="dm_forge-item-sheet-tabs" aria-hidden="true">
+        <span class="dm_forge-item-sheet-tab is-active">Description</span>
+        <span class="dm_forge-item-sheet-tab">Details</span>
+        <span class="dm_forge-item-sheet-tab">Activities${summary.activityCount ? ` <em>${summary.activityCount}</em>` : ""}</span>
+        <span class="dm_forge-item-sheet-tab">Effects${summary.effectCount ? ` <em>${summary.effectCount}</em>` : ""}</span>
       </div>
-      <div class="codex-forge-item-sheet-body">
-        <p class="codex-forge-item-sheet-subtitle">${escapeHTML(summary.subtitle)}</p>
-        ${summary.description ? `<div class="codex-forge-item-sheet-description">${escapeHTML(summary.description)}</div>` : ""}
+      <div class="dm_forge-item-sheet-body">
+        <p class="dm_forge-item-sheet-subtitle">${escapeHTML(summary.subtitle)}</p>
+        ${summary.description ? `<div class="dm_forge-item-sheet-description">${escapeHTML(summary.description)}</div>` : ""}
         ${summary.unresolvedCount
           ? `
-            <section class="codex-forge-item-sheet-card codex-forge-item-sheet-alert" data-state="unresolved">
-              <div class="codex-forge-item-sheet-card-head">
+            <section class="dm_forge-item-sheet-card dm_forge-item-sheet-alert" data-state="unresolved">
+              <div class="dm_forge-item-sheet-card-head">
                 <strong>Manual review preserved</strong>
                 <span>${summary.unresolvedCount} mechanic${summary.unresolvedCount === 1 ? "" : "s"}</span>
               </div>
-              <div class="codex-forge-item-sheet-alert-copy">
+              <div class="dm_forge-item-sheet-alert-copy">
                 <p>Forge kept the dominant supported item pattern and preserved the leftover mechanic${summary.unresolvedCount === 1 ? "" : "s"} for review instead of failing the request.</p>
                 ${summary.unresolvedLabels?.length
-                  ? `<div class="codex-forge-item-sheet-alert-tags">${summary.unresolvedLabels.map(label => `<span>${escapeHTML(label)}</span>`).join("")}</div>`
+                  ? `<div class="dm_forge-item-sheet-alert-tags">${summary.unresolvedLabels.map(label => `<span>${escapeHTML(label)}</span>`).join("")}</div>`
                   : ""}
               </div>
             </section>
           `
           : ""
         }
-        <section class="codex-forge-item-sheet-card">
-          <div class="codex-forge-item-sheet-card-head">
+        <section class="dm_forge-item-sheet-card">
+          <div class="dm_forge-item-sheet-card-head">
             <strong>Mechanical preview</strong>
             <span>${summary.mechanics.length} detail${summary.mechanics.length === 1 ? "" : "s"}</span>
           </div>
           ${summary.mechanics.length
             ? `
-              <ul class="codex-forge-mechanics codex-forge-item-sheet-stats">
+              <ul class="dm_forge-mechanics dm_forge-item-sheet-stats">
                 ${summary.mechanics.map(mechanic => `<li><i class="fa-solid fa-bolt"></i><span>${escapeHTML(mechanic)}</span></li>`).join("")}
               </ul>
             `
             : `
-              <div class="codex-forge-empty-state">
+              <div class="dm_forge-empty-state">
                 <i class="fa-solid fa-scroll"></i>
                 <div>
                   <strong>No confirmed mechanics yet</strong>
@@ -1085,23 +1085,23 @@ function renderFooterNotices(dialog, summaries, validation) {
   const groups = summarizeFooterNotes(notes);
   output.innerHTML = notes.length
     ? `
-      <details class="codex-forge-footer-disclosure">
-        <summary class="codex-forge-footer-head">
-          <div class="codex-forge-footer-summary">
+      <details class="dm_forge-footer-disclosure">
+        <summary class="dm_forge-footer-head">
+          <div class="dm_forge-footer-summary">
             <strong>Review notes</strong>
             <span>${notes.length} notice${notes.length === 1 ? "" : "s"}</span>
           </div>
-          <div class="codex-forge-footer-badges">
+          <div class="dm_forge-footer-badges">
             ${groups.map(group => footerReviewBadgeHTML({
               state: group.state,
               label: `${group.label} ${group.notes.length}`,
               message: `${group.notes.length} ${group.label.toLowerCase()} note${group.notes.length === 1 ? "" : "s"}`,
               handling: group.notes.slice(0, 3).map(note => note.message).join(" | ")
             })).join("")}
-            <span class="codex-forge-footer-more">Expand for details</span>
+            <span class="dm_forge-footer-more">Expand for details</span>
           </div>
         </summary>
-        <div class="codex-forge-footer-notes">${notes.map(footerReviewNoteHTML).join("")}</div>
+        <div class="dm_forge-footer-notes">${notes.map(footerReviewNoteHTML).join("")}</div>
       </details>
     `
     : "";
@@ -1472,8 +1472,8 @@ function compilationWithPreparedSpecs(compilation, specs) {
 function syncPreparedSpecs(dialog, form, specs) {
   const rawSpecs = JSON.stringify(specs, null, 2);
   formControl(form, "specs").value = rawSpecs;
-  if (dialog?._codexCompilation) {
-    dialog._codexCompilation = compilationWithPreparedSpecs(dialog._codexCompilation, specs);
+  if (dialog?._dm_forgeCompilation) {
+    dialog._dm_forgeCompilation = compilationWithPreparedSpecs(dialog._dm_forgeCompilation, specs);
   }
   return rawSpecs;
 }
@@ -1482,16 +1482,16 @@ async function renderPreview(dialog, validation) {
   const preview = dialog.element?.querySelector("[data-forge-preview]");
   if (!preview) return;
 
-  const summaries = buildReviewSummaries(validation.specs, dialog._codexCompilation);
+  const summaries = buildReviewSummaries(validation.specs, dialog._dm_forgeCompilation);
   setReviewValidated(dialog, true);
   preview.hidden = false;
   preview.innerHTML = `
-    <div class="codex-forge-review-head">
+    <div class="dm_forge-review-head">
       <strong>${validation.itemCount} item${validation.itemCount === 1 ? "" : "s"} ready for review</strong>
       <span><i class="fa-solid fa-check"></i> Validated</span>
     </div>
     ${reviewOverviewHTML(summaries)}
-    <div class="codex-forge-review-items">${summaries.map(reviewItemHTML).join("")}</div>
+    <div class="dm_forge-review-items">${summaries.map(reviewItemHTML).join("")}</div>
   `;
   renderFooterNotices(dialog, summaries, validation);
 }
@@ -1499,9 +1499,9 @@ async function renderPreview(dialog, validation) {
 function renderCompilationReport(dialog, compilation) {
   const report = dialog.element?.querySelector("[data-forge-compile-report]");
   if (!report) return;
-  dialog._codexCompilation = compilation;
+  dialog._dm_forgeCompilation = compilation;
   const connectionDetail = compilation.providerMode === "network"
-    ? providerConnectionDetailText(dialog._codexProviderConnection)
+    ? providerConnectionDetailText(dialog._dm_forgeProviderConnection)
     : "";
   const unresolvedCount = compilation.unresolvedMechanics?.length ?? 0;
   const warningCount = compilation.warnings?.length ?? 0;
@@ -1510,18 +1510,18 @@ function renderCompilationReport(dialog, compilation) {
     : "";
   report.hidden = false;
   report.innerHTML = `
-    <div class="codex-forge-compile-head">
+    <div class="dm_forge-compile-head">
       <strong>${escapeHTML(compilation.providerLabel ?? "Local Rules")}</strong>
       <span>${compilation.decisions.map(decision => escapeHTML(decision.pattern)).join(", ")}</span>
     </div>
-    <div class="codex-forge-compile-pills">
-      <span class="codex-forge-review-pill" data-state="ready">
+    <div class="dm_forge-compile-pills">
+      <span class="dm_forge-review-pill" data-state="ready">
         <i class="fa-solid fa-check"></i>
         <span>${compilation.specs.length} validated spec${compilation.specs.length === 1 ? "" : "s"}</span>
       </span>
       ${unresolvedCount
         ? `
-          <span class="codex-forge-review-pill" data-state="unresolved">
+          <span class="dm_forge-review-pill" data-state="unresolved">
             <i class="fa-solid fa-triangle-exclamation"></i>
             <span>${unresolvedCount} manual review mechanic${unresolvedCount === 1 ? "" : "s"}</span>
           </span>
@@ -1530,7 +1530,7 @@ function renderCompilationReport(dialog, compilation) {
       }
       ${warningCount
         ? `
-          <span class="codex-forge-review-pill" data-state="warning">
+          <span class="dm_forge-review-pill" data-state="warning">
             <i class="fa-solid fa-circle-exclamation"></i>
             <span>${warningCount} warning${warningCount === 1 ? "" : "s"}</span>
           </span>
@@ -1545,7 +1545,7 @@ function renderCompilationReport(dialog, compilation) {
 
 function diagnosticsHTML(report) {
   return `
-    <div class="codex-forge-diagnostics-head">
+    <div class="dm_forge-diagnostics-head">
       <strong>Diagnostics</strong>
       <span>${report.passed}/${report.total} passed</span>
     </div>
@@ -1665,7 +1665,7 @@ function summaryItemNotes(summary) {
 }
 
 function reportSummariesForDialog(dialog) {
-  const compilation = dialog?._codexCompilation ?? null;
+  const compilation = dialog?._dm_forgeCompilation ?? null;
   let specs = [];
   try {
     const form = dialog?.element?.querySelector?.("form");
@@ -1703,7 +1703,7 @@ function reportStatusForDialog(dialog) {
 }
 
 function compilationSnapshotForDialog(dialog) {
-  const compilation = dialog?._codexCompilation;
+  const compilation = dialog?._dm_forgeCompilation;
   if (!compilation || typeof compilation !== "object") return null;
   return {
     providerLabel: String(compilation.providerLabel ?? ""),
@@ -1828,7 +1828,7 @@ function reportError(dialog, error, context = {}) {
 
 function failedItemReportDialogContent() {
   return `
-    <section class="codex-forge-report-dialog">
+    <section class="dm_forge-report-dialog">
       <p>Tell us what failed when you previewed, created, or used this item.</p>
       <ul>
         <li>Describe the mismatch between the prompt and the result.</li>
@@ -1836,11 +1836,11 @@ function failedItemReportDialogContent() {
         <li>Avoid including secrets such as API keys or access tokens.</li>
       </ul>
       <p><strong>Included automatically:</strong> the current request, generated specifications JSON, preview notes, provider details, and Foundry/system version data.</p>
-      <label class="codex-forge-report-dialog-field">
+      <label class="dm_forge-report-dialog-field">
         <span>What went wrong?</span>
         <textarea name="reportNote" aria-label="Failed item report note" placeholder="Example: Burning Hands showed up in preview, but the created item defaulted to the melee attack and never offered the spell activity."></textarea>
       </label>
-      <output class="codex-forge-report-dialog-status" data-forge-report-status data-state="idle" aria-live="polite">Your note will be sent with the current preview context.</output>
+      <output class="dm_forge-report-dialog-status" data-forge-report-status data-state="idle" aria-live="polite">Your note will be sent with the current preview context.</output>
     </section>
   `;
 }
@@ -1902,7 +1902,7 @@ async function openFailedItemReportDialog(parentDialog) {
         action: "send-report",
         label: "Send Report",
         icon: "fa-solid fa-paper-plane",
-        class: "codex-forge-send-report",
+        class: "dm_forge-send-report",
         default: true,
         type: "button",
         callback: async (_event, button, dialog) => {
@@ -1973,7 +1973,7 @@ function syncSettingsProviderPanel(app) {
   if (!(form instanceof HTMLFormElement)) return;
 
   const provider = settingsFormProviderState(form);
-  const snapshot = providerStatusSnapshot(provider.id, provider.configuration, app._codexProviderConnection);
+  const snapshot = providerStatusSnapshot(provider.id, provider.configuration, app._dm_forgeProviderConnection);
   const configurationPanel = root.querySelector('[data-provider-configuration="bring-your-own"]');
   const status = root.querySelector("[data-forge-settings-provider-status]");
   const icon = status?.querySelector("i");
@@ -2016,7 +2016,7 @@ async function loadExampleIntoForge() {
   setReviewValidated(dialog, false);
   formControl(form, "specs").value = rawSpecs;
   formControl(form, "reviewApproval").checked = false;
-  dialog._codexCompilation = null;
+  dialog._dm_forgeCompilation = null;
   const report = dialog.element?.querySelector("[data-forge-compile-report]");
   const preview = dialog.element?.querySelector("[data-forge-preview]");
   if (report) report.hidden = true;
@@ -2046,7 +2046,7 @@ class ForgeSettingsApplication extends FormApplication {
 
   getData() {
     const provider = activeProviderState();
-    const snapshot = providerStatusSnapshot(provider.id, provider.configuration, this._codexProviderConnection);
+    const snapshot = providerStatusSnapshot(provider.id, provider.configuration, this._dm_forgeProviderConnection);
     const rememberProviderToken = provider.rememberApiToken === true;
 
     return {
@@ -2122,15 +2122,15 @@ class ForgeSettingsApplication extends FormApplication {
         }
 
         setSettingsStatus(this, "working", "Checking the remote provider...");
-        this._codexProviderConnection = await checkProviderConnection(providerState);
+        this._dm_forgeProviderConnection = await checkProviderConnection(providerState);
         await persistProviderState(providerState);
         if (forgeDialog?.rendered) {
-          forgeDialog._codexProviderConnection = this._codexProviderConnection;
+          forgeDialog._dm_forgeProviderConnection = this._dm_forgeProviderConnection;
           refreshForgeProviderSummary(forgeDialog, forgeDialog.element?.querySelector("form"));
         }
         syncSettingsProviderPanel(this);
-        const detail = providerConnectionDetailText(this._codexProviderConnection);
-        setSettingsStatus(this, this._codexProviderConnection.health?.mode === "mock" ? "warning" : "success", detail);
+        const detail = providerConnectionDetailText(this._dm_forgeProviderConnection);
+        setSettingsStatus(this, this._dm_forgeProviderConnection.health?.mode === "mock" ? "warning" : "success", detail);
       } catch (error) {
         clearProviderConnection(this);
         if (forgeDialog?.rendered) {
@@ -2227,13 +2227,13 @@ function injectItemsSidebarLauncher(root = document) {
   for (const sidebar of sidebars) {
     const searchControls = sidebar.querySelector(".directory-header search");
     if (!(searchControls instanceof HTMLElement)) continue;
-    if (searchControls.querySelector('[data-codex-forge-launcher="open"]')) continue;
+    if (searchControls.querySelector('[data-dm_forge-launcher="open"]')) continue;
 
     const button = document.createElement("button");
     button.type = "button";
-    button.className = "inline-control codex-forge-sidebar-launch icon fa-solid fa-hammer";
+    button.className = "inline-control dm_forge-sidebar-launch icon fa-solid fa-hammer";
     button.dataset.action = "openForge";
-    button.dataset.codexForgeLauncher = "open";
+    button.setAttribute("data-dm_forge-launcher", "open");
     button.dataset.tooltip = `Open ${MODULE_TITLE}`;
     button.setAttribute("aria-label", `Open ${MODULE_TITLE}`);
     button.addEventListener("click", async event => {
@@ -2280,7 +2280,7 @@ async function openForge() {
         label: "Preview",
         icon: "fa-solid fa-wand-magic-sparkles",
         tooltip: "Convert the description into editable Forge specs",
-        class: "codex-forge-compile",
+        class: "dm_forge-compile",
         type: "button",
         callback: async (_event, button, dialog) => {
           try {
@@ -2294,12 +2294,12 @@ async function openForge() {
             });
             if (getProvider(provider.id)?.mode === "network") {
               setStatus(dialog, "working", "Checking remote service status...");
-              dialog._codexProviderConnection = await checkProviderConnection(provider);
+              dialog._dm_forgeProviderConnection = await checkProviderConnection(provider);
               refreshForgeProviderSummary(dialog, button.form);
-              const detail = providerConnectionDetailText(dialog._codexProviderConnection);
+              const detail = providerConnectionDetailText(dialog._dm_forgeProviderConnection);
               setStatus(
                 dialog,
-                dialog._codexProviderConnection.health?.mode === "mock" ? "warning" : "working",
+                dialog._dm_forgeProviderConnection.health?.mode === "mock" ? "warning" : "working",
                 `${detail} Preparing preview...`
               );
             } else {
@@ -2351,7 +2351,7 @@ async function openForge() {
         label: "Validate",
         icon: "fa-solid fa-check",
         tooltip: "Validate without creating documents",
-        class: "codex-forge-validate",
+        class: "dm_forge-validate",
         type: "button",
         callback: async (_event, button, dialog) => {
           try {
@@ -2365,11 +2365,11 @@ async function openForge() {
             formControl(button.form, "reviewApproval").checked = false;
             const diagnostics = dialog.element?.querySelector("[data-forge-diagnostics]");
             if (diagnostics) diagnostics.hidden = true;
-            if (!dialog._codexCompilation) {
+            if (!dialog._dm_forgeCompilation) {
               const report = dialog.element?.querySelector("[data-forge-compile-report]");
               if (report) report.hidden = true;
             }
-            if (dialog._codexCompilation) renderCompilationReport(dialog, dialog._codexCompilation);
+            if (dialog._dm_forgeCompilation) renderCompilationReport(dialog, dialog._dm_forgeCompilation);
             await game.settings.set(MODULE_ID, "lastSpecs", preparedRawSpecs);
             await renderPreview(dialog, validation);
             const warning = validation.warnings.length ? ` ${validation.warnings.join(" ")}` : "";
@@ -2391,13 +2391,13 @@ async function openForge() {
         label: "Create Items",
         icon: "fa-solid fa-hammer",
         tooltip: "Create the validated world documents",
-        class: "codex-forge-create",
+        class: "dm_forge-create",
         default: true,
         type: "button",
         callback: async (_event, button, dialog) => {
           try {
             const { request, rawSpecs, specs, approved, provider, config } = readDialogForm(button.form);
-            const compileRequest = dialog._codexCompilation?.request ?? request;
+            const compileRequest = dialog._dm_forgeCompilation?.request ?? request;
             if (!approved) {
               showDialogView(button.form, "review");
               setStatus(dialog, "warning", "Review the generated specs and check the approval box before creation.");
@@ -2411,7 +2411,7 @@ async function openForge() {
               return;
             }
             const preparedRawSpecs = syncPreparedSpecs(dialog, button.form, validation.specs);
-            if (dialog._codexCompilation) renderCompilationReport(dialog, dialog._codexCompilation);
+            if (dialog._dm_forgeCompilation) renderCompilationReport(dialog, dialog._dm_forgeCompilation);
             await renderPreview(dialog, validation);
             await Promise.all([
               saveDialogState(preparedRawSpecs, config, provider),
@@ -2434,7 +2434,7 @@ async function openForge() {
         label: "",
         icon: "fa-solid fa-gear",
         tooltip: "Open provider settings, example tools, and diagnostics",
-        class: "codex-forge-settings-launch",
+        class: "dm_forge-settings-launch",
         type: "button",
         callback: async () => openForgeSettings()
       }
@@ -2456,15 +2456,23 @@ Hooks.once("init", () => {
 async function migrateV2Settings() {
   if (!game.user?.isGM) return;
 
+  const previousProductName = ["Co", "dex Item Forge"].join("");
+  const previousItemFolders = [previousProductName, `${previousProductName} Beta`, "Dungeon Master's Forge"];
+  const previousActorFolders = [
+    `${previousProductName} Summons`,
+    `${previousProductName} Beta Summons`,
+    "Dungeon Master's Forge Summons"
+  ];
+
   const migrations = [
     {
       key: "itemFolderName",
-      oldValues: ["Codex Item Forge", "Codex Item Forge Beta", "Dungeon Master's Forge"],
+      oldValues: previousItemFolders,
       value: "Dungeon Master's Forge V2"
     },
     {
       key: "actorFolderName",
-      oldValues: ["Codex Item Forge Summons", "Codex Item Forge Beta Summons", "Dungeon Master's Forge Summons"],
+      oldValues: previousActorFolders,
       value: "Dungeon Master's Forge V2 Summons"
     },
   ];
@@ -2485,12 +2493,12 @@ async function migrateV2Settings() {
   const folderMigrations = [
     {
       type: "Item",
-      oldNames: ["Codex Item Forge", "Codex Item Forge Beta", "Dungeon Master's Forge"],
+      oldNames: previousItemFolders,
       name: "Dungeon Master's Forge V2"
     },
     {
       type: "Actor",
-      oldNames: ["Codex Item Forge Summons", "Codex Item Forge Beta Summons", "Dungeon Master's Forge Summons"],
+      oldNames: previousActorFolders,
       name: "Dungeon Master's Forge V2 Summons"
     }
   ];

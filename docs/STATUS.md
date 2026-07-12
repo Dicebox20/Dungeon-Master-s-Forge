@@ -83,7 +83,7 @@ Historical validation notes below still mention earlier `2.23.0-test.*` smoke pa
 
 - Workspace module tests pass.
 - The packaged/export AI service snapshot still passes at its currently exported `95`-test baseline.
-- Public export module tests pass after the filename-surface sync from `codex-item-forge.js` to `dungeon-masters-forge.js`.
+- Public export module tests pass after the filename-surface sync to `dungeon-masters-forge.js`.
 - Public export AI service tests pass (95 tests).
 - The currently installed Foundry build on disk is `2.23.0-test.2`.
 - The installed module manifest on disk matches the tester manifest target for `dungeon-masters-forge`.

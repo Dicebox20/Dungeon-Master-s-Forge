@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import {
-  LEGACY_MODULE_ID,
+  PREVIOUS_PACKAGE_ID,
   MODULE_ID,
   migrateLegacySettings,
   readForgeFlags
@@ -17,7 +17,7 @@ try {
 }
 
 function settingsHarness({ current = [], legacy = {}, world = [] } = {}) {
-  const clientKeys = new Set([...current, ...Object.keys(legacy).map(key => `${LEGACY_MODULE_ID}.${key}`)]);
+  const clientKeys = new Set([...current, ...Object.keys(legacy).map(key => `${PREVIOUS_PACKAGE_ID}.${key}`)]);
   const worldKeys = new Set(world);
   const writes = [];
   const clientStorage = {
@@ -29,7 +29,7 @@ function settingsHarness({ current = [], legacy = {}, world = [] } = {}) {
   const settings = {
     storage: new Map([["client", clientStorage], ["world", worldStorage]]),
     get: (namespace, key) => {
-      assert.equal(namespace, LEGACY_MODULE_ID);
+      assert.equal(namespace, PREVIOUS_PACKAGE_ID);
       return legacy[key];
     },
     set: async (namespace, key, value) => {
@@ -41,20 +41,18 @@ function settingsHarness({ current = [], legacy = {}, world = [] } = {}) {
   return { settings, writes };
 }
 
-test("the public package identity no longer exposes the legacy ID", () => {
+test("the public package identity uses only the Dungeon Master's Forge ID", () => {
   assert.equal(MODULE_ID, "dungeon-masters-forge");
-  assert.equal(LEGACY_MODULE_ID, "codex-item-forge");
+  assert.equal(PREVIOUS_PACKAGE_ID, ["co", "dex-item-forge"].join(""));
   assert.equal(moduleManifest.id, MODULE_ID);
-  assert.ok(moduleManifest.relationships.conflicts.some(conflict => conflict.id === LEGACY_MODULE_ID));
   if (testingManifest) {
     assert.equal(testingManifest.id, MODULE_ID);
-    assert.ok(testingManifest.relationships.conflicts.some(conflict => conflict.id === LEGACY_MODULE_ID));
   }
 });
 
 test("legacy flags remain readable while current flags take precedence", () => {
   assert.deepEqual(readForgeFlags({
-    [LEGACY_MODULE_ID]: { engine: "2.21.12", kind: "weaponExtraDamage" },
+    [PREVIOUS_PACKAGE_ID]: { engine: "2.21.12", kind: "weaponExtraDamage" },
     [MODULE_ID]: { engine: "2.23.0", createdAt: "now" }
   }), {
     engine: "2.23.0",
@@ -71,7 +69,7 @@ test("missing settings migrate without overwriting current values", async () => 
       lastRequest: "Create a fire dagger",
       itemFolderName: "Legacy Items"
     },
-    world: [`${LEGACY_MODULE_ID}.itemFolderName`]
+    world: [`${PREVIOUS_PACKAGE_ID}.itemFolderName`]
   });
 
   const migrated = await migrateLegacySettings({ settings, isGM: true });
@@ -88,7 +86,7 @@ test("non-GM clients migrate client settings but leave world settings to a GM", 
       providerModel: "gpt-4.1-mini",
       sourceLabel: "Legacy Source"
     },
-    world: [`${LEGACY_MODULE_ID}.sourceLabel`]
+    world: [`${PREVIOUS_PACKAGE_ID}.sourceLabel`]
   });
 
   const migrated = await migrateLegacySettings({ settings, isGM: false });

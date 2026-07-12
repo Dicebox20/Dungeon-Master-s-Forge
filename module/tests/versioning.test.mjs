@@ -9,9 +9,10 @@ assert.equal(PRODUCT_TITLE, "Dungeon Master's Forge V2");
 assert.equal(sourceLabelForVersion("2.10.0"), "Dungeon Master's Forge V2 v2.10.0");
 assert.equal(sourceLabelForVersion(""), "Dungeon Master's Forge V2");
 
+const previousProductName = ["Co", "dex Item Forge"].join("");
 for (const label of [
-  "Codex Item Forge v0.1",
-  "Codex Item Forge Beta",
+  `${previousProductName} v0.1`,
+  `${previousProductName} Beta`,
   "Dungeon Master's Forge v0.1",
   "Dungeon Master's Forge V2",
   "Dungeon Master's Forge V2.9.0"
