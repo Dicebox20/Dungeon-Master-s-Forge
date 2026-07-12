@@ -38,7 +38,7 @@ test("private releases accept only credential-free HTTPS endpoints", () => {
     enabled: true,
     label: "Free Forge",
     endpoint: "https://forge.example/v1/forge/compile",
-    model: "gpt-4.1-mini"
+    model: "gpt-5.4-mini"
   });
   assert.equal(configured.enabled, true);
   assert.equal(configured.endpoint, "https://forge.example/v1/forge/compile");

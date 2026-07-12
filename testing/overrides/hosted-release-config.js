@@ -2,7 +2,7 @@ const HOSTED_FORGE_RELEASE_CONFIG = Object.freeze({
   enabled: true,
   label: "Free Forge",
   endpoint: "https://dmforge.137-184-103-220.sslip.io/v1/forge/compile",
-  model: "gpt-4.1-mini"
+  model: "gpt-5.4-mini"
 });
 
 function normalizeHostedReleaseConfig(input = HOSTED_FORGE_RELEASE_CONFIG) {
