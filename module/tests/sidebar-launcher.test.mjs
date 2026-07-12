@@ -8,3 +8,4 @@ assert.match(script, /data-dm_forge-launcher="open"/);
 assert.match(script, /Hooks\.on\("renderSidebarTab"/);
 assert.match(script, /Hooks\.on\("changeSidebarTab"/);
 assert.match(script, /Open \$\{MODULE_TITLE\}/);
+assert.match(script, /if \(forgeDialog\.minimized\) await forgeDialog\.maximize\(\)/);

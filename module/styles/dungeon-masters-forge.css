@@ -505,14 +505,6 @@
   white-space: nowrap;
 }
 
-.dm_forge-report-action-controls {
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  flex: 0 0 auto;
-}
-
 .dm_forge-report-button:disabled {
   opacity: 0.6;
 }
@@ -816,6 +808,22 @@
   font-weight: 700;
   text-transform: uppercase;
   white-space: nowrap;
+}
+
+.dungeon-masters-forge .form-footer.dm_forge-actions-footer {
+  align-items: center;
+}
+
+.dungeon-masters-forge .form-footer.dm_forge-actions-footer .dm_forge-approval {
+  margin-right: 2px;
+}
+
+.dungeon-masters-forge .form-footer.dm_forge-actions-footer [data-action="report-failed-item"] {
+  margin-left: auto;
+}
+
+.dungeon-masters-forge .form-footer.dm_forge-actions-footer [data-action="create"] {
+  margin-left: 0;
 }
 
 .dm_forge-report-dialog {
