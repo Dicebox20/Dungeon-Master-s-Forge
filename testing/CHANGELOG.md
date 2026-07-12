@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 2.23.1-test.24
+
+- Updated the baked-in Free Forge model request to `gpt-5.4-mini` so it matches the live service allowlist.
+
 ## 2.23.1-test.23
 
 - Replaced publishable internal naming and tester manifest paths with Dungeon Master's Forge naming.
