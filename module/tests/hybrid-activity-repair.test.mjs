@@ -141,7 +141,7 @@ assert.equal(reroutedStormUtility.spec.saveActivities[0].target.template.type, "
 const staleGrenadeTemplate = repairHybridSpecFromRequest({
   kind: "chargedSaveDamage",
   name: "Thunderclap Grenade",
-  save: { ability: "con", dc: 15 },
+  save: { ability: "dex", dc: 15 },
   damageParts: [{ number: 3, denomination: 6, bonus: "", types: ["thunder"] }],
   range: { value: 20, units: "ft" },
   target: { template: { type: "burst", size: 5, units: "ft" }, prompt: true }
@@ -151,6 +151,7 @@ assert.equal(staleGrenadeTemplate.spec.range.value, 60);
 assert.equal(staleGrenadeTemplate.spec.target.template.type, "sphere");
 assert.equal(staleGrenadeTemplate.spec.target.template.size, 10);
 assert.equal(staleGrenadeTemplate.spec.target.prompt, true);
+assert.equal(staleGrenadeTemplate.spec.save.ability, "con");
 
 const celestialGlaive = repairHybridSpecFromRequest({
   kind: "artifactWeaponHybrid",

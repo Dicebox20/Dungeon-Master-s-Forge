@@ -7,10 +7,10 @@
       "name": "Dungeon Master's Forge V2 Project"
     }
   ],
-  "version": "2.23.1-test.21",
+  "version": "2.23.1-test.22",
   "url": "https://github.com/Dicebox20/Dungeon-Master-s-Forge",
   "manifest": "https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/codex/package-id-migration/testing/module.json",
-  "download": "https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/codex/package-id-migration/testing/releases/dungeon-masters-forge-v2-2.23.1-test.21.zip",
+  "download": "https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/codex/package-id-migration/testing/releases/dungeon-masters-forge-v2-2.23.1-test.22.zip",
   "readme": "https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/codex/package-id-migration/testing/README.md",
   "changelog": "https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/codex/package-id-migration/testing/CHANGELOG.md",
   "compatibility": {

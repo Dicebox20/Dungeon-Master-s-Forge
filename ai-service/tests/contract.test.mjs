@@ -1201,6 +1201,28 @@ test("grenade normalization prefers explicit request range over stale model defa
   assert.equal(spec.target.prompt, true);
 });
 
+test("grenade normalization prefers an explicit request save ability over model defaults", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a Thunderclap Grenade. Throw it to a point within 60 feet. Each creature in a 10-foot-radius sphere must make a DC 15 Constitution saving throw, taking 3d6 thunder damage on a failure."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "chargedSaveDamage",
+      name: "Thunderclap Grenade",
+      description: "A concussive grenade.",
+      save: { ability: "dex", dc: 15 },
+      damageParts: [{ number: 3, denomination: 6, bonus: "", types: ["thunder"] }],
+      range: { value: 60, units: "ft" },
+      target: {
+        template: { type: "sphere", size: 10, units: "ft" },
+        prompt: true
+      }
+    }]
+  }, request, { makeId: ids() });
+
+  assert.equal(result.specs[0].save.ability, "con");
+});
+
 test("grenade normalization also preserves thrown range from layered Forge brief text", () => {
   const request = validateForgeRequest(envelope({
     request: [

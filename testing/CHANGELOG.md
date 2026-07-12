@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 2.23.1-test.22
+
+- Made an explicitly requested grenade saving-throw ability override stale model defaults in both the AI service and Foundry repair pass.
+
 ## 2.23.1-test.21
 
 - Added damage-aware Foundry core images for grenade-style consumable projectiles when no exact DND5e system image is available.

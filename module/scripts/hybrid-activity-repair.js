@@ -826,20 +826,35 @@ function looksLikeThrownConsumableRequest(text) {
 function repairExplicitConsumableTargets(spec, request) {
   if (!looksLikeThrownConsumableRequest(request)) return { applied: false, spec, assumptions: [] };
   const template = parseTemplateTarget(request);
-  if (!template) return { applied: false, spec, assumptions: [] };
+  const explicitSaveAbility = inferSaveAbility(request, "");
+  if (!template && !explicitSaveAbility) return { applied: false, spec, assumptions: [] };
 
   const next = clone(spec);
   let applied = false;
+  let targetApplied = false;
+  let saveApplied = false;
   const fields = ["activities", "attackActivities", "saveActivities", "utilityActivities"];
   for (const field of fields) {
     if (!Array.isArray(next[field])) continue;
     next[field] = next[field].map(activity => {
       if (!activity || typeof activity !== "object") return activity;
+      const nextActivity = clone(activity);
+      if (explicitSaveAbility && (field === "saveActivities" || activity.save)) {
+        if (compactText(activity.save?.ability).toLowerCase() !== explicitSaveAbility) {
+          nextActivity.save = {
+            ...(clone(activity.save) ?? {}),
+            ability: explicitSaveAbility
+          };
+          applied = true;
+          saveApplied = true;
+        }
+      }
+      if (!template) return nextActivity;
       const currentTemplate = activity.target?.template;
       const sameTemplate = currentTemplate?.type === template.target.template.type
         && Number(currentTemplate?.size) === Number(template.target.template.size)
         && Number(currentTemplate?.width ?? 0) === Number(template.target.template.width ?? 0);
-      const nextActivity = {
+      Object.assign(nextActivity, {
         ...activity,
         range: clone(template.range),
         target: {
@@ -852,23 +867,41 @@ function repairExplicitConsumableTargets(spec, request) {
           },
           prompt: true
         }
-      };
-      if (!sameTemplate || activity.target?.prompt !== true || activity.range?.value !== template.range?.value) applied = true;
+      });
+      if (!sameTemplate || activity.target?.prompt !== true || activity.range?.value !== template.range?.value) {
+        applied = true;
+        targetApplied = true;
+      }
       return nextActivity;
     });
   }
 
   if (next.kind === "chargedSaveDamage") {
-    if (JSON.stringify(next.target?.template) !== JSON.stringify(template.target.template)
-      || next.target?.prompt !== true
-      || next.range?.value !== template.range?.value) applied = true;
-    next.range = clone(template.range);
-    next.target = clone(template.target);
+    if (explicitSaveAbility && compactText(next.save?.ability).toLowerCase() !== explicitSaveAbility) {
+      next.save = {
+        ...(clone(next.save) ?? {}),
+        ability: explicitSaveAbility
+      };
+      applied = true;
+      saveApplied = true;
+    }
+    if (template) {
+      if (JSON.stringify(next.target?.template) !== JSON.stringify(template.target.template)
+        || next.target?.prompt !== true
+        || next.range?.value !== template.range?.value) {
+        applied = true;
+        targetApplied = true;
+      }
+      next.range = clone(template.range);
+      next.target = clone(template.target);
+    }
   }
 
-  return applied
-    ? { applied: true, spec: next, assumptions: ["Applied explicit consumable range and area template from the request over stale model defaults."] }
-    : { applied: false, spec, assumptions: [] };
+  if (!applied) return { applied: false, spec, assumptions: [] };
+  const assumptions = [];
+  if (targetApplied) assumptions.push("Applied explicit consumable range and area template from the request over stale model defaults.");
+  if (saveApplied) assumptions.push("Applied the explicit consumable saving throw ability from the request over stale model defaults.");
+  return { applied: true, spec: next, assumptions };
 }
 
 function addHealingActivity(spec, request) {
