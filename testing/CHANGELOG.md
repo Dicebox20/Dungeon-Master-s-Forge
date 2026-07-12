@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 2.23.1-test.29
+
+- Restored a minimized Forge window when the Items sidebar hammer is selected again.
+
+## 2.23.1-test.28
+
+- Moved approval and failed-item reporting controls into the actual bottom action bar, matching the compact Forge layout.
+
 ## 2.23.1-test.27
 
 - Moved creation approval beside the failed-item report control as a compact, clearly labeled action.
