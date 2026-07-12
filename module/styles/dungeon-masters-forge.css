@@ -58,7 +58,7 @@
   box-sizing: border-box;
 }
 
-.codex-forge-workflow {
+.dm_forge-workflow {
   display: grid;
   grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
   min-height: 0;
@@ -67,7 +67,7 @@
   gap: 14px;
 }
 
-.codex-forge-step {
+.dm_forge-step {
   display: inline-grid;
   place-items: center;
   width: 20px;
@@ -79,7 +79,7 @@
   line-height: 1;
 }
 
-.codex-forge-panel {
+.dm_forge-panel {
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -97,12 +97,12 @@
   scrollbar-gutter: stable;
 }
 
-.codex-forge-panel:focus-visible {
+.dm_forge-panel:focus-visible {
   outline: 2px solid #e5a15d;
   outline-offset: 2px;
 }
 
-.codex-forge-pane-header {
+.dm_forge-pane-header {
   position: sticky;
   top: 0;
   z-index: 1;
@@ -112,7 +112,7 @@
   background: linear-gradient(180deg, rgb(25 14 17 / 97%), rgb(17 20 24 / 87%));
 }
 
-.codex-forge-pane-header h2 {
+.dm_forge-pane-header h2 {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -124,7 +124,7 @@
   text-shadow: 0 1px 0 rgb(0 0 0 / 55%);
 }
 
-.codex-forge-provider-summary {
+.dm_forge-provider-summary {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -135,16 +135,16 @@
   background: linear-gradient(180deg, rgb(53 18 23 / 42%), rgb(24 20 24 / 42%));
 }
 
-.codex-forge-provider-summary-copy {
+.dm_forge-provider-summary-copy {
   display: grid;
   gap: 4px;
 }
 
-.codex-forge-provider-summary-copy strong {
+.dm_forge-provider-summary-copy strong {
   font-size: var(--font-size-14);
 }
 
-.codex-forge-provider-summary-meta {
+.dm_forge-provider-summary-meta {
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -152,19 +152,19 @@
   font-size: var(--font-size-12);
 }
 
-.codex-forge-provider-summary[data-state="warning"] .codex-forge-provider-summary-meta {
+.dm_forge-provider-summary[data-state="warning"] .dm_forge-provider-summary-meta {
   color: #e5a15d;
 }
 
-.codex-forge-provider-summary[data-state="ready"] .codex-forge-provider-summary-meta i {
+.dm_forge-provider-summary[data-state="ready"] .dm_forge-provider-summary-meta i {
   color: #73c991;
 }
 
-.codex-forge-request-controls {
+.dm_forge-request-controls {
   grid-template-columns: minmax(180px, 1fr) minmax(220px, 1.3fr);
 }
 
-.codex-forge-request-hint {
+.dm_forge-request-hint {
   display: flex;
   flex-direction: column;
   gap: 5px;
@@ -172,7 +172,7 @@
   font-weight: 600;
 }
 
-.codex-forge-request-hint small {
+.dm_forge-request-hint small {
   color: var(--color-text-subtle);
   font-weight: 400;
   line-height: 1.4;
@@ -180,7 +180,7 @@
 
 .dungeon-masters-forge label > span:first-child,
 .dungeon-masters-forge summary span,
-.dungeon-masters-forge .codex-forge-request-hint > span {
+.dungeon-masters-forge .dm_forge-request-hint > span {
   color: #d8c8ba;
   font-size: var(--font-size-11);
   font-weight: 700;
@@ -188,7 +188,7 @@
   text-transform: uppercase;
 }
 
-.codex-forge-request {
+.dm_forge-request {
   display: flex;
   flex-direction: column;
   flex: 1 1 auto;
@@ -197,14 +197,14 @@
   font-weight: 600;
 }
 
-.codex-forge-provider-controls {
+.dm_forge-provider-controls {
   display: grid;
   grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) auto;
   gap: 10px 12px;
   align-items: end;
 }
 
-.codex-forge-provider-controls label {
+.dm_forge-provider-controls label {
   display: flex;
   flex-direction: column;
   gap: 5px;
@@ -212,11 +212,11 @@
   font-weight: 600;
 }
 
-.codex-forge-provider-controls select {
+.dm_forge-provider-controls select {
   width: 100%;
 }
 
-.codex-forge-provider-settings {
+.dm_forge-provider-settings {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 8px;
@@ -225,11 +225,11 @@
   background: rgb(20 24 28 / 45%);
 }
 
-.codex-forge-provider-settings[hidden] {
+.dm_forge-provider-settings[hidden] {
   display: none;
 }
 
-.codex-forge-provider-settings label {
+.dm_forge-provider-settings label {
   display: flex;
   flex-direction: column;
   gap: 5px;
@@ -237,12 +237,12 @@
   font-weight: 600;
 }
 
-.codex-forge-provider-settings input {
+.dm_forge-provider-settings input {
   width: 100%;
   min-height: 32px;
 }
 
-.codex-forge-provider-settings .codex-forge-token-storage {
+.dm_forge-provider-settings .dm_forge-token-storage {
   grid-column: 1 / -1;
   display: grid;
   grid-template-columns: auto 1fr;
@@ -250,18 +250,18 @@
   gap: 3px 8px;
 }
 
-.codex-forge-token-storage input {
+.dm_forge-token-storage input {
   width: auto;
   margin: 0;
 }
 
-.codex-forge-token-storage small {
+.dm_forge-token-storage small {
   grid-column: 2;
   font-weight: 400;
   opacity: 0.78;
 }
 
-.codex-forge-provider-state {
+.dm_forge-provider-state {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -273,7 +273,7 @@
   white-space: nowrap;
 }
 
-.codex-forge-provider-state[data-state="warning"] {
+.dm_forge-provider-state[data-state="warning"] {
   color: #e5a15d;
 }
 
@@ -295,19 +295,19 @@
 .dungeon-masters-forge textarea,
 .dungeon-masters-forge select,
 .dungeon-masters-forge option,
-.dungeon-masters-forge .codex-forge-settings-card input,
-.dungeon-masters-forge .codex-forge-settings-card select,
-.dungeon-masters-forge .codex-forge-options input,
-.dungeon-masters-forge .codex-forge-request textarea,
-.dungeon-masters-forge .codex-forge-specs textarea,
+.dungeon-masters-forge .dm_forge-settings-card input,
+.dungeon-masters-forge .dm_forge-settings-card select,
+.dungeon-masters-forge .dm_forge-options input,
+.dungeon-masters-forge .dm_forge-request textarea,
+.dungeon-masters-forge .dm_forge-specs textarea,
 .dungeon-masters-forge-settings input,
 .dungeon-masters-forge-settings textarea,
 .dungeon-masters-forge-settings select,
 .dungeon-masters-forge-settings option,
-.dungeon-masters-forge-settings .codex-forge-settings-card input,
-.dungeon-masters-forge-settings .codex-forge-settings-card select,
-.dungeon-masters-forge-settings .codex-forge-settings-status,
-.dungeon-masters-forge-settings .codex-forge-settings-provider-status {
+.dungeon-masters-forge-settings .dm_forge-settings-card input,
+.dungeon-masters-forge-settings .dm_forge-settings-card select,
+.dungeon-masters-forge-settings .dm_forge-settings-status,
+.dungeon-masters-forge-settings .dm_forge-settings-provider-status {
   color: #f0ece5 !important;
   -webkit-text-fill-color: #f0ece5 !important;
 }
@@ -362,7 +362,7 @@
     0 0 0 1px rgb(229 161 93 / 18%);
 }
 
-.codex-forge-request textarea {
+.dm_forge-request textarea {
   flex: 1 1 auto;
   width: 100%;
   min-height: 190px;
@@ -373,12 +373,12 @@
   line-height: 1.45;
 }
 
-.codex-forge-request textarea,
-.codex-forge-specs textarea {
+.dm_forge-request textarea,
+.dm_forge-specs textarea {
   scrollbar-color: rgb(180 42 51 / 65%) rgb(0 0 0 / 20%);
 }
 
-.codex-forge-compile-report {
+.dm_forge-compile-report {
   display: block;
   padding: 10px 12px;
   border: 1px solid rgb(180 42 51 / 24%);
@@ -388,23 +388,23 @@
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 5%);
 }
 
-.codex-forge-compile-report[hidden] {
+.dm_forge-compile-report[hidden] {
   display: none;
 }
 
-.codex-forge-diagnostics {
+.dm_forge-diagnostics {
   max-height: 250px;
   overflow: auto;
   border-top: 1px solid var(--color-border-light-primary);
   border-bottom: 1px solid var(--color-border-light-primary);
 }
 
-.codex-forge-diagnostics[hidden] {
+.dm_forge-diagnostics[hidden] {
   display: none;
 }
 
-.codex-forge-diagnostics-head,
-.codex-forge-diagnostics li {
+.dm_forge-diagnostics-head,
+.dm_forge-diagnostics li {
   display: grid;
   grid-template-columns: 18px minmax(150px, 1fr) auto minmax(220px, 1.4fr);
   gap: 8px;
@@ -413,62 +413,62 @@
   padding: 5px 6px;
 }
 
-.codex-forge-diagnostics-head {
+.dm_forge-diagnostics-head {
   grid-template-columns: minmax(0, 1fr) auto;
   color: var(--color-text-subtle);
   font-size: var(--font-size-12);
 }
 
-.codex-forge-diagnostics ol {
+.dm_forge-diagnostics ol {
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.codex-forge-diagnostics li + li {
+.dm_forge-diagnostics li + li {
   border-top: 1px solid rgb(255 255 255 / 8%);
 }
 
-.codex-forge-diagnostics li[data-state="passed"] i {
+.dm_forge-diagnostics li[data-state="passed"] i {
   color: #73c991;
 }
 
-.codex-forge-diagnostics li[data-state="failed"] i {
+.dm_forge-diagnostics li[data-state="failed"] i {
   color: #d66a6a;
 }
 
-.codex-forge-diagnostics code,
-.codex-forge-diagnostics small {
+.dm_forge-diagnostics code,
+.dm_forge-diagnostics small {
   overflow-wrap: anywhere;
   font-size: var(--font-size-11);
 }
 
-.codex-forge-compile-head,
-.codex-forge-no-notes {
+.dm_forge-compile-head,
+.dm_forge-no-notes {
   grid-column: 1 / -1;
   margin: 0;
 }
 
-.codex-forge-compile-head {
+.dm_forge-compile-head {
   display: flex;
   justify-content: space-between;
   gap: 12px;
   align-items: center;
 }
 
-.codex-forge-compile-head span {
+.dm_forge-compile-head span {
   color: #e5a15d;
   font-family: var(--font-monospace, "Consolas", monospace);
   font-size: var(--font-size-11);
 }
 
-.codex-forge-bottom-tray {
+.dm_forge-bottom-tray {
   display: grid;
   gap: 8px;
   flex: 0 0 auto;
 }
 
-.codex-forge-report-action {
+.dm_forge-report-action {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -482,22 +482,22 @@
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 3%);
 }
 
-.codex-forge-report-action-copy {
+.dm_forge-report-action-copy {
   display: grid;
   gap: 4px;
   min-width: 0;
 }
 
-.codex-forge-report-action-copy strong {
+.dm_forge-report-action-copy strong {
   color: #f3e8da;
 }
 
-.codex-forge-report-action-copy small {
+.dm_forge-report-action-copy small {
   color: #cbb8a2;
   line-height: 1.45;
 }
 
-.codex-forge-report-button {
+.dm_forge-report-button {
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
@@ -505,11 +505,11 @@
   white-space: nowrap;
 }
 
-.codex-forge-report-button:disabled {
+.dm_forge-report-button:disabled {
   opacity: 0.6;
 }
 
-.codex-forge-notice-stack {
+.dm_forge-notice-stack {
   display: block;
   border: 1px solid rgb(180 42 51 / 18%);
   border-radius: 6px;
@@ -517,20 +517,20 @@
   overflow: hidden;
 }
 
-.codex-forge-footer-disclosure {
+.dm_forge-footer-disclosure {
   display: grid;
   gap: 8px;
 }
 
-.codex-forge-footer-disclosure > summary {
+.dm_forge-footer-disclosure > summary {
   list-style: none;
 }
 
-.codex-forge-footer-disclosure > summary::-webkit-details-marker {
+.dm_forge-footer-disclosure > summary::-webkit-details-marker {
   display: none;
 }
 
-.codex-forge-footer-head {
+.dm_forge-footer-head {
   display: flex;
   justify-content: space-between;
   gap: 10px 14px;
@@ -542,14 +542,14 @@
   cursor: pointer;
 }
 
-.codex-forge-footer-summary {
+.dm_forge-footer-summary {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
 }
 
-.codex-forge-footer-badges {
+.dm_forge-footer-badges {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
@@ -557,8 +557,8 @@
   min-width: 0;
 }
 
-.codex-forge-footer-badge,
-.codex-forge-footer-more {
+.dm_forge-footer-badge,
+.dm_forge-footer-more {
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -571,59 +571,59 @@
   white-space: nowrap;
 }
 
-.codex-forge-footer-badge {
+.dm_forge-footer-badge {
   color: #ddd5cb;
 }
 
-.codex-forge-footer-badge[data-state="warning"],
-.codex-forge-footer-badge[data-state="unresolved"] {
+.dm_forge-footer-badge[data-state="warning"],
+.dm_forge-footer-badge[data-state="unresolved"] {
   color: #f0c488;
 }
 
-.codex-forge-footer-badge[data-state="deferred"] {
+.dm_forge-footer-badge[data-state="deferred"] {
   color: #d7a5dd;
 }
 
-.codex-forge-footer-badge[data-state="assumption"] {
+.dm_forge-footer-badge[data-state="assumption"] {
   color: #9fdeb0;
 }
 
-.codex-forge-footer-more {
+.dm_forge-footer-more {
   color: var(--color-text-subtle);
 }
 
-.codex-forge-footer-disclosure[open] .codex-forge-footer-head {
+.dm_forge-footer-disclosure[open] .dm_forge-footer-head {
   border-bottom: 1px solid rgb(255 255 255 / 6%);
 }
 
-.codex-forge-footer-notes {
+.dm_forge-footer-notes {
   display: grid;
   gap: 8px;
   padding: 0 12px 12px;
 }
 
-.codex-forge-footer-note {
+.dm_forge-footer-note {
   padding: 8px 10px;
   border-left: 3px solid #5aa9d6;
   border-radius: 4px;
   background: rgb(255 255 255 / 3%);
 }
 
-.codex-forge-footer-note[data-state="warning"],
-.codex-forge-footer-note[data-state="unresolved"] {
+.dm_forge-footer-note[data-state="warning"],
+.dm_forge-footer-note[data-state="unresolved"] {
   border-left-color: #e5a15d;
 }
 
-.codex-forge-footer-note[data-state="deferred"] {
+.dm_forge-footer-note[data-state="deferred"] {
   border-left-color: #c17fc4;
 }
 
-.codex-forge-footer-note[data-state="assumption"] {
+.dm_forge-footer-note[data-state="assumption"] {
   border-left-color: #73c991;
 }
 
 
-.codex-forge-statusbar {
+.dm_forge-statusbar {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
@@ -631,7 +631,7 @@
   border-bottom: 1px solid var(--color-border-light-primary);
 }
 
-.codex-forge-pill {
+.dm_forge-pill {
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -644,15 +644,15 @@
   white-space: nowrap;
 }
 
-.codex-forge-pill[data-state="ready"] i {
+.dm_forge-pill[data-state="ready"] i {
   color: #73c991;
 }
 
-.codex-forge-pill[data-state="inactive"] {
+.dm_forge-pill[data-state="inactive"] {
   color: var(--color-text-subtle);
 }
 
-.codex-forge-options {
+.dm_forge-options {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 10px 12px;
@@ -662,8 +662,8 @@
   background: rgb(255 255 255 / 2%);
 }
 
-.codex-forge-options label,
-.codex-forge-specs {
+.dm_forge-options label,
+.dm_forge-specs {
   display: flex;
   flex-direction: column;
   gap: 5px;
@@ -671,11 +671,11 @@
   font-weight: 600;
 }
 
-.codex-forge-options input[type="text"] {
+.dm_forge-options input[type="text"] {
   width: 100%;
 }
 
-.codex-forge-options .codex-forge-toggle {
+.dm_forge-options .dm_forge-toggle {
   flex-direction: row;
   align-items: center;
   grid-column: 1 / -1;
@@ -683,16 +683,16 @@
   font-weight: 400;
 }
 
-.codex-forge-toggle input {
+.dm_forge-toggle input {
   flex: 0 0 auto;
 }
 
-.codex-forge-specs {
+.dm_forge-specs {
   flex: 1 1 auto;
   min-height: 220px;
 }
 
-.codex-forge-specs textarea {
+.dm_forge-specs textarea {
   flex: 1 1 auto;
   width: 100%;
   min-height: 220px;
@@ -706,7 +706,7 @@
   white-space: pre;
 }
 
-.codex-forge-approval {
+.dm_forge-approval {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -720,11 +720,11 @@
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 3%);
 }
 
-.codex-forge-approval-footer {
+.dm_forge-approval-footer {
   justify-content: flex-start;
 }
 
-.codex-forge-approval input {
+.dm_forge-approval input {
   position: absolute;
   inline-size: 1px;
   block-size: 1px;
@@ -738,11 +738,11 @@
   cursor: pointer;
 }
 
-.codex-forge-approval:has(input:disabled) {
+.dm_forge-approval:has(input:disabled) {
   opacity: 0.55;
 }
 
-.codex-forge-approval-box {
+.dm_forge-approval-box {
   display: inline-grid;
   place-items: center;
   flex: 0 0 auto;
@@ -756,7 +756,7 @@
   transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease, box-shadow 120ms ease;
 }
 
-.codex-forge-approval input:checked + .codex-forge-approval-box {
+.dm_forge-approval input:checked + .dm_forge-approval-box {
   background: linear-gradient(180deg, rgb(179 49 45 / 96%), rgb(126 25 24 / 96%));
   border-color: rgb(245 190 120 / 88%);
   color: #fff6e7;
@@ -765,55 +765,55 @@
     0 0 0 1px rgb(179 49 45 / 18%);
 }
 
-.codex-forge-approval-box i {
+.dm_forge-approval-box i {
   opacity: 0;
   transform: scale(0.75);
   transition: opacity 120ms ease, transform 120ms ease;
 }
 
-.codex-forge-approval input:checked + .codex-forge-approval-box i {
+.dm_forge-approval input:checked + .dm_forge-approval-box i {
   opacity: 1;
   transform: scale(1);
 }
 
-.codex-forge-approval input:focus-visible {
+.dm_forge-approval input:focus-visible {
   outline: 2px solid rgb(229 161 93 / 88%);
   outline-offset: 2px;
 }
 
-.codex-forge-approval-text {
+.dm_forge-approval-text {
   color: #f1e7da;
   font-weight: 600;
 }
 
-.codex-forge-report-dialog {
+.dm_forge-report-dialog {
   display: grid;
   gap: 12px;
 }
 
-.codex-forge-report-dialog p,
-.codex-forge-report-dialog li {
+.dm_forge-report-dialog p,
+.dm_forge-report-dialog li {
   color: #e8ddd0;
   line-height: 1.5;
 }
 
-.codex-forge-report-dialog ul {
+.dm_forge-report-dialog ul {
   margin: 0;
   padding-left: 18px;
 }
 
-.codex-forge-report-dialog-field {
+.dm_forge-report-dialog-field {
   display: grid;
   gap: 6px;
   font-weight: 600;
 }
 
-.codex-forge-report-dialog-field textarea {
+.dm_forge-report-dialog-field textarea {
   min-height: 180px;
   resize: vertical;
 }
 
-.codex-forge-report-dialog-status {
+.dm_forge-report-dialog-status {
   display: block;
   padding: 10px 12px;
   border: 1px solid rgb(208 180 129 / 16%);
@@ -822,27 +822,27 @@
   color: #e8ddd0;
 }
 
-.codex-forge-report-dialog-status[data-state="working"] {
+.dm_forge-report-dialog-status[data-state="working"] {
   color: #f3d39c;
 }
 
-.codex-forge-report-dialog-status[data-state="success"] {
+.dm_forge-report-dialog-status[data-state="success"] {
   color: #92ddb0;
 }
 
-.codex-forge-report-dialog-status[data-state="warning"] {
+.dm_forge-report-dialog-status[data-state="warning"] {
   color: #f0c27d;
 }
 
-.codex-forge-report-dialog-status[data-state="error"] {
+.dm_forge-report-dialog-status[data-state="error"] {
   color: #ffb3b0;
 }
 
-.codex-forge-review-summary[hidden] {
+.dm_forge-review-summary[hidden] {
   display: none;
 }
 
-.codex-forge-review-head {
+.dm_forge-review-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -850,7 +850,7 @@
   margin-bottom: 8px;
 }
 
-.codex-forge-review-head span {
+.dm_forge-review-head span {
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -858,19 +858,19 @@
   font-size: var(--font-size-12);
 }
 
-.codex-forge-review-head span i {
+.dm_forge-review-head span i {
   color: #73c991;
 }
 
-.codex-forge-review-overview,
-.codex-forge-compile-pills {
+.dm_forge-review-overview,
+.dm_forge-compile-pills {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   margin: 0 0 10px;
 }
 
-.codex-forge-review-pill {
+.dm_forge-review-pill {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -884,22 +884,22 @@
   font-weight: 700;
 }
 
-.codex-forge-review-pill i {
+.dm_forge-review-pill i {
   color: #73c991;
 }
 
-.codex-forge-review-pill[data-state="unresolved"] i,
-.codex-forge-review-pill[data-state="warning"] i {
+.dm_forge-review-pill[data-state="unresolved"] i,
+.dm_forge-review-pill[data-state="warning"] i {
   color: #e5a15d;
 }
 
-.codex-forge-review-items {
+.dm_forge-review-items {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
   gap: 12px;
 }
 
-.codex-forge-item-summary {
+.dm_forge-item-summary {
   padding: 0;
   border: 1px solid rgb(208 180 129 / 26%);
   border-left: 3px solid #73c991;
@@ -913,11 +913,11 @@
     0 10px 24px rgb(0 0 0 / 16%);
 }
 
-.codex-forge-item-summary[data-state="unresolved"] {
+.dm_forge-item-summary[data-state="unresolved"] {
   border-left-color: #e5a15d;
 }
 
-.codex-forge-item-sheet-header {
+.dm_forge-item-sheet-header {
   display: grid;
   grid-template-columns: clamp(72px, 10vw, 96px) minmax(0, 1fr);
   gap: 12px;
@@ -927,7 +927,7 @@
   background: linear-gradient(180deg, rgb(58 55 59 / 58%), rgb(37 39 48 / 10%));
 }
 
-.codex-forge-item-sheet-header img {
+.dm_forge-item-sheet-header img {
   width: 100%;
   aspect-ratio: 1;
   border: 1px solid rgb(218 188 137 / 55%);
@@ -936,7 +936,7 @@
   box-shadow: 0 0 0 1px rgb(0 0 0 / 35%);
 }
 
-.codex-forge-item-summary h3 {
+.dm_forge-item-summary h3 {
   margin: 0;
   font-size: clamp(21px, 1.3vw + 15px, 30px);
   font-weight: 800;
@@ -947,19 +947,19 @@
   text-shadow: 0 2px 0 rgb(0 0 0 / 45%);
 }
 
-.codex-forge-item-sheet-titlewrap {
+.dm_forge-item-sheet-titlewrap {
   display: grid;
   gap: 8px;
   min-width: 0;
 }
 
-.codex-forge-item-sheet-titlebar {
+.dm_forge-item-sheet-titlebar {
   padding: 8px 12px;
   border-radius: 4px;
   background: linear-gradient(180deg, rgb(255 255 255 / 10%), rgb(255 255 255 / 4%));
 }
 
-.codex-forge-item-sheet-ribbon {
+.dm_forge-item-sheet-ribbon {
   display: flex;
   flex-wrap: wrap;
   gap: 6px 8px;
@@ -968,20 +968,20 @@
   text-transform: uppercase;
 }
 
-.codex-forge-item-sheet-ribbon span {
+.dm_forge-item-sheet-ribbon span {
   padding: 3px 8px;
   border: 1px solid rgb(218 188 137 / 24%);
   border-radius: 999px;
   background: rgb(17 19 24 / 40%);
 }
 
-.codex-forge-item-sheet-status {
+.dm_forge-item-sheet-status {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
 
-.codex-forge-item-sheet-tabs {
+.dm_forge-item-sheet-tabs {
   display: flex;
   align-items: center;
   gap: 18px;
@@ -994,7 +994,7 @@
   font-weight: 700;
 }
 
-.codex-forge-item-sheet-tab {
+.dm_forge-item-sheet-tab {
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -1003,17 +1003,17 @@
   opacity: 0.72;
 }
 
-.codex-forge-item-sheet-tab em {
+.dm_forge-item-sheet-tab em {
   font-style: normal;
   color: #e5a15d;
 }
 
-.codex-forge-item-sheet-tab.is-active {
+.dm_forge-item-sheet-tab.is-active {
   opacity: 1;
   color: #f4f0ea;
 }
 
-.codex-forge-item-sheet-tab.is-active::after {
+.dm_forge-item-sheet-tab.is-active::after {
   content: "";
   position: absolute;
   left: 0;
@@ -1023,13 +1023,13 @@
   background: #e5a15d;
 }
 
-.codex-forge-item-sheet-body {
+.dm_forge-item-sheet-body {
   display: grid;
   gap: 12px;
   padding: 14px;
 }
 
-.codex-forge-item-sheet-subtitle {
+.dm_forge-item-sheet-subtitle {
   margin: 0;
   color: #d6d0c8;
   font-style: italic;
@@ -1037,7 +1037,7 @@
   font-size: clamp(12px, 0.3vw + 11px, 14px);
 }
 
-.codex-forge-item-sheet-description {
+.dm_forge-item-sheet-description {
   padding: 12px 14px;
   border-radius: 4px;
   background: rgb(10 12 18 / 20%);
@@ -1046,7 +1046,7 @@
   line-height: 1.6;
 }
 
-.codex-forge-item-sheet-card {
+.dm_forge-item-sheet-card {
   display: grid;
   gap: 10px;
   padding: 12px 14px;
@@ -1055,29 +1055,29 @@
   background: rgb(0 0 0 / 10%);
 }
 
-.codex-forge-item-sheet-alert {
+.dm_forge-item-sheet-alert {
   border-color: rgb(229 161 93 / 30%);
   background: linear-gradient(180deg, rgb(79 46 23 / 18%), rgb(38 27 20 / 14%));
 }
 
-.codex-forge-item-sheet-alert-copy {
+.dm_forge-item-sheet-alert-copy {
   display: grid;
   gap: 9px;
 }
 
-.codex-forge-item-sheet-alert-copy p {
+.dm_forge-item-sheet-alert-copy p {
   margin: 0;
   color: #efe6d8;
   line-height: 1.5;
 }
 
-.codex-forge-item-sheet-alert-tags {
+.dm_forge-item-sheet-alert-tags {
   display: flex;
   flex-wrap: wrap;
   gap: 6px 8px;
 }
 
-.codex-forge-item-sheet-alert-tags span {
+.dm_forge-item-sheet-alert-tags span {
   display: inline-flex;
   align-items: center;
   min-height: 22px;
@@ -1090,7 +1090,7 @@
   font-weight: 700;
 }
 
-.codex-forge-item-sheet-card-head {
+.dm_forge-item-sheet-card-head {
   display: flex;
   justify-content: space-between;
   gap: 12px;
@@ -1098,12 +1098,12 @@
   color: #d6d0c8;
 }
 
-.codex-forge-item-sheet-card-head span {
+.dm_forge-item-sheet-card-head span {
   font-size: clamp(10px, 0.2vw + 10px, 12px);
   color: var(--color-text-subtle);
 }
 
-.codex-forge-empty-state {
+.dm_forge-empty-state {
   display: grid;
   grid-template-columns: 18px minmax(0, 1fr);
   gap: 10px;
@@ -1114,26 +1114,26 @@
   color: #ddd5cb;
 }
 
-.codex-forge-empty-state i {
+.dm_forge-empty-state i {
   margin-top: 2px;
   color: #e5a15d;
 }
 
-.codex-forge-empty-state div {
+.dm_forge-empty-state div {
   display: grid;
   gap: 3px;
 }
 
-.codex-forge-empty-state strong {
+.dm_forge-empty-state strong {
   color: #f1e7da;
 }
 
-.codex-forge-empty-state span {
+.dm_forge-empty-state span {
   color: var(--color-text-subtle);
   line-height: 1.45;
 }
 
-.codex-forge-mechanics {
+.dm_forge-mechanics {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px 12px;
@@ -1142,11 +1142,11 @@
   list-style: none;
 }
 
-.codex-forge-item-sheet-stats {
+.dm_forge-item-sheet-stats {
   margin-top: 0;
 }
 
-.codex-forge-mechanics li {
+.dm_forge-mechanics li {
   display: grid;
   grid-template-columns: 16px minmax(0, 1fr);
   gap: 6px;
@@ -1155,73 +1155,73 @@
   line-height: 1.45;
 }
 
-.codex-forge-mechanics li i {
+.dm_forge-mechanics li i {
   margin-top: 2px;
   color: #e5a15d;
 }
 
-.codex-forge-review-note {
+.dm_forge-review-note {
   display: grid;
   grid-template-columns: 16px minmax(0, 1fr);
   gap: 7px;
   font-size: var(--font-size-11);
 }
 
-.codex-forge-review-note > i {
+.dm_forge-review-note > i {
   margin-top: 2px;
   color: #5aa9d6;
 }
 
-.codex-forge-review-note[data-state="warning"] > i,
-.codex-forge-review-note[data-state="unresolved"] > i {
+.dm_forge-review-note[data-state="warning"] > i,
+.dm_forge-review-note[data-state="unresolved"] > i {
   color: #e5a15d;
 }
 
-.codex-forge-review-note[data-state="deferred"] > i {
+.dm_forge-review-note[data-state="deferred"] > i {
   color: #c17fc4;
 }
 
-.codex-forge-review-note div {
+.dm_forge-review-note div {
   display: grid;
   gap: 2px;
 }
 
-.codex-forge-review-note strong {
+.dm_forge-review-note strong {
   color: var(--color-text-primary);
 }
 
-.codex-forge-review-note small {
+.dm_forge-review-note small {
   color: var(--color-text-subtle);
 }
 
-.codex-forge-item-sheet-notes {
+.dm_forge-item-sheet-notes {
   gap: 8px;
 }
 
-.codex-forge-item-note-badges {
+.dm_forge-item-note-badges {
   display: flex;
   flex-wrap: wrap;
   gap: 6px 8px;
   align-items: center;
 }
 
-.codex-forge-item-note-badges .codex-forge-footer-badge {
+.dm_forge-item-note-badges .dm_forge-footer-badge {
   min-height: 22px;
   padding: 2px 7px;
   background: rgb(255 255 255 / 2%);
 }
 
-.codex-forge-item-note-hint {
+.dm_forge-item-note-hint {
   color: var(--color-text-subtle);
   font-size: var(--font-size-11);
 }
 
-.codex-forge-advanced {
+.dm_forge-advanced {
   border-top: 1px solid var(--color-border-light-primary);
   border-bottom: 1px solid var(--color-border-light-primary);
 }
 
-.codex-forge-advanced > summary {
+.dm_forge-advanced > summary {
   display: flex;
   align-items: center;
   gap: 7px;
@@ -1230,20 +1230,20 @@
   color: var(--color-text-subtle);
 }
 
-.codex-forge-advanced > summary:hover,
-.codex-forge-advanced > summary:focus-visible {
+.dm_forge-advanced > summary:hover,
+.dm_forge-advanced > summary:focus-visible {
   color: #f1ded1;
 }
 
-.codex-forge-advanced[open] > summary {
+.dm_forge-advanced[open] > summary {
   color: var(--color-text-primary);
 }
 
-.codex-forge-advanced .codex-forge-specs {
+.dm_forge-advanced .dm_forge-specs {
   margin: 4px 0 10px;
 }
 
-.codex-forge-message {
+.dm_forge-message {
   display: block;
   flex: 0 0 auto;
   min-height: 34px;
@@ -1256,32 +1256,32 @@
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 4%);
 }
 
-.codex-forge-message[data-state="working"] {
+.dm_forge-message[data-state="working"] {
   border-left-color: #5aa9d6;
 }
 
-.codex-forge-message[data-state="success"] {
+.dm_forge-message[data-state="success"] {
   border-left-color: #73c991;
 }
 
-.codex-forge-message[data-state="warning"] {
+.dm_forge-message[data-state="warning"] {
   border-left-color: #e5a15d;
 }
 
-.codex-forge-message[data-state="error"] {
+.dm_forge-message[data-state="error"] {
   border-left-color: #d66a6a;
 }
 
-.dungeon-masters-forge button.codex-forge-create {
+.dungeon-masters-forge button.dm_forge-create {
   border-color: #e07832;
 }
 
-.dungeon-masters-forge button.codex-forge-create:disabled {
+.dungeon-masters-forge button.dm_forge-create:disabled {
   border-color: var(--color-border-light-primary);
   opacity: 0.5;
 }
 
-.dungeon-masters-forge button.codex-forge-compile {
+.dungeon-masters-forge button.dm_forge-compile {
   border-color: #c17fc4;
 }
 
@@ -1330,7 +1330,7 @@
   color: #f0ece5;
 }
 
-.codex-forge-settings-shell {
+.dm_forge-settings-shell {
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -1339,54 +1339,54 @@
   padding-right: 4px;
 }
 
-.codex-forge-settings-shell .form-header {
+.dm_forge-settings-shell .form-header {
   margin: 6px 0 0;
   color: #d14a52;
   text-shadow: 0 1px 0 rgb(0 0 0 / 45%);
 }
 
-.codex-forge-settings-intro-block {
+.dm_forge-settings-intro-block {
   flex: 0 0 auto !important;
   height: auto !important;
   min-height: 0;
 }
 
-.codex-forge-settings-intro-block > .codex-forge-settings-intro {
+.dm_forge-settings-intro-block > .dm_forge-settings-intro {
   margin: -4px 0 4px;
   color: #d7c8bc;
   line-height: 1.35;
 }
 
-.codex-forge-settings-shell .form-group {
+.dm_forge-settings-shell .form-group {
   margin: 0;
   padding: 2px 0;
 }
 
-.codex-forge-settings-shell .form-group > label {
+.dm_forge-settings-shell .form-group > label {
   flex: 0 0 180px;
   color: #efe3d7;
   font-weight: 700;
 }
 
-.codex-forge-settings-shell .form-fields {
+.dm_forge-settings-shell .form-fields {
   gap: 8px;
 }
 
-.codex-forge-settings-shell input,
-.codex-forge-settings-shell select {
+.dm_forge-settings-shell input,
+.dm_forge-settings-shell select {
   width: 100%;
   color: #f0ece5;
   border-color: rgb(180 42 51 / 26%);
   background: linear-gradient(180deg, rgb(31 25 30 / 96%), rgb(19 22 27 / 96%));
 }
 
-.codex-forge-settings-actions {
+.dm_forge-settings-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
 
-.codex-forge-settings-actions button {
+.dm_forge-settings-actions button {
   flex: 0 0 auto;
   min-width: 132px;
   color: #f6ebe2;
@@ -1395,8 +1395,8 @@
   background: linear-gradient(180deg, rgb(54 27 24 / 94%), rgb(33 21 24 / 96%));
 }
 
-.codex-forge-settings-actions button:hover,
-.codex-forge-settings-actions button:focus-visible {
+.dm_forge-settings-actions button:hover,
+.dm_forge-settings-actions button:focus-visible {
   border-color: rgb(229 161 93 / 82%);
   background: linear-gradient(180deg, rgb(74 34 28 / 96%), rgb(43 24 26 / 98%));
 }
@@ -1409,11 +1409,11 @@
   color: #f0ece5;
 }
 
-.codex-forge-settings-shell .form-fields.codex-forge-settings-actions {
+.dm_forge-settings-shell .form-fields.dm_forge-settings-actions {
   justify-content: flex-start;
 }
 
-.codex-forge-settings-shell > .form-footer {
+.dm_forge-settings-shell > .form-footer {
   flex: 0 0 auto;
   justify-content: flex-end;
   margin-top: 6px;
@@ -1421,7 +1421,7 @@
   border-top: 1px solid var(--color-border-light-primary);
 }
 
-.codex-forge-settings-shell > .form-footer button {
+.dm_forge-settings-shell > .form-footer button {
   flex: 0 0 auto;
   min-width: 150px;
   color: #f6ebe2;
@@ -1430,13 +1430,13 @@
   background: linear-gradient(180deg, rgb(70 31 27 / 96%), rgb(37 22 25 / 98%));
 }
 
-.codex-forge-settings-shell > .form-footer button:hover,
-.codex-forge-settings-shell > .form-footer button:focus-visible {
+.dm_forge-settings-shell > .form-footer button:hover,
+.dm_forge-settings-shell > .form-footer button:focus-visible {
   border-color: rgb(229 161 93 / 86%);
   background: linear-gradient(180deg, rgb(88 38 31 / 98%), rgb(49 25 27 / 99%));
 }
 
-.codex-forge-settings-provider-status {
+.dm_forge-settings-provider-status {
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -1448,11 +1448,11 @@
   color: #73c991;
 }
 
-.codex-forge-settings-provider-status[data-state="warning"] {
+.dm_forge-settings-provider-status[data-state="warning"] {
   color: #e5a15d;
 }
 
-.codex-forge-settings-status {
+.dm_forge-settings-status {
   display: block;
   min-height: 34px;
   margin-top: 4px;
@@ -1464,27 +1464,27 @@
   line-height: 1.35;
 }
 
-.codex-forge-settings-status[data-state="working"] {
+.dm_forge-settings-status[data-state="working"] {
   border-left-color: #5aa9d6;
 }
 
-.codex-forge-settings-status[data-state="success"] {
+.dm_forge-settings-status[data-state="success"] {
   border-left-color: #73c991;
 }
 
-.codex-forge-settings-status[data-state="warning"] {
+.dm_forge-settings-status[data-state="warning"] {
   border-left-color: #e5a15d;
 }
 
-.codex-forge-settings-status[data-state="error"] {
+.dm_forge-settings-status[data-state="error"] {
   border-left-color: #d66a6a;
 }
 
-.codex-forge-token-storage .form-fields {
+.dm_forge-token-storage .form-fields {
   justify-content: flex-start;
 }
 
-.codex-forge-token-storage .checkbox {
+.dm_forge-token-storage .checkbox {
   flex: 0 0 auto;
 }
 
@@ -1493,98 +1493,98 @@
     margin-left: 0;
   }
 
-  .codex-forge-provider-controls {
+  .dm_forge-provider-controls {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .codex-forge-provider-settings {
+  .dm_forge-provider-settings {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .codex-forge-provider-state {
+  .dm_forge-provider-state {
     justify-self: start;
   }
 
-  .codex-forge-provider-summary {
+  .dm_forge-provider-summary {
     flex-direction: column;
     align-items: stretch;
   }
 
-  .codex-forge-settings-shell .form-group {
+  .dm_forge-settings-shell .form-group {
     align-items: stretch;
   }
 
-  .codex-forge-settings-shell .form-group > label {
+  .dm_forge-settings-shell .form-group > label {
     flex-basis: auto;
   }
 
-  .codex-forge-options {
+  .dm_forge-options {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .codex-forge-options .codex-forge-toggle {
+  .dm_forge-options .dm_forge-toggle {
     grid-column: auto;
   }
 
-  .codex-forge-compile-report {
+  .dm_forge-compile-report {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .codex-forge-mechanics {
+  .dm_forge-mechanics {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .codex-forge-diagnostics li {
+  .dm_forge-diagnostics li {
     grid-template-columns: 18px minmax(0, 1fr) auto;
   }
 
-  .codex-forge-diagnostics li small {
+  .dm_forge-diagnostics li small {
     grid-column: 2 / -1;
   }
 }
 
 @media (max-width: 960px) {
-  .codex-forge-workflow {
+  .dm_forge-workflow {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .codex-forge-settings-grid {
+  .dm_forge-settings-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .codex-forge-panel {
+  .dm_forge-panel {
     padding-right: 6px;
   }
 
-  .codex-forge-pane-header {
+  .dm_forge-pane-header {
     margin-right: -6px;
     padding-right: 6px;
   }
 
-  .codex-forge-item-sheet-header {
+  .dm_forge-item-sheet-header {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .codex-forge-item-sheet-header img {
+  .dm_forge-item-sheet-header img {
     width: 72px;
   }
 
-  .codex-forge-item-summary h3 {
+  .dm_forge-item-summary h3 {
     font-size: 22px;
   }
 
-  .codex-forge-item-sheet-tabs {
+  .dm_forge-item-sheet-tabs {
     flex-wrap: wrap;
     gap: 10px 16px;
     padding-top: 6px;
     padding-bottom: 6px;
   }
 
-  .codex-forge-footer-head {
+  .dm_forge-footer-head {
     align-items: flex-start;
   }
 
-  .codex-forge-footer-badges {
+  .dm_forge-footer-badges {
     justify-content: flex-start;
   }
 }

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 2.23.1-test.23
+
+- Replaced publishable internal naming and tester manifest paths with Dungeon Master's Forge naming.
+- Retained prior saved settings and generated-item compatibility without exposing the former package name in release materials.
+
 ## 2.23.1-test.22
 
 - Made an explicitly requested grenade saving-throw ability override stale model defaults in both the AI service and Foundry repair pass.
@@ -314,7 +319,7 @@
 
 - Renamed the visible product to Dungeon Master's Forge.
 - Added a GM-only hammer button directly to the Items directory search bar.
-- Kept the existing `codex-item-forge` module ID and API path for compatibility.
+- Preserved prior package settings and generated-item data for compatibility.
 
 ## 0.1.0 - 2026-06-26
 

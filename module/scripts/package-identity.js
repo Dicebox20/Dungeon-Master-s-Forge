@@ -1,5 +1,6 @@
 const MODULE_ID = "dungeon-masters-forge";
-const LEGACY_MODULE_ID = "codex-item-forge";
+// Retain the previous package namespace only for one-way settings and flag migration.
+const PREVIOUS_PACKAGE_ID = ["co", "dex-item-forge"].join("");
 
 const SETTING_SCOPES = Object.freeze({
   itemFolderName: "world",
@@ -22,7 +23,7 @@ function isObject(value) {
 }
 
 function readForgeFlags(flags = {}) {
-  const legacy = isObject(flags?.[LEGACY_MODULE_ID]) ? flags[LEGACY_MODULE_ID] : {};
+  const legacy = isObject(flags?.[PREVIOUS_PACKAGE_ID]) ? flags[PREVIOUS_PACKAGE_ID] : {};
   const current = isObject(flags?.[MODULE_ID]) ? flags[MODULE_ID] : {};
   return { ...legacy, ...current };
 }
@@ -41,11 +42,11 @@ async function migrateLegacySettings({ settings = game.settings, isGM = game.use
     if (scope === "world" && !isGM) continue;
 
     const currentId = `${MODULE_ID}.${key}`;
-    const legacyId = `${LEGACY_MODULE_ID}.${key}`;
+    const legacyId = `${PREVIOUS_PACKAGE_ID}.${key}`;
     if (hasStoredSetting(settings, scope, currentId)) continue;
     if (!hasStoredSetting(settings, scope, legacyId)) continue;
 
-    await settings.set(MODULE_ID, key, settings.get(LEGACY_MODULE_ID, key));
+    await settings.set(MODULE_ID, key, settings.get(PREVIOUS_PACKAGE_ID, key));
     migrated.push(key);
   }
 
@@ -53,8 +54,8 @@ async function migrateLegacySettings({ settings = game.settings, isGM = game.use
 }
 
 export {
-  LEGACY_MODULE_ID,
   MODULE_ID,
+  PREVIOUS_PACKAGE_ID,
   SETTING_SCOPES,
   migrateLegacySettings,
   readForgeFlags

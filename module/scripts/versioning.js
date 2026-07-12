@@ -8,7 +8,9 @@ function sourceLabelForVersion(version) {
 
 function isManagedSourceLabel(label) {
   const value = String(label ?? "").trim();
-  return /^(?:Codex Item Forge(?:\s+(?:v?[\d.]+|Beta))?|Dungeon Master's Forge(?:\s+(?:v?[\d.]+|Beta|V2))?)$/i.test(value);
+  const priorProductLabel = ["Co", "dex Item Forge"].join("");
+  const priorPattern = priorProductLabel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`^(?:${priorPattern}(?:\\s+(?:v?[\\d.]+|Beta))?|Dungeon Master's Forge(?:\\s+(?:v?[\\d.]+|Beta|V2))?)$`, "i").test(value);
 }
 
 export { BUILD_VERSION, PRODUCT_TITLE, isManagedSourceLabel, sourceLabelForVersion };

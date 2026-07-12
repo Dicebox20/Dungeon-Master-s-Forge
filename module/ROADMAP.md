@@ -39,7 +39,7 @@
 
 - Prepare the public package for Foundry's AI Tools category as a user-prompted runtime item creation tool, not a rules replacement or bundled content pack.
 - Prepare a staff-facing submission brief that explains DMF's runtime AI usage, review-before-create safety model, hosted-vs-BYO provider lanes, and why the package belongs in the `AI Tools` category.
-- Clean test manifest URLs so `testing/module.json` no longer points at legacy `codex/package-id-migration` branch paths for `manifest`, `download`, `readme`, or `changelog`.
+- Keep test manifest URLs on the dedicated tester branch for `manifest`, `download`, `readme`, and `changelog`.
 - Prepare a stable release manifest and GitHub release zip before public Foundry submission.
 - Confirm final package description is human-written and explains that the Dungeon Master writes the idea, reviews the result, and approves creation.
 - Prepare a human-authored Foundry listing packet: short description, long description, support links, screenshots, demo prompts, known limitations, and moderation/abuse wording.

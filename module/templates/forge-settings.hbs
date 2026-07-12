@@ -1,7 +1,7 @@
-<form class="codex-forge-settings-shell standard-form" autocomplete="off">
+<form class="dm_forge-settings-shell standard-form" autocomplete="off">
   <h3 class="form-header">Connection</h3>
-  <div class="codex-forge-settings-intro-block">
-    <p class="notes codex-forge-settings-intro">Choose the generation provider and manage Bring Your Own API details outside the main Forge workflow.</p>
+  <div class="dm_forge-settings-intro-block">
+    <p class="notes dm_forge-settings-intro">Choose the generation provider and manage Bring Your Own API details outside the main Forge workflow.</p>
   </div>
 
   <div class="form-group">
@@ -14,7 +14,7 @@
     <p class="notes">Local Rules stays entirely inside Foundry. Bring Your Own API checks a user-configured Forge-compatible endpoint.</p>
   </div>
 
-  <div class="codex-forge-provider-settings" data-provider-configuration="bring-your-own" {{#unless isBringYourOwn}}hidden{{/unless}}>
+  <div class="dm_forge-provider-settings" data-provider-configuration="bring-your-own" {{#unless isBringYourOwn}}hidden{{/unless}}>
     <div class="form-group">
       <label>Endpoint</label>
       <div class="form-fields">
@@ -39,7 +39,7 @@
       <p class="notes">This can be a shared Forge service token or a personal API key, depending on how the service is configured.</p>
     </div>
 
-    <div class="form-group codex-forge-token-storage">
+    <div class="form-group dm_forge-token-storage">
       <label>Remember token on this device</label>
       <div class="form-fields">
         <label class="checkbox">
@@ -53,7 +53,7 @@
   <div class="form-group">
     <label>Connection status</label>
     <div class="form-fields">
-      <output class="codex-forge-settings-provider-status" data-forge-settings-provider-status data-state="{{providerStatusState}}" aria-live="polite">
+      <output class="dm_forge-settings-provider-status" data-forge-settings-provider-status data-state="{{providerStatusState}}" aria-live="polite">
         <i class="fa-solid {{providerStatusIcon}}"></i>
         <span>{{providerStatusMessage}}</span>
       </output>
@@ -63,7 +63,7 @@
 
   <div class="form-group">
     <label>Connection tools</label>
-    <div class="form-fields codex-forge-settings-actions">
+    <div class="form-fields dm_forge-settings-actions">
       <button type="button" data-action="check-provider">Check Connection</button>
     </div>
   </div>
@@ -79,13 +79,13 @@
   </div>
 
   <h3 class="form-header">Utilities</h3>
-  <div class="codex-forge-settings-intro-block">
-    <p class="notes codex-forge-settings-intro">Keep examples and diagnostics nearby without crowding the Forge window.</p>
+  <div class="dm_forge-settings-intro-block">
+    <p class="notes dm_forge-settings-intro">Keep examples and diagnostics nearby without crowding the Forge window.</p>
   </div>
 
   <div class="form-group">
     <label>Utility actions</label>
-    <div class="form-fields codex-forge-settings-actions">
+    <div class="form-fields dm_forge-settings-actions">
       <button type="button" data-action="example">Load Example</button>
       <button type="button" data-action="diagnostics">Run Diagnostics</button>
       <button type="button" data-action="open-forge">Open Forge</button>
@@ -93,9 +93,9 @@
     <p class="notes">These actions do not create or delete world documents.</p>
   </div>
 
-  <div class="codex-forge-diagnostics" data-forge-settings-diagnostics hidden></div>
+  <div class="dm_forge-diagnostics" data-forge-settings-diagnostics hidden></div>
 
-  <output class="codex-forge-settings-status" data-forge-settings-status data-state="idle" aria-live="polite">Connection and utilities are ready.</output>
+  <output class="dm_forge-settings-status" data-forge-settings-status data-state="idle" aria-live="polite">Connection and utilities are ready.</output>
 
   <footer class="form-footer">
     <button type="submit" data-action="save-settings">

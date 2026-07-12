@@ -27,13 +27,6 @@
           "verified": "5.3.3"
         }
       }
-    ],
-    "conflicts": [
-      {
-        "id": "codex-item-forge",
-        "type": "module",
-        "reason": "Legacy package identity. Disable the old package after settings migration."
-      }
     ]
   },
   "esmodules": [

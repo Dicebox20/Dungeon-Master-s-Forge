@@ -17,7 +17,7 @@ The module can also be opened from a Script Macro:
 game.modules.get("dungeon-masters-forge").api.open();
 ```
 
-The public module ID is `dungeon-masters-forge`. On first launch, it copies saved settings from the legacy package namespace when the new setting has not already been configured. Existing generated items with `flags.codex-item-forge` remain readable; newly created documents use `flags.dungeon-masters-forge`.
+The public module ID is `dungeon-masters-forge`. On first launch, it copies saved settings from the previous package namespace when the new setting has not already been configured. Existing generated items from the previous package remain readable; newly created documents use `flags.dungeon-masters-forge`.
 
 Bring Your Own API connection details now live in **Forge Settings**. Endpoints and model names are client settings. API tokens remain session-only unless **Remember token on this device** is explicitly checked; remembered tokens are stored in that browser's local Foundry settings and should be used only on a trusted computer. Depending on the service deployment, that token can be either a shared service token or a personal OpenAI API key for client-key mode. For the current local reference service, the canonical endpoint is `http://localhost:8788/v1/forge/compile`.
 

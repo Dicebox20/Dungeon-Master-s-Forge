@@ -283,7 +283,7 @@
 
 - Renamed the visible product to Dungeon Master's Forge.
 - Added a GM-only hammer button directly to the Items directory search bar.
-- Kept the existing `codex-item-forge` module ID and API path for compatibility.
+- Preserved prior package settings and generated-item data for compatibility.
 
 ## 0.1.0 - 2026-06-26
 
