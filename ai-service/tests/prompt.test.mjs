@@ -61,4 +61,5 @@ test("prompt explicitly steers enchant oils and summon actor shape", () => {
   const result = prompt();
   assert.match(result, /Oils, unguents, salves, and coatings that enchant a weapon, armor, or shield must use nativeEnchant/i);
   assert.match(result, /nativeSummon stores the summoned creature stat block under summonActor, not actor/i);
+  assert.match(result, /Thrown grenades, bombs, splash flasks, and similar one-use area projectiles belong here/i);
 });

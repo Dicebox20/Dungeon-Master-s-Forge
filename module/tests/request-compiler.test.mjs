@@ -139,6 +139,31 @@ assert.deepEqual(emberOil.specs[0].enchantChanges.map(change => change.key), ["s
 assert.match(emberOil.specs[0].activityId, /^[A-Za-z0-9]{16}$/);
 assert.match(emberOil.specs[0].effectId, /^[A-Za-z0-9]{16}$/);
 
+const alchemistFire = compileItemRequest(`
+Create an uncommon flask of Alchemist Fire. As an action, throw it at a creature within 20 feet.
+On a hit, the target takes 1d4 fire damage at the start of each of its turns until a creature uses an action to extinguish the flames.
+The flask is consumed after one use.
+`);
+assert.equal(alchemistFire.specs[0].kind, "equipmentPowerSuite");
+assert.equal(alchemistFire.specs[0].itemType, "consumable");
+assert.equal(alchemistFire.specs[0].consumableType, "trinket");
+assert.equal(alchemistFire.specs[0].uses.autoDestroy, true);
+assert.equal(alchemistFire.specs[0].attackActivities.length, 1);
+assert.equal(alchemistFire.specs[0].attackActivities[0].attackType, "ranged");
+assert.equal(alchemistFire.specs[0].unresolvedMechanics[0].category, "tableAdjudication");
+
+const fireGrenade = compileItemRequest(`
+Create a rare grenade. As an action, throw it to a point within 60 feet.
+Each creature in a 10-foot-radius sphere must make a DC 15 Dexterity saving throw, taking 4d6 fire damage on a failed save, or half as much on a success.
+The grenade is consumed after one use.
+`);
+assert.equal(fireGrenade.specs[0].kind, "chargedSaveDamage");
+assert.equal(fireGrenade.specs[0].itemType, "consumable");
+assert.equal(fireGrenade.specs[0].consumableType, "trinket");
+assert.equal(fireGrenade.specs[0].uses.autoDestroy, true);
+assert.equal(fireGrenade.specs[0].target.template.type, "sphere");
+assert.equal(fireGrenade.specs[0].target.template.size, 10);
+
 const mindCirclet = compileItemRequest(`
 Mindshard Circlet
 Very rare circlet requiring attunement. It has 5 charges and regains all charges on a long rest.

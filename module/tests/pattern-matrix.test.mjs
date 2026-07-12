@@ -43,6 +43,11 @@ const cases = [
     request: "Oil of Ember Edge\nUncommon consumable oil. As an action, apply it to one nonmagical weapon. For 1 hour it becomes magical and deals an extra 1d4 fire damage. One use, consumed."
   },
   {
+    name: "grenade consumable",
+    kind: "chargedSaveDamage",
+    request: "Cinderburst Grenade\nRare grenade. As an action, throw it to a point within 60 feet. Each creature in a 10-foot-radius sphere makes a DC 15 Dexterity save, taking 4d6 fire damage on a failed save, or half on a success. One use, consumed."
+  },
+  {
     name: "single summon",
     kind: "nativeSummon",
     request: "Moonhowl Whistle\nRare item. Once per long rest, summon a friendly wolf for 1 hour."

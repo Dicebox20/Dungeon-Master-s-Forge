@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Added the `2.23.1-test.19` tester build. Thrown consumables now normalize into real consumable items during hosted generation, bogus template/spell-attack noise is stripped from flask-style outputs, grenade save templates recover their thrown range and area metadata, and tester previews label those specs as consumable projectiles instead of equipment suites.
 - Added the `2.23.1-test.18` tester build. Preview and review notes now drop stale spell-family warnings once a working SRD spell activity has actually been preserved on the item, reducing false manual-review noise for simple prompt hybrids.
 - Added the `2.23.1-test.17` tester build. Multi-stage SRD spell activities now disambiguate their labels so split spells like Ice Knife no longer appear as duplicate identical buttons in the final item activity list.
 - Added the `2.23.1-test.16` tester build. Simple weapon-plus-spell hybrids now preserve the activity chooser by blocking Midi's one-attack-plus-one-rider auto-merge path, and layered briefs now recognize explicit `Spell:` fields so SRD spell activities survive normalization.
