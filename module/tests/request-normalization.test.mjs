@@ -15,6 +15,12 @@ const shortbow = normalizeItemRequest("Create a shortbow that gives +1 to attack
 assert.match(shortbow.normalizedRequest, /Base item: Shortbow/);
 assert.match(shortbow.normalizedRequest, /Spell: Ray of Sickness/);
 
+const grenade = normalizeItemRequest("Create a rare grenade that is consumed after one use. As an action, throw it to a point within 60 feet. Each creature in a 10-foot-radius sphere makes a DC 15 Dexterity save, taking 4d6 fire damage on a failed save.");
+assert.match(grenade.normalizedRequest, /Base item: Grenade/);
+assert.match(grenade.normalizedRequest, /Item type: Consumable projectile/);
+assert.match(grenade.normalizedRequest, /Use model: Consumed after one use/);
+assert.match(grenade.normalizedRequest, /Activation: Throw as an action/);
+
 const alreadyStructured = normalizeItemRequest(`
 Item name: Emberglass Dagger
 Base item: Dagger
@@ -26,4 +32,4 @@ Spell usage: once per day
 assert.match(alreadyStructured.normalizedRequest, /Item name: Emberglass Dagger/);
 assert.match(alreadyStructured.normalizedRequest, /Spell: Burning Hands/);
 
-export const testedNormalizationCases = 3;
+export const testedNormalizationCases = 4;

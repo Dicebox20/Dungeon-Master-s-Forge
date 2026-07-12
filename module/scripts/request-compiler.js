@@ -223,6 +223,22 @@ function detectSaveSpells(text) {
     .map(([, profile]) => profile);
 }
 
+function detectThrowableConsumableSubject(text) {
+  if (/\balchemist(?:'s)?\s+fire\b/i.test(text)) return "alchemist fire";
+  if (/\bacid\s+flask\b/i.test(text)) return "acid flask";
+  if (/\bholy\s+water\b/i.test(text)) return "holy water";
+  if (/\bgrenade\b/i.test(text)) return "grenade";
+  if (/\bbomb\b/i.test(text)) return "bomb";
+  if (/\bflask\b/i.test(text)) return "flask";
+  if (/\bvial\b/i.test(text)) return "vial";
+  return "";
+}
+
+function looksLikeThrowableConsumable(text) {
+  if (!/\b(?:grenade|bomb|flask|vial|alchemist(?:'s)?\s+fire|acid\s+flask|holy\s+water)\b/i.test(text)) return false;
+  return /\b(?:throw|thrown|hurl|lob|splash|burst|explode|explodes?)\b/i.test(text);
+}
+
 function detectFiendProfiles(text) {
   const normalized = text.replace(/yuguloth/gi, "yugoloth");
   return Object.entries(FIEND_SUMMON_PROFILES)
@@ -380,13 +396,28 @@ function parseRange(text, fallback = { units: "self" }) {
 }
 
 function parseTarget(text) {
-  const area = text.match(/\b(\d+)\s*[- ]?(?:foot|feet)\s+(cone|cube|line|radius|sphere|cylinder)/i);
+  const radiusArea = text.match(/\b(\d+)\s*[- ]?(?:foot|feet)\s*[- ]?radius\s+(sphere|cylinder)\b/i);
+  if (radiusArea) {
+    return {
+      template: { count: "1", type: radiusArea[2].toLowerCase(), size: Number(radiusArea[1]), units: "ft" },
+      affects: { type: "creature", choice: false },
+      prompt: true
+    };
+  }
+  const area = text.match(/\b(\d+)\s*[- ]?(?:foot|feet)\s+(cone|cube|line|radius|sphere|cylinder)\b/i);
   if (!area) return { affects: { count: "1", type: "creature" }, prompt: true };
   return {
     template: { count: "1", type: area[2].toLowerCase(), size: Number(area[1]), units: "ft" },
     affects: { type: "creature", choice: false },
     prompt: true
   };
+}
+
+function consumableProjectileImg(text) {
+  if (/\b(?:grenade|bomb)\b/i.test(text)) return "icons/consumables/potions/potion-flask-corked-orange.webp";
+  if (/\b(?:acid|poison)\b/i.test(text)) return "icons/consumables/potions/bottle-conical-green.webp";
+  if (/\b(?:holy water|radiant)\b/i.test(text)) return "icons/consumables/potions/bottle-conical-corked-blue.webp";
+  return "icons/consumables/potions/potion-flask-corked-orange.webp";
 }
 
 function parseDuration(text, fallback = { value: 1, units: "hour", seconds: 3600, concentration: false }) {
@@ -617,6 +648,82 @@ function compileEquipmentAttack(context) {
       attackClassification: "spell",
       damageParts: damageParts.map(diePart)
     }]
+  };
+}
+
+function compileThrowableConsumableAttack(context) {
+  const { request, name, rarity, attunement, warnings, deferred } = context;
+  const damageParts = parseDamage(request);
+  if (!damageParts.length) {
+    const damageType = DAMAGE_TYPES.find(type => new RegExp(`\\b${type}\\b`, "i").test(request)) ?? "fire";
+    damageParts.push({ number: 1, denomination: 4, bonus: "", types: [damageType] });
+  }
+  const uses = parseUses(request, "1") ?? { max: "1", recovery: [], autoDestroy: true };
+  const target = { affects: { count: "1", type: "enemy" }, prompt: true };
+  const range = parseRange(request, { value: 20, units: "ft" });
+  const ongoingClause = /\b(?:at the start of each of its turns|until .* extinguish|until extinguished|ongoing|continues? to burn)\b/i.test(request);
+
+  const spec = {
+    kind: "equipmentPowerSuite",
+    name,
+    img: consumableProjectileImg(request),
+    description: request,
+    rarity,
+    attunement,
+    itemType: "consumable",
+    consumableType: /\b(?:acid|poison)\b/i.test(request) ? "poison" : "trinket",
+    properties: [],
+    uses: { ...uses, autoDestroy: true },
+    effects: [],
+    utilityActivities: [],
+    saveActivities: [],
+    attackActivities: [{
+      activityId: stableId(`${name} Throw`),
+      activityName: /\balchemist(?:'s)?\s+fire\b/i.test(request) ? "Throw Alchemist Fire" : `Throw ${name}`,
+      activityImg: consumableProjectileImg(request),
+      activationType: parseActivation(request),
+      chargeCost: 1,
+      chatFlavor: `Throw ${name}.`,
+      range,
+      target,
+      ability: "dex",
+      attackBonus: "@prof",
+      attackType: "ranged",
+      attackClassification: "weapon",
+      damageParts: damageParts.map(diePart)
+    }]
+  };
+
+  if (ongoingClause) {
+    warnings.push("The projectile's ongoing burn or extinguish clause requires manual follow-through after the initial hit.");
+    deferred.push("The ongoing damage clause was preserved for table handling after the initial thrown attack resolves.");
+    spec.unresolvedMechanics = [
+      unresolvedMechanic(
+        name,
+        "tableAdjudication",
+        "Ongoing thrown-consumable effect",
+        matchingClause(request, /\b(?:at the start of each of its turns|until .* extinguish|until extinguished|ongoing|continues? to burn)\b/i),
+        "The initial thrown attack is supported, but the follow-up burning or extinguish sequence is not fully automated for consumable projectiles.",
+        "Resolve the initial attack natively, then track the ongoing damage or extinguish condition manually."
+      )
+    ];
+  }
+
+  return spec;
+}
+
+function compileThrowableConsumableSave(context) {
+  const spec = compileSaveDamage(context);
+  return {
+    ...spec,
+    img: consumableProjectileImg(context.request),
+    itemType: "consumable",
+    consumableType: /\b(?:acid|poison)\b/i.test(context.request) ? "poison" : "trinket",
+    uses: {
+      ...(spec.uses ?? { max: "1", recovery: [] }),
+      autoDestroy: true
+    },
+    activityName: /\b(?:grenade|bomb)\b/i.test(context.request) ? `Throw ${context.name}` : (spec.activityName ?? `Use ${context.name}`)
   };
 }
 
@@ -1013,11 +1120,14 @@ function compileOne(request) {
   const creatureName = detectCreature(trimmed);
   const saveSpells = detectSaveSpells(trimmed);
   const fiendProfiles = detectFiendProfiles(trimmed);
+  const throwableSubject = detectThrowableConsumableSubject(trimmed);
   const rarity = detectRarity(fields.rarity ?? trimmed);
   const attunement = /attunement\s*:\s*(?:not required|no|none)|does not require attunement|no attunement/i.test(trimmed)
     ? ""
     : /attunement|required by|requires? attunement/i.test(trimmed) ? "required" : "";
-  const subject = weaponName ?? (creatureName && /summon/i.test(trimmed) ? `${creatureName} summoning item` : /potion/i.test(trimmed) ? "potion" : /shield/i.test(trimmed) ? "shield" : /helm|helmet/i.test(trimmed) ? "helm" : "item");
+  const subject = weaponName
+    ?? throwableSubject
+    ?? (creatureName && /summon/i.test(trimmed) ? `${creatureName} summoning item` : /potion/i.test(trimmed) ? "potion" : /shield/i.test(trimmed) ? "shield" : /helm|helmet/i.test(trimmed) ? "helm" : "item");
   const name = detectName(trimmed, fields, subject, assumptions);
   const context = { request: trimmed, lower, fields, name, rarity, attunement, weaponName, creatureName, assumptions, warnings, deferred };
 
@@ -1034,6 +1144,14 @@ function compileOne(request) {
     && /\b(?:oil|salve|rune|enchant)/i.test(trimmed)) {
     pattern = "nativeEnchant";
     spec = compileNativeEnchant(context);
+  } else if (looksLikeThrowableConsumable(trimmed)) {
+    if (parseSave(trimmed, rarity) || /\b(?:each creature|all creatures|cone|cube|line|radius|sphere|cylinder)\b/i.test(trimmed)) {
+      pattern = "chargedSaveDamage";
+      spec = compileThrowableConsumableSave(context);
+    } else {
+      pattern = "equipmentPowerSuite";
+      spec = compileThrowableConsumableAttack(context);
+    }
   } else if (/summon|conjure|call forth/i.test(trimmed) && fiendProfiles.length >= 2) {
     pattern = "nativeMultiProfileSummon";
     spec = compileMultiProfileFiendSummon(context, fiendProfiles);

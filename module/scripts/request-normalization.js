@@ -27,7 +27,11 @@ const BASE_ITEMS = [
   "wand",
   "rod",
   "potion",
-  "oil"
+  "oil",
+  "flask",
+  "vial",
+  "grenade",
+  "bomb"
 ];
 
 const SPELL_NAMES = [
@@ -217,6 +221,13 @@ function detectSaveDc(text, spellNames = []) {
   return spellNames.some(spell => SAVE_SPELLS.has(spell)) ? "15" : "";
 }
 
+function detectThrowableConsumable(text, fields = {}) {
+  const explicitType = compactText(fields["item type"] ?? fields["base item"]);
+  const haystack = `${explicitType}\n${String(text ?? "")}`;
+  if (!/\b(?:grenade|bomb|flask|vial|alchemist(?:'s)?\s+fire|acid\s+flask|holy\s+water)\b/i.test(haystack)) return false;
+  return /\b(?:throw|thrown|hurl|lob|splash|burst|explode|explodes?)\b/i.test(haystack);
+}
+
 function buildLayeredBrief(chunk, extracted) {
   const sections = [];
 
@@ -226,6 +237,7 @@ function buildLayeredBrief(chunk, extracted) {
   if (extracted.attunement === "required") baseLines.push("Attunement: Required");
   if (extracted.attunement === "none") baseLines.push("Attunement: None");
   if (extracted.magicalBonus) baseLines.push(`Magical bonus: +${extracted.magicalBonus}`);
+  if (extracted.throwableConsumable) baseLines.push("Item type: Consumable projectile");
   if (baseLines.length) {
     sections.push(["Complexity layer 1 - Base chassis", ...baseLines].join("\n"));
   }
@@ -243,6 +255,9 @@ function buildLayeredBrief(chunk, extracted) {
   const resourceLines = [];
   if (extracted.spellUsage) resourceLines.push(`Spell usage: ${extracted.spellUsage}`);
   if (extracted.chargeSummary) resourceLines.push(`Charges: ${extracted.chargeSummary}`);
+  if (extracted.throwableConsumable && /\b(?:consumed|one use|single use)\b/i.test(chunk)) {
+    resourceLines.push("Use model: Consumed after one use");
+  }
   if (resourceLines.length) {
     sections.push(["Complexity layer 3 - Resource model", ...resourceLines].join("\n"));
   }
@@ -250,6 +265,9 @@ function buildLayeredBrief(chunk, extracted) {
   const activityLines = [];
   if (extracted.spellNames.length) activityLines.push(`Spell: ${extracted.spellNames.join("; ")}`);
   if (extracted.saveDc) activityLines.push(`Spell save DC: ${extracted.saveDc}`);
+  if (extracted.throwableConsumable) {
+    activityLines.push("Activation: Throw as an action");
+  }
   if (activityLines.length) {
     sections.push(["Complexity layer 4 - Named activities", ...activityLines].join("\n"));
   }
@@ -271,7 +289,8 @@ function normalizeSingleItemRequest(chunk) {
     spellUsage: detectSpellUsage(original),
     saveDc: detectSaveDc(original, detectSpellNames(original, fields)),
     chargeSummary: detectChargeSummary(original),
-    attunement: detectAttunement(original, fields)
+    attunement: detectAttunement(original, fields),
+    throwableConsumable: detectThrowableConsumable(original, fields)
   };
 
   const layeredBrief = buildLayeredBrief(original, extracted);

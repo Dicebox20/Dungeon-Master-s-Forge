@@ -17,6 +17,18 @@ const KIND_LABELS = Object.freeze({
   weaponExtraDamage: "Extra-damage weapon"
 });
 
+function isConsumableProjectileSpec(spec) {
+  const text = String([
+    spec?.name,
+    spec?.description,
+    spec?.itemType,
+    spec?.consumableType,
+    spec?.baseItem
+  ].filter(Boolean).join(" "));
+  return spec?.kind === "equipmentPowerSuite"
+    && (spec?.itemType === "consumable" || /\b(?:consumable|grenade|bomb|flask|vial|alchemist(?:'s)? fire|acid flask|holy water)\b/i.test(text));
+}
+
 const ABILITY_LABELS = Object.freeze({
   str: "Strength",
   dex: "Dexterity",
@@ -335,7 +347,9 @@ function summarizeSpec(spec, context = {}) {
     ...unresolved
   ];
 
-  const kindLabel = spec.kind === "shieldArmorBonus" && armorProfile && !armorProfile.isShield
+  const kindLabel = isConsumableProjectileSpec(spec)
+    ? "Consumable projectile"
+    : spec.kind === "shieldArmorBonus" && armorProfile && !armorProfile.isShield
     ? "Magic armor"
     : KIND_LABELS[spec.kind] ?? titleCase(spec.kind);
 

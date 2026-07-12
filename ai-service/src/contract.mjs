@@ -1369,6 +1369,171 @@ function normalizeMissingUses(spec, requestChunk) {
   return normalized;
 }
 
+function looksLikeThrowableConsumableRequest(text) {
+  const source = compactText(text);
+  if (!source) return false;
+  if (!/\b(?:grenade|bomb|flask|vial|alchemist(?:'s)?\s+fire|acid\s+flask|holy\s+water)\b/i.test(source)) return false;
+  return /\b(?:throw|thrown|hurl|lob|splash|burst|explode|explodes?|hit)\b/i.test(source);
+}
+
+function inferThrowableConsumableName(text) {
+  const source = compactText(text);
+  if (/\balchemist(?:'s)?\s+fire\b/i.test(source)) return "Alchemist Fire";
+  if (/\bacid\s+flask\b/i.test(source)) return "Acid Flask";
+  if (/\bholy\s+water\b/i.test(source)) return "Holy Water";
+  return "";
+}
+
+function inferThrowableConsumableType(text) {
+  return /\b(?:acid|poison)\b/i.test(text) ? "poison" : "trinket";
+}
+
+function inferFeetValue(text, fallback = null) {
+  const match = String(text ?? "").match(/\bwithin\s+(\d+)\s*feet?\b/i)
+    ?? String(text ?? "").match(/\brange\s+of\s+(\d+)\s*feet?\b/i)
+    ?? String(text ?? "").match(/\bto\s+a\s+point\s+within\s+(\d+)\s*feet?\b/i)
+    ?? String(text ?? "").match(/\b(\d+)\s*[- ]?foot\b/i);
+  return match ? Number(match[1]) : fallback;
+}
+
+function inferTemplateFromText(text) {
+  const source = compactText(text);
+  if (!source) return null;
+  const sphere = source.match(/\b(\d+)\s*[- ]?foot(?:-radius)?\s+sphere\b/i)
+    ?? source.match(/\b(\d+)\s*[- ]?foot(?:\s+radius)?\s+sphere\b/i);
+  if (sphere) return { type: "sphere", size: Number(sphere[1]), units: "ft" };
+  const cone = source.match(/\b(\d+)\s*[- ]?foot\s+cone\b/i);
+  if (cone) return { type: "cone", size: Number(cone[1]), units: "ft" };
+  const cube = source.match(/\b(\d+)\s*[- ]?foot\s+cube\b/i);
+  if (cube) return { type: "cube", size: Number(cube[1]), units: "ft" };
+  const line = source.match(/\b(\d+)\s*[- ]?foot\s+line\b/i);
+  if (line) return { type: "line", size: Number(line[1]), units: "ft" };
+  return null;
+}
+
+function stripThrowableConsumableNoiseEffects(effects, text) {
+  if (!Array.isArray(effects)) return [];
+  const explicitAttackBonus = /\b(?:\+\d+|bonus)\s+to\s+(?:spell\s+)?attack(?: rolls?)?\b/i.test(text);
+  return effects.filter(effect => {
+    if (!object(effect)) return false;
+    const name = compactText(effect.name);
+    const changes = Array.isArray(effect.changes) ? effect.changes.filter(change => object(change) && compactText(change.key)) : [];
+    if (!changes.length) return false;
+    if (/\btemplate\b/i.test(name)) return false;
+    if (!explicitAttackBonus && changes.every(change => /system\.bonuses\.(?:m|r)sak\.attack/i.test(compactText(change.key)))) {
+      return false;
+    }
+    return true;
+  });
+}
+
+function normalizeThrowableConsumableSpec(spec, requestChunk) {
+  const text = textForSpecInference(spec, requestChunk);
+  if (!looksLikeThrowableConsumableRequest(text)) return spec;
+
+  const normalized = clone(spec);
+  const canonicalName = inferThrowableConsumableName(text);
+  if (canonicalName) normalized.name = canonicalName;
+  normalized.itemType = "consumable";
+  normalized.consumableType = normalized.consumableType || inferThrowableConsumableType(text);
+  delete normalized.equipmentType;
+
+  const currentMax = String(normalized.uses?.max ?? "").trim();
+  normalized.uses = {
+    ...(object(normalized.uses) ? normalized.uses : {}),
+    max: currentMax || "1",
+    recovery: Array.isArray(normalized.uses?.recovery) ? normalized.uses.recovery : [],
+    autoDestroy: true
+  };
+
+  const explicitMagicalBonus = String(text).match(/\B\+(\d)\b(?!\s*d)/)?.[1] ?? "";
+  normalized.magicalBonus = explicitMagicalBonus;
+  normalized.effects = stripThrowableConsumableNoiseEffects(normalized.effects, text);
+
+  const thrownRange = inferFeetValue(text, 20);
+  const template = inferTemplateFromText(text);
+
+  if (normalized.kind === "chargedSaveDamage") {
+    if (!normalized.uses.recovery.length) {
+      normalized.uses.recovery = [{ period: "", type: "recoverAll", formula: "" }];
+    }
+    normalized.range = object(normalized.range) ? normalized.range : {};
+    normalized.range.value = Number.isFinite(Number(normalized.range.value)) ? normalized.range.value : thrownRange;
+    normalized.range.units = compactText(normalized.range.units) && compactText(normalized.range.units).toLowerCase() !== "self"
+      ? normalized.range.units
+      : "ft";
+    normalized.target = object(normalized.target) ? normalized.target : {};
+    if (template) {
+      normalized.target.template = {
+        ...(object(normalized.target.template) ? normalized.target.template : {}),
+        ...template
+      };
+      normalized.target.affects = {
+        ...(object(normalized.target.affects) ? normalized.target.affects : {}),
+        type: compactText(normalized.target.affects?.type) || "creature"
+      };
+      normalized.target.prompt = normalized.target.prompt ?? true;
+    } else {
+      normalized.target.affects = {
+        ...(object(normalized.target.affects) ? normalized.target.affects : {}),
+        count: compactText(normalized.target.affects?.count) || "1",
+        type: compactText(normalized.target.affects?.type) || "creature"
+      };
+    }
+    return normalized;
+  }
+
+  if (normalized.kind !== "equipmentPowerSuite") return normalized;
+
+  const attackActivities = Array.isArray(normalized.attackActivities) ? normalized.attackActivities : [];
+  normalized.attackActivities = attackActivities.map(activity => {
+    const next = clone(activity);
+    next.activationType = compactText(next.activationType) || "action";
+    next.chargeCost = Number.isFinite(Number(next.chargeCost)) && Number(next.chargeCost) > 0 ? Number(next.chargeCost) : 1;
+    next.ability = compactText(next.ability) || "dex";
+    next.attackType = compactText(next.attackType) || "ranged";
+    next.attackClassification = compactText(next.attackClassification) || "weapon";
+    next.range = object(next.range) ? next.range : {};
+    next.range.value = Number.isFinite(Number(next.range.value)) ? next.range.value : thrownRange;
+    next.range.units = compactText(next.range.units) && compactText(next.range.units).toLowerCase() !== "self"
+      ? next.range.units
+      : "ft";
+    next.target = object(next.target) ? next.target : {};
+    if (template) {
+      next.target.template = {
+        ...(object(next.target.template) ? next.target.template : {}),
+        ...template
+      };
+      next.target.affects = {
+        ...(object(next.target.affects) ? next.target.affects : {}),
+        type: compactText(next.target.affects?.type) || "creature"
+      };
+      next.target.prompt = next.target.prompt ?? true;
+    } else {
+      next.target.template = {
+        count: "",
+        contiguous: false,
+        stationary: false,
+        type: "",
+        size: "",
+        width: "",
+        height: "",
+        units: "ft"
+      };
+      next.target.affects = {
+        ...(object(next.target.affects) ? next.target.affects : {}),
+        count: compactText(next.target.affects?.count) || "1",
+        type: compactText(next.target.affects?.type) || "creature",
+        special: compactText(next.target.affects?.special) || ""
+      };
+      next.target.prompt = next.target.prompt ?? true;
+    }
+    return next;
+  });
+
+  return normalized;
+}
+
 function normalizeNativeEnchant(spec, requestChunk, supportedKinds) {
   const text = textForSpecInference(spec, requestChunk);
   const shouldNormalize = spec.kind === "nativeEnchant" || looksLikeEnchantRequest(text);
@@ -1488,6 +1653,7 @@ function normalizeRecoverableModelSlip(spec, requestChunk, supportedKinds) {
   let normalized = clone(spec);
   if (!compactText(normalized.kind)) normalized.kind = inferSpecKind(normalized, requestChunk, supportedKinds);
   normalized = normalizeMissingUses(normalized, requestChunk);
+  normalized = normalizeThrowableConsumableSpec(normalized, requestChunk);
   normalized = normalizeNativeEnchant(normalized, requestChunk, supportedKinds);
   normalized = normalizeNativeSummonShape(normalized, requestChunk, supportedKinds);
   normalized = normalizeConditionOnHit(normalized, requestChunk);

@@ -120,4 +120,24 @@ const resolvedSpellWarnings = buildReviewSummaries([{
 
 assert.equal(resolvedSpellWarnings.notes.some(note => /Thunderwave remains unresolved|spell save DCs or spellcasting activities|deferred for table handling/i.test(note.message)), false);
 
+const consumableProjectile = buildReviewSummaries([{
+  kind: "equipmentPowerSuite",
+  name: "Alchemist Fire",
+  description: "A thrown flask of flame.",
+  itemType: "consumable",
+  consumableType: "trinket",
+  rarity: "uncommon",
+  uses: { max: "1", recovery: [], autoDestroy: true },
+  attackActivities: [{
+    activityId: "ThrowFlask000001",
+    activityName: "Throw Alchemist Fire",
+    attackType: "ranged",
+    attackClassification: "weapon",
+    range: { value: 20, units: "ft" },
+    target: { affects: { count: "1", type: "creature" }, prompt: true },
+    damageParts: [{ number: 1, denomination: 4, bonus: "", types: ["fire"] }]
+  }]
+}], null)[0];
+assert.equal(consumableProjectile.kindLabel, "Consumable projectile");
+
 export const testedReviewSummaryCount = 24;

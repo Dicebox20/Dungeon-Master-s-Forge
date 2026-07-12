@@ -938,15 +938,39 @@ ${activitySpec.macroCommand}
     }, { inplace: false });
   }
 
+  function consumableSystem(spec) {
+    return foundry.utils.mergeObject(basePhysicalSystem(spec), {
+      type: { value: spec.consumableType ?? "trinket", subtype: "" },
+      uses: usesData(spec.uses),
+      damage: { base: emptyDamageData(), replace: false },
+      magicalBonus: "",
+      activities: {}
+    }, { inplace: false });
+  }
+
   function suiteUsesWeaponBase(spec) {
     return Boolean(spec?.weaponType && spec?.baseItem);
   }
 
+  function suiteShouldUseConsumableBase(spec) {
+    if (spec?.itemType === "consumable" || compactText(spec?.consumableType)) return true;
+    const text = compactText([
+      spec?.name,
+      spec?.description,
+      spec?.baseItem,
+      spec?.itemType,
+      spec?.equipmentType
+    ].filter(Boolean).join(" "));
+    return Boolean(spec?.uses?.autoDestroy) && /\b(?:consumable|grenade|bomb|flask|vial|alchemist(?:'s)? fire|acid flask|holy water)\b/i.test(text);
+  }
+
   function suiteItemType(spec) {
+    if (suiteShouldUseConsumableBase(spec)) return "consumable";
     return suiteUsesWeaponBase(spec) ? "weapon" : "equipment";
   }
 
   function suiteItemSystem(spec) {
+    if (suiteItemType(spec) === "consumable") return consumableSystem(spec);
     return suiteUsesWeaponBase(spec) ? weaponSystem(spec) : equipmentSystem(spec);
   }
 

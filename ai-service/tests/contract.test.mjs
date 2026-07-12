@@ -1111,3 +1111,63 @@ test("suite utility enchantments do not trigger false unresolved enchant review 
   assert.equal(unresolvedCategories.has("enchant"), false);
   assert.equal(result.warnings.includes("A requested enchantment rider was not preserved in the generated Foundry structure."), false);
 });
+
+test("thrown consumable suites are normalized into one-use consumables without bogus template or spell-attack effects", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create an uncommon flask of Alchemist Fire. As an action, throw it at a creature within 20 feet. On a hit, the target takes 1d4 fire damage at the start of each of its turns until a creature uses an action to extinguish the flames. The flask is consumed after one use."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "equipmentPowerSuite",
+      name: "Flame Flask",
+      description: "A volatile flask.",
+      attackActivities: [{
+        activityName: "Throw Flame Flask",
+        damageParts: [{ number: 1, denomination: 4, bonus: "", types: ["fire"] }],
+        target: { template: { type: "cone", size: 5, units: "ft" } }
+      }],
+      effects: [{
+        name: "Flame Flask Template",
+        changes: [{ key: "system.bonuses.msak.attack", mode: "ADD", value: "1" }]
+      }]
+    }]
+  }, request, { makeId: ids() });
+
+  const spec = result.specs[0];
+  assert.equal(spec.name, "Alchemist Fire");
+  assert.equal(spec.itemType, "consumable");
+  assert.equal(spec.uses.autoDestroy, true);
+  assert.equal(spec.attackActivities[0].range.value, 20);
+  assert.equal(spec.attackActivities[0].range.units, "ft");
+  assert.equal(spec.attackActivities[0].target.template.type, "");
+  assert.equal(spec.attackActivities[0].target.affects.count, "1");
+  assert.equal(spec.attackActivities[0].target.affects.type, "creature");
+  assert.equal(spec.effects.length, 0);
+  assert.equal(spec.magicalBonus, "");
+});
+
+test("grenade save activities recover missing template and thrown range from request text", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a rare grenade. As an action, throw it to a point within 60 feet. Each creature in a 10-foot-radius sphere must make a DC 15 Dexterity saving throw, taking 4d6 fire damage on a failed save, or half as much on a success. The grenade is consumed after one use."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "chargedSaveDamage",
+      name: "Pyre Grenade",
+      description: "A volatile explosive.",
+      save: { ability: "dex", dc: 15 },
+      damageParts: [{ number: 4, denomination: 6, bonus: "", types: ["fire"] }],
+      range: { units: "self" },
+      target: {}
+    }]
+  }, request, { makeId: ids() });
+
+  const spec = result.specs[0];
+  assert.equal(spec.itemType, "consumable");
+  assert.equal(spec.uses.autoDestroy, true);
+  assert.equal(spec.range.value, 60);
+  assert.equal(spec.range.units, "ft");
+  assert.equal(spec.target.template.type, "sphere");
+  assert.equal(spec.target.template.size, 10);
+  assert.equal(spec.target.affects.type, "creature");
+});
