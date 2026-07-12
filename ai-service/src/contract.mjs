@@ -1416,6 +1416,14 @@ function inferTemplateFromText(text) {
   return null;
 }
 
+function inferExplicitSaveAbility(text) {
+  const match = compactText(text).match(/\b(strength|dexterity|constitution|intelligence|wisdom|charisma)\s+sav(?:e|ing throw)/i)
+    ?? compactText(text).match(/\bsave ability\s*:\s*(strength|dexterity|constitution|intelligence|wisdom|charisma)\b/i);
+  if (!match) return "";
+  const ability = match[1].slice(0, 3).toLowerCase();
+  return ["str", "dex", "con", "int", "wis", "cha"].includes(ability) ? ability : "";
+}
+
 function stripThrowableConsumableNoiseEffects(effects, text) {
   if (!Array.isArray(effects)) return [];
   const explicitAttackBonus = /\b(?:\+\d+|bonus)\s+to\s+(?:spell\s+)?attack(?: rolls?)?\b/i.test(text);
@@ -1459,6 +1467,7 @@ function normalizeThrowableConsumableSpec(spec, requestChunk) {
   const explicitThrownRange = inferExplicitFeetValue(explicitRequestText);
   const thrownRange = explicitThrownRange ?? inferFeetValue(text, 20);
   const template = inferTemplateFromText(explicitRequestText) ?? inferTemplateFromText(text);
+  const explicitSaveAbility = inferExplicitSaveAbility(explicitRequestText);
 
   if (normalized.kind === "chargedSaveDamage") {
     if (!normalized.uses.recovery.length) {
@@ -1471,6 +1480,12 @@ function normalizeThrowableConsumableSpec(spec, requestChunk) {
     normalized.range.units = compactText(normalized.range.units) && compactText(normalized.range.units).toLowerCase() !== "self"
       ? normalized.range.units
       : "ft";
+    if (explicitSaveAbility) {
+      normalized.save = {
+        ...(object(normalized.save) ? normalized.save : {}),
+        ability: explicitSaveAbility
+      };
+    }
     normalized.target = object(normalized.target) ? normalized.target : {};
     if (template) {
       normalized.target.template = {
