@@ -51,7 +51,7 @@ import { sanitizeForgeSpec } from "./forge-spec-integrity.js";
 import { repairHybridSpecFromRequest } from "./hybrid-activity-repair.js";
 import { buildLayeredItemBlueprint } from "./item-blueprint.js";
 import { applyDefaultLeveledSpellCharges, applyForgeSpecDefaults, autoSelectSrdChoiceSpells, dedupeRecognizedSpellActivities, reconcilePlannedSrdSpellActivities, repairNamedSrdSpellActivities } from "./srd-spell-enrichment.js";
-import { applyFallbackActivityArt, applySpellActivityArt, applySystemEquipmentArt } from "./system-art-enrichment.js";
+import { applyConsumableProjectileFallbackArt, applyFallbackActivityArt, applySpellActivityArt, applySystemEquipmentArt, needsFallbackItemArt } from "./system-art-enrichment.js";
 import {
   LEGACY_MODULE_ID,
   MODULE_ID,
@@ -1306,6 +1306,23 @@ async function enrichSpecsWithSystemReferences(specs, requestText = "") {
       }
     }
     nextSpec = applyFallbackActivityArt(nextSpec);
+    const projectileArt = applyConsumableProjectileFallbackArt(nextSpec, requestText);
+    nextSpec = projectileArt.spec;
+    if (projectileArt.applied) {
+      systemReferences.push({
+        kind: "art",
+        name: `${nextSpec.name} Foundry core art`,
+        label: "Foundry core image",
+        message: "Used bundled Foundry consumable-projectile art because no exact system item image was available."
+      });
+    } else if (needsFallbackItemArt(nextSpec.img)) {
+      systemReferences.push({
+        kind: "art",
+        name: `${nextSpec.name} missing art`,
+        label: "Item image",
+        message: "No matching system or bundled Foundry image was found; the generic item image is being used."
+      });
+    }
     return systemReferences.length ? { ...nextSpec, systemReferences: uniqueReferences(systemReferences) } : nextSpec;
   }));
 }

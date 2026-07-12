@@ -164,6 +164,7 @@ assert.equal(fireGrenade.specs[0].consumableType, "trinket");
 assert.equal(fireGrenade.specs[0].uses.autoDestroy, true);
 assert.equal(fireGrenade.specs[0].target.template.type, "sphere");
 assert.equal(fireGrenade.specs[0].target.template.size, 10);
+assert.equal(fireGrenade.specs[0].img, "icons/weapons/thrown/grenade-incendiary.webp");
 
 const mindCirclet = compileItemRequest(`
 Mindshard Circlet

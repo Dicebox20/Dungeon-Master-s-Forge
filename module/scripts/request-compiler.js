@@ -1,4 +1,5 @@
 import { splitItemRequests } from "./request-normalization.js";
+import { consumableProjectileFallbackImage } from "./system-art-enrichment.js";
 
 const COMPILER_VERSION = "2.4.0";
 const DEFAULT_SAVE_DC = 15;
@@ -417,10 +418,8 @@ function parseTarget(text) {
 }
 
 function consumableProjectileImg(text) {
-  if (/\b(?:grenade|bomb)\b/i.test(text)) return "icons/consumables/potions/potion-flask-corked-orange.webp";
-  if (/\b(?:acid|poison)\b/i.test(text)) return "icons/consumables/potions/bottle-conical-green.webp";
-  if (/\b(?:holy water|radiant)\b/i.test(text)) return "icons/consumables/potions/bottle-conical-corked-blue.webp";
-  return "icons/consumables/potions/potion-flask-corked-orange.webp";
+  return consumableProjectileFallbackImage({ itemType: "consumable" }, text)
+    || "icons/consumables/potions/potion-flask-corked-orange.webp";
 }
 
 function parseDuration(text, fallback = { value: 1, units: "hour", seconds: 3600, concentration: false }) {

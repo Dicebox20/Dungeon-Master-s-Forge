@@ -9,6 +9,17 @@ const SYSTEM_EQUIPMENT_ART_FAMILIES = new Set([
   "casterUtilityEquipment"
 ]);
 
+const CONSUMABLE_PROJECTILE_ART = Object.freeze({
+  acid: "icons/weapons/thrown/grenade-chemical.webp",
+  cold: "icons/weapons/thrown/bomb-fuse-blue.webp",
+  fire: "icons/weapons/thrown/grenade-incendiary.webp",
+  genericGrenade: "icons/weapons/thrown/grenade-round.webp",
+  genericFlask: "icons/consumables/potions/potion-flask-corked-orange.webp",
+  lightning: "icons/weapons/thrown/grenade-energy.webp",
+  poison: "icons/weapons/thrown/grenade-chemical.webp",
+  thunder: "icons/weapons/thrown/bomb-pressure-black.webp"
+});
+
 function compact(value) {
   return String(value ?? "").trim();
 }
@@ -21,6 +32,48 @@ function hasImage(value) {
 function needsFallbackItemArt(value) {
   const normalized = compact(value);
   return !normalized || normalized === "icons/svg/item-bag.svg";
+}
+
+function consumableProjectileFallbackImage(spec = {}, requestText = "") {
+  const source = [
+    spec.name,
+    spec.description,
+    spec.baseItem,
+    spec.itemType,
+    spec.consumableType,
+    requestText
+  ].filter(Boolean).join(" ");
+  const isGrenade = /\b(?:grenade|bomb)\b/i.test(source);
+  const isFlask = /\b(?:flask|vial|alchemist(?:'s)? fire|acid flask|holy water)\b/i.test(source);
+  const isThrownConsumable = spec.itemType === "consumable"
+    && /\b(?:throw|thrown|hurl|lob|consumable projectile)\b/i.test(source);
+  if (!isGrenade && !isFlask && !isThrownConsumable) return "";
+
+  if (/\b(?:lightning|electric|arc\w*)\b/i.test(source)) return CONSUMABLE_PROJECTILE_ART.lightning;
+  if (/\b(?:cold|frost\w*|ice)\b/i.test(source)) return CONSUMABLE_PROJECTILE_ART.cold;
+  if (/\b(?:thunder\w*|sonic|concussive)\b/i.test(source)) return CONSUMABLE_PROJECTILE_ART.thunder;
+  if (/\b(?:acid|corrosive)\b/i.test(source)) return isGrenade
+    ? CONSUMABLE_PROJECTILE_ART.acid
+    : "icons/consumables/potions/bottle-conical-green.webp";
+  if (/\b(?:poison|toxic|gas)\b/i.test(source)) return isGrenade
+    ? CONSUMABLE_PROJECTILE_ART.poison
+    : "icons/consumables/potions/bottle-conical-green.webp";
+  if (/\b(?:fire|flame|incendiary|burn)\b/i.test(source)) return isGrenade
+    ? CONSUMABLE_PROJECTILE_ART.fire
+    : CONSUMABLE_PROJECTILE_ART.genericFlask;
+  return isGrenade ? CONSUMABLE_PROJECTILE_ART.genericGrenade : CONSUMABLE_PROJECTILE_ART.genericFlask;
+}
+
+function applyConsumableProjectileFallbackArt(spec = {}, requestText = "") {
+  if (!needsFallbackItemArt(spec?.img)) return { applied: false, status: "existing", spec };
+  const img = consumableProjectileFallbackImage(spec, requestText);
+  if (!img) return { applied: false, status: "missing", spec };
+  return {
+    applied: true,
+    status: "fallback",
+    img,
+    spec: { ...spec, img }
+  };
 }
 
 function supportsSystemEquipmentArt(spec = {}) {
@@ -85,10 +138,13 @@ function applyFallbackActivityArt(spec) {
 }
 
 export {
+  CONSUMABLE_PROJECTILE_ART,
   SYSTEM_EQUIPMENT_ART_FAMILIES,
+  applyConsumableProjectileFallbackArt,
   applySpellActivityArt,
   applyFallbackActivityArt,
   applySystemEquipmentArt,
+  consumableProjectileFallbackImage,
   hasImage,
   needsFallbackItemArt,
   spellActivityMatches,

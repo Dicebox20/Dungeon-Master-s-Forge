@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 2.23.1-test.21
+
+- Added damage-aware Foundry core images for grenade-style consumable projectiles when no exact DND5e system image is available.
+- Added an explicit review note when neither system art nor a safe bundled Foundry fallback can be found.
+- Kept local and AI-generated consumable-projectile image selection on the same deterministic path.
+
 ## 2.23.1-test.20
 
 - Prevented thrown consumable prompts from receiving an invented `+1` magical or attack bonus.
