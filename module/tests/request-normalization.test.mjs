@@ -20,6 +20,15 @@ assert.match(grenade.normalizedRequest, /Base item: Grenade/);
 assert.match(grenade.normalizedRequest, /Item type: Consumable projectile/);
 assert.match(grenade.normalizedRequest, /Use model: Consumed after one use/);
 assert.match(grenade.normalizedRequest, /Activation: Throw as an action/);
+assert.match(grenade.normalizedRequest, /Range: 60 feet/);
+assert.match(grenade.normalizedRequest, /Area: 10-foot-radius sphere/);
+
+const alchemistFire = normalizeItemRequest("Create an uncommon flask of Alchemist Fire. As an action, throw it at a creature within 20 feet. On a hit, the target takes 1d4 fire damage at the start of each of its turns until a creature uses an action to extinguish the flames. The flask is consumed after one use.");
+assert.match(alchemistFire.normalizedRequest, /Item name: Alchemist Fire/);
+assert.doesNotMatch(alchemistFire.normalizedRequest, /Magical bonus:/);
+
+const acidFlask = normalizeItemRequest("Create an uncommon acid flask. As an action, throw it at one creature within 20 feet. On a hit, the target takes 2d6 acid damage. The flask is consumed after one use.");
+assert.doesNotMatch(acidFlask.normalizedRequest, /Magical bonus:/);
 
 const alreadyStructured = normalizeItemRequest(`
 Item name: Emberglass Dagger
@@ -32,4 +41,4 @@ Spell usage: once per day
 assert.match(alreadyStructured.normalizedRequest, /Item name: Emberglass Dagger/);
 assert.match(alreadyStructured.normalizedRequest, /Spell: Burning Hands/);
 
-export const testedNormalizationCases = 4;
+export const testedNormalizationCases = 5;

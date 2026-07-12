@@ -147,6 +147,7 @@ The flask is consumed after one use.
 assert.equal(alchemistFire.specs[0].kind, "equipmentPowerSuite");
 assert.equal(alchemistFire.specs[0].itemType, "consumable");
 assert.equal(alchemistFire.specs[0].consumableType, "trinket");
+assert.equal(alchemistFire.specs[0].name, "Alchemist Fire");
 assert.equal(alchemistFire.specs[0].uses.autoDestroy, true);
 assert.equal(alchemistFire.specs[0].attackActivities.length, 1);
 assert.equal(alchemistFire.specs[0].attackActivities[0].attackType, "ranged");

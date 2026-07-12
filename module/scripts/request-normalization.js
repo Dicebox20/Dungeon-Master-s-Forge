@@ -138,20 +138,23 @@ function detectRarity(text, fields = {}) {
 function detectExplicitName(text, fields = {}) {
   const explicit = compactText(fields["item name"] ?? fields.name);
   if (explicit) return explicit;
+  if (/\balchemist(?:'s)?\s+fire\b/i.test(text)) return "Alchemist Fire";
+  if (/\bacid\s+flask\b/i.test(text)) return "Acid Flask";
+  if (/\bholy\s+water\b/i.test(text)) return "Holy Water";
   const title = firstTitleLine(text);
   if (title) return title;
   const named = String(text ?? "").match(/\b(?:named|called)\s+["']?([^"'.,;\n]+)["']?/i)?.[1]?.trim();
   return named ?? "";
 }
 
-function detectMagicalBonus(text, baseItem = "") {
+function detectMagicalBonus(text, baseItem = "", { skipDefault = false } = {}) {
   const explicit = String(text ?? "").match(/\B\+(\d)\b(?!\s*d)/);
   if (explicit) return explicit[1];
   const attackRolls = /(?:\+\s*(\d)|(\d)\s*\+)\s+to\s+(?:attack|attack rolls?|attack and damage rolls?)/i.exec(text);
   const damageRolls = /(?:\+\s*(\d)|(\d)\s*\+)\s+to\s+damage rolls?/i.exec(text);
   const extracted = attackRolls?.[1] || attackRolls?.[2] || damageRolls?.[1] || damageRolls?.[2] || "";
   if (extracted) return extracted;
-  if (!baseItem) return "";
+  if (!baseItem || skipDefault) return "";
   if (!/\b(?:cast|spell|charges?|damage|resistance|advantage|summon|heal|magical|magic)\b/i.test(text)) return "";
   return "1";
 }
@@ -228,6 +231,21 @@ function detectThrowableConsumable(text, fields = {}) {
   return /\b(?:throw|thrown|hurl|lob|splash|burst|explode|explodes?)\b/i.test(haystack);
 }
 
+function detectThrownRange(text) {
+  const match = String(text ?? "").match(/\bwithin\s+(\d+)\s*feet?\b/i)
+    ?? String(text ?? "").match(/\brange\s+of\s+(\d+)\s*feet?\b/i)
+    ?? String(text ?? "").match(/\bto\s+a\s+point\s+within\s+(\d+)\s*feet?\b/i);
+  return match ? `${match[1]} feet` : "";
+}
+
+function detectAreaSummary(text) {
+  const radiusArea = String(text ?? "").match(/\b(\d+)\s*[- ]?(?:foot|feet)\s*[- ]?radius\s+(sphere|cylinder)\b/i);
+  if (radiusArea) return `${radiusArea[1]}-foot-radius ${radiusArea[2].toLowerCase()}`;
+  const area = String(text ?? "").match(/\b(\d+)\s*[- ]?(?:foot|feet)\s+(cone|cube|line|sphere|cylinder)\b/i);
+  if (!area) return "";
+  return `${area[1]}-foot ${area[2].toLowerCase()}`;
+}
+
 function buildLayeredBrief(chunk, extracted) {
   const sections = [];
 
@@ -267,6 +285,8 @@ function buildLayeredBrief(chunk, extracted) {
   if (extracted.saveDc) activityLines.push(`Spell save DC: ${extracted.saveDc}`);
   if (extracted.throwableConsumable) {
     activityLines.push("Activation: Throw as an action");
+    if (extracted.throwRange) activityLines.push(`Range: ${extracted.throwRange}`);
+    if (extracted.areaSummary) activityLines.push(`Area: ${extracted.areaSummary}`);
   }
   if (activityLines.length) {
     sections.push(["Complexity layer 4 - Named activities", ...activityLines].join("\n"));
@@ -279,18 +299,22 @@ function buildLayeredBrief(chunk, extracted) {
 function normalizeSingleItemRequest(chunk) {
   const original = String(chunk ?? "").trim();
   const fields = parseFields(original);
+  const baseItem = detectBaseItem(original, fields);
+  const throwableConsumable = detectThrowableConsumable(original, fields);
   const extracted = {
     name: detectExplicitName(original, fields),
-    baseItem: detectBaseItem(original, fields),
+    baseItem,
     rarity: detectRarity(original, fields),
-    magicalBonus: detectMagicalBonus(original, detectBaseItem(original, fields)),
+    magicalBonus: detectMagicalBonus(original, baseItem, { skipDefault: throwableConsumable }),
     damageParts: parseDamageParts(original),
     spellNames: detectSpellNames(original, fields),
     spellUsage: detectSpellUsage(original),
     saveDc: detectSaveDc(original, detectSpellNames(original, fields)),
     chargeSummary: detectChargeSummary(original),
     attunement: detectAttunement(original, fields),
-    throwableConsumable: detectThrowableConsumable(original, fields)
+    throwableConsumable,
+    throwRange: detectThrownRange(original),
+    areaSummary: detectAreaSummary(original)
   };
 
   const layeredBrief = buildLayeredBrief(original, extracted);

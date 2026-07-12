@@ -1142,6 +1142,7 @@ test("thrown consumable suites are normalized into one-use consumables without b
   assert.equal(spec.attackActivities[0].target.template.type, "");
   assert.equal(spec.attackActivities[0].target.affects.count, "1");
   assert.equal(spec.attackActivities[0].target.affects.type, "creature");
+  assert.equal(spec.attackActivities[0].target.prompt, true);
   assert.equal(spec.effects.length, 0);
   assert.equal(spec.magicalBonus, "");
 });
@@ -1170,4 +1171,143 @@ test("grenade save activities recover missing template and thrown range from req
   assert.equal(spec.target.template.type, "sphere");
   assert.equal(spec.target.template.size, 10);
   assert.equal(spec.target.affects.type, "creature");
+  assert.equal(spec.target.prompt, true);
+});
+
+test("grenade normalization prefers explicit request range over stale model defaults", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a rare grenade. As an action, throw it to a point within 60 feet. Each creature in a 10-foot-radius sphere must make a DC 15 Dexterity saving throw, taking 4d6 fire damage on a failed save, or half as much on a success. The grenade is consumed after one use."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "chargedSaveDamage",
+      name: "Fiery Grenade",
+      description: "A volatile explosive.",
+      save: { ability: "dex", dc: 15 },
+      damageParts: [{ number: 4, denomination: 6, bonus: "", types: ["fire"] }],
+      range: { value: 20, units: "ft" },
+      target: {
+        template: { type: "sphere", size: 5, units: "ft" },
+        prompt: false
+      }
+    }]
+  }, request, { makeId: ids() });
+
+  const spec = result.specs[0];
+  assert.equal(spec.range.value, 60);
+  assert.equal(spec.range.units, "ft");
+  assert.equal(spec.target.template.type, "sphere");
+  assert.equal(spec.target.template.size, 10);
+  assert.equal(spec.target.prompt, true);
+});
+
+test("grenade normalization also preserves thrown range from layered Forge brief text", () => {
+  const request = validateForgeRequest(envelope({
+    request: [
+      "Item name: Incendiary Grenade",
+      "",
+      "Complexity layer 1 - Base chassis",
+      "Base item: Grenade",
+      "Rarity: Rare",
+      "Item type: Consumable projectile",
+      "",
+      "Complexity layer 3 - Resource model",
+      "Use model: Consumed after one use",
+      "",
+      "Complexity layer 4 - Named activities",
+      "Activation: Throw as an action",
+      "Range: 60 feet",
+      "Area: 10-foot-radius sphere",
+      "Spell save DC: 15"
+    ].join("\n")
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "chargedSaveDamage",
+      name: "Incendiary Grenade",
+      description: "Layered grenade brief.",
+      save: { ability: "dex", dc: 15 },
+      damageParts: [{ number: 4, denomination: 6, bonus: "", types: ["fire"] }],
+      range: { units: "self" },
+      target: {}
+    }]
+  }, request, { makeId: ids() });
+
+  const spec = result.specs[0];
+  assert.equal(spec.range.value, 60);
+  assert.equal(spec.range.units, "ft");
+  assert.equal(spec.target.template.type, "sphere");
+  assert.equal(spec.target.template.size, 10);
+});
+
+test("throwable consumable attack activities prefer explicit request range over stale model defaults", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create an uncommon flask of Alchemist Fire. As an action, throw it at a creature within 20 feet. On a hit, the target takes 1d4 fire damage at the start of each of its turns until a creature uses an action to extinguish the flames. The flask is consumed after one use."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "equipmentPowerSuite",
+      name: "Flame Flask",
+      description: "A volatile flask.",
+      attackActivities: [{
+        activityName: "Throw Flame Flask",
+        damageParts: [{ number: 1, denomination: 4, bonus: "", types: ["fire"] }],
+        range: { value: 5, units: "ft" },
+        target: {
+          template: { type: "cone", size: 5, units: "ft" },
+          prompt: false
+        }
+      }]
+    }]
+  }, request, { makeId: ids() });
+
+  const spec = result.specs[0];
+  assert.equal(spec.attackActivities[0].range.value, 20);
+  assert.equal(spec.attackActivities[0].range.units, "ft");
+  assert.equal(spec.attackActivities[0].target.template.type, "");
+  assert.equal(spec.attackActivities[0].target.affects.count, "1");
+  assert.equal(spec.attackActivities[0].target.affects.type, "creature");
+  assert.equal(spec.attackActivities[0].target.prompt, true);
+});
+
+test("throwable consumables discard model-invented attack bonuses but keep explicit bonuses", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create an uncommon acid flask. As an action, throw it at one creature within 20 feet. On a hit, the target takes 2d6 acid damage. The flask is consumed after one use."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "equipmentPowerSuite",
+      name: "Acid Flask",
+      description: "A flask.",
+      magicalBonus: "1",
+      attackActivities: [{
+        activityName: "Throw",
+        attackBonus: "1",
+        damageParts: [{ number: 0, denomination: 0, bonus: "", types: ["acid"] }, { number: 2, denomination: 6, bonus: "", types: ["acid"] }]
+      }]
+    }]
+  }, request, { makeId: ids() });
+
+  const spec = result.specs[0];
+  assert.equal(spec.magicalBonus, "");
+  assert.equal(spec.attackActivities[0].attackBonus, "");
+  assert.deepEqual(spec.attackActivities[0].damageParts.map(part => `${part.number}d${part.denomination}`), ["2d6"]);
+
+  const explicit = validateForgeRequest(envelope({
+    request: "Create an uncommon +1 acid flask. As an action, throw it at one creature within 20 feet. On a hit, the target takes 2d6 acid damage. The flask is consumed after one use."
+  }));
+  const explicitResult = normalizeModelOutput({
+    specs: [{
+      kind: "equipmentPowerSuite",
+      name: "Acid Flask",
+      description: "A flask.",
+      attackActivities: [{
+        activityName: "Throw",
+        attackBonus: "",
+        damageParts: [{ number: 2, denomination: 6, bonus: "", types: ["acid"] }]
+      }]
+    }]
+  }, explicit, { makeId: ids() });
+  assert.equal(explicitResult.specs[0].magicalBonus, "1");
+  assert.equal(explicitResult.specs[0].attackActivities[0].attackBonus, "");
 });

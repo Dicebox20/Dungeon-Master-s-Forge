@@ -201,7 +201,7 @@ function parseTemplateTarget(text) {
   if (!size) return null;
   if (/\bcone\b/i.test(source)) {
     return {
-      range: { units: "self" },
+      range: rangeFromFeet(source, { units: "self" }),
       target: {
         template: { count: "1", type: "cone", size, units: "ft" },
         affects: { type: "creature", special: `Creatures in the ${size}-foot cone` },
@@ -211,7 +211,7 @@ function parseTemplateTarget(text) {
   }
   if (/\bcube\b/i.test(source)) {
     return {
-      range: { units: "self" },
+      range: rangeFromFeet(source, { units: "self" }),
       target: {
         template: { count: "1", type: "cube", size, units: "ft" },
         affects: { type: "creature", special: `Creatures in the ${size}-foot cube` },
@@ -222,7 +222,7 @@ function parseTemplateTarget(text) {
   if (/\bline\b/i.test(source)) {
     const width = Number(source.match(/\b(\d+)\s*[- ]?(?:foot|feet|ft\.?)\s+wide\b/i)?.[1] ?? 5);
     return {
-      range: { units: "self" },
+      range: rangeFromFeet(source, { units: "self" }),
       target: {
         template: { count: "1", type: "line", size, width, units: "ft" },
         affects: { type: "creature", special: `Creatures in the ${size}-foot line` },
@@ -817,6 +817,60 @@ function repairMalformedSaveActivities(spec, request) {
   return { applied: true, spec: next, assumptions };
 }
 
+function looksLikeThrownConsumableRequest(text) {
+  const source = compactText(text);
+  return /\b(?:grenade|bomb|flask|vial|alchemist(?:'s)?\s+fire|acid\s+flask|holy\s+water)\b/i.test(source)
+    && /\b(?:throw|thrown|hurl|lob|splash|burst|explode|explodes?)\b/i.test(source);
+}
+
+function repairExplicitConsumableTargets(spec, request) {
+  if (!looksLikeThrownConsumableRequest(request)) return { applied: false, spec, assumptions: [] };
+  const template = parseTemplateTarget(request);
+  if (!template) return { applied: false, spec, assumptions: [] };
+
+  const next = clone(spec);
+  let applied = false;
+  const fields = ["activities", "attackActivities", "saveActivities", "utilityActivities"];
+  for (const field of fields) {
+    if (!Array.isArray(next[field])) continue;
+    next[field] = next[field].map(activity => {
+      if (!activity || typeof activity !== "object") return activity;
+      const currentTemplate = activity.target?.template;
+      const sameTemplate = currentTemplate?.type === template.target.template.type
+        && Number(currentTemplate?.size) === Number(template.target.template.size)
+        && Number(currentTemplate?.width ?? 0) === Number(template.target.template.width ?? 0);
+      const nextActivity = {
+        ...activity,
+        range: clone(template.range),
+        target: {
+          ...(clone(activity.target) ?? {}),
+          ...clone(template.target),
+          template: clone(template.target.template),
+          affects: {
+            ...(clone(activity.target?.affects) ?? {}),
+            ...clone(template.target.affects)
+          },
+          prompt: true
+        }
+      };
+      if (!sameTemplate || activity.target?.prompt !== true || activity.range?.value !== template.range?.value) applied = true;
+      return nextActivity;
+    });
+  }
+
+  if (next.kind === "chargedSaveDamage") {
+    if (JSON.stringify(next.target?.template) !== JSON.stringify(template.target.template)
+      || next.target?.prompt !== true
+      || next.range?.value !== template.range?.value) applied = true;
+    next.range = clone(template.range);
+    next.target = clone(template.target);
+  }
+
+  return applied
+    ? { applied: true, spec: next, assumptions: ["Applied explicit consumable range and area template from the request over stale model defaults."] }
+    : { applied: false, spec, assumptions: [] };
+}
+
 function addHealingActivity(spec, request) {
   if (!SUITE_KINDS.has(spec?.kind)) return { applied: false, spec, assumptions: [] };
   const clause = healingClause(request);
@@ -1337,6 +1391,7 @@ function repairHybridSpecFromRequest(spec, request) {
     addNamedAttackActivities,
     addNamedSaveActivities,
     repairMalformedSaveActivities,
+    repairExplicitConsumableTargets,
     addGenericSaveActivity,
     addHealingActivity,
     addSummonActivity,

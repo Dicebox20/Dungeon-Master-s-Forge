@@ -531,6 +531,16 @@ function forgeContent() {
       <section class="codex-forge-bottom-tray">
         <div class="codex-forge-compile-report" data-forge-compile-report hidden></div>
         <div class="codex-forge-notice-stack" data-forge-notices hidden></div>
+        <section class="codex-forge-report-action" data-forge-report-action>
+          <div class="codex-forge-report-action-copy">
+            <strong>Report Failed Item</strong>
+            <small data-forge-report-action-text>Available after you preview or validate an item. Opens a separate report window and includes the current request, generated JSON, preview notes, and your note.</small>
+          </div>
+          <button type="button" class="codex-forge-report-button" data-action="report-failed-item" disabled>
+            <i class="fa-solid fa-bug"></i>
+            <span>Report Failed Item</span>
+          </button>
+        </section>
         <label class="codex-forge-approval codex-forge-approval-footer">
           <input type="checkbox" name="reviewApproval">
           <span class="codex-forge-approval-box" aria-hidden="true"><i class="fa-solid fa-check"></i></span>
@@ -731,6 +741,59 @@ function syncCreateAction(dialog) {
   createButton.setAttribute("aria-disabled", String(createButton.disabled));
 }
 
+function failedItemReportAvailability(dialog) {
+  const rawSpecs = reportRawSpecsForDialog(dialog);
+  const preview = dialog?.element?.querySelector?.("[data-forge-preview]");
+  const hasPreview = preview instanceof HTMLElement && preview.hidden === false;
+  const items = hasPreview ? reportSummariesForDialog(dialog) : [];
+  if (!rawSpecs || !hasPreview || !items.length) {
+    return {
+      enabled: false,
+      message: "Available after you preview or validate an item. The report window will include the current request, generated JSON, preview notes, and your note."
+    };
+  }
+
+  const provider = reportContextProvider(dialog);
+  const providerRecord = getProvider(provider.id);
+  if (!providerRecord || providerRecord.mode !== "network") {
+    return {
+      enabled: false,
+      message: "Failed-item reports are available when you are connected to a network Forge service."
+    };
+  }
+
+  try {
+    const connection = networkProviderConfiguration(provider.id, provider.configuration);
+    if (!String(connection.endpoint ?? "").trim()) {
+      return {
+        enabled: false,
+        message: "Add a Forge-compatible compile endpoint in Forge Settings before sending failed-item reports."
+      };
+    }
+  } catch {
+    return {
+      enabled: false,
+      message: "Finish configuring the connected Forge service before sending failed-item reports."
+    };
+  }
+
+  return {
+    enabled: true,
+    message: "Opens a separate report window. We will attach the current request, generated JSON, preview notes, provider details, and your note."
+  };
+}
+
+function syncFailedItemReportAction(dialog) {
+  const button = dialog?.element?.querySelector?.('[data-action="report-failed-item"]');
+  const text = dialog?.element?.querySelector?.("[data-forge-report-action-text]");
+  if (!(button instanceof HTMLButtonElement)) return;
+
+  const availability = failedItemReportAvailability(dialog);
+  button.disabled = !availability.enabled;
+  button.setAttribute("aria-disabled", String(button.disabled));
+  if (text) text.textContent = availability.message;
+}
+
 function setReviewValidated(dialog, validated) {
   const form = dialog.element?.querySelector("form");
   const approval = form?.elements?.namedItem("reviewApproval");
@@ -740,6 +803,7 @@ function setReviewValidated(dialog, validated) {
     if (!validated) approval.checked = false;
   }
   syncCreateAction(dialog);
+  syncFailedItemReportAction(dialog);
 }
 
 function bindForgeUsability(dialog, element) {
@@ -750,8 +814,16 @@ function bindForgeUsability(dialog, element) {
   const approval = formControl(form, "reviewApproval");
   const specs = formControl(form, "specs");
   const unresolvedPolicy = formControl(form, "unresolvedPolicy");
+  const reportButton = form.querySelector('[data-action="report-failed-item"]');
   approval.addEventListener("change", () => syncCreateAction(dialog));
-  unresolvedPolicy.addEventListener("change", () => refreshForgeProviderSummary(dialog, form));
+  unresolvedPolicy.addEventListener("change", () => {
+    refreshForgeProviderSummary(dialog, form);
+    syncFailedItemReportAction(dialog);
+  });
+  reportButton?.addEventListener("click", event => {
+    event.preventDefault();
+    void openFailedItemReportDialog(dialog);
+  });
   specs.addEventListener("input", () => {
     dialog._codexCompilation = null;
     setReviewValidated(dialog, false);
@@ -765,6 +837,7 @@ function bindForgeUsability(dialog, element) {
   });
   setReviewValidated(dialog, false);
   refreshForgeProviderSummary(dialog, form);
+  syncFailedItemReportAction(dialog);
 }
 
 function setStatus(dialog, state, message) {
@@ -1589,7 +1662,51 @@ function reportSummariesForDialog(dialog) {
   return buildReviewSummaries(specs, compilation).map(summaryItemNotes);
 }
 
-function buildAnonymousErrorReportPayload(dialog, error, context = {}) {
+function reportRawSpecsForDialog(dialog) {
+  try {
+    const form = dialog?.element?.querySelector?.("form");
+    return form instanceof HTMLFormElement ? formControl(form, "specs").value.trim() : "";
+  } catch {
+    return "";
+  }
+}
+
+function reportRequestForDialog(dialog) {
+  try {
+    const form = dialog?.element?.querySelector?.("form");
+    return form instanceof HTMLFormElement ? formControl(form, "request").value.trim() : "";
+  } catch {
+    return "";
+  }
+}
+
+function reportStatusForDialog(dialog) {
+  const status = dialog?.element?.querySelector?.("[data-forge-status]");
+  return String(status?.textContent ?? "").trim();
+}
+
+function compilationSnapshotForDialog(dialog) {
+  const compilation = dialog?._codexCompilation;
+  if (!compilation || typeof compilation !== "object") return null;
+  return {
+    providerLabel: String(compilation.providerLabel ?? ""),
+    providerMode: String(compilation.providerMode ?? ""),
+    normalizedRequest: String(compilation.request ?? ""),
+    decisions: Array.isArray(compilation.decisions)
+      ? compilation.decisions.map(decision => ({
+          name: String(decision?.name ?? ""),
+          pattern: String(decision?.pattern ?? ""),
+          unresolvedCount: Number.isFinite(Number(decision?.unresolvedCount)) ? Number(decision.unresolvedCount) : 0
+        }))
+      : [],
+    assumptions: Array.isArray(compilation.assumptions) ? compilation.assumptions.map(String) : [],
+    warnings: Array.isArray(compilation.warnings) ? compilation.warnings.map(String) : [],
+    deferred: Array.isArray(compilation.deferred) ? compilation.deferred.map(String) : [],
+    unresolvedCount: Array.isArray(compilation.unresolvedMechanics) ? compilation.unresolvedMechanics.length : 0
+  };
+}
+
+function buildReportPayloadBase(dialog, error, context = {}) {
   const provider = reportContextProvider(dialog);
   let endpoint = "";
   try {
@@ -1600,7 +1717,7 @@ function buildAnonymousErrorReportPayload(dialog, error, context = {}) {
   const endpointUrl = endpoint ? new URL(endpoint) : null;
   return {
     schemaVersion: "1.0",
-    source: "dungeon-masters-forge-module",
+    source: String(context.source ?? "dungeon-masters-forge-module"),
     occurredAt: new Date().toISOString(),
     module: {
       id: MODULE_ID,
@@ -1627,6 +1744,31 @@ function buildAnonymousErrorReportPayload(dialog, error, context = {}) {
       stack: sanitizedStack(error)
     },
     items: reportSummariesForDialog(dialog)
+  };
+}
+
+function buildAnonymousErrorReportPayload(dialog, error, context = {}) {
+  return buildReportPayloadBase(dialog, error, {
+    ...context,
+    source: "dungeon-masters-forge-module"
+  });
+}
+
+function buildFailedItemReportPayload(dialog, userNote) {
+  return {
+    ...buildReportPayloadBase(dialog, new Error("User reported a failed item from the Forge preview window."), {
+      stage: "user-feedback",
+      source: "dungeon-masters-forge-failed-item"
+    }),
+    feedback: {
+      kind: "failed-item",
+      userNote: String(userNote ?? "").trim(),
+      requestText: reportRequestForDialog(dialog),
+      generatedSpecsJson: reportRawSpecsForDialog(dialog),
+      statusMessage: reportStatusForDialog(dialog),
+      includedPreviewNotes: true
+    },
+    compilation: compilationSnapshotForDialog(dialog)
   };
 }
 
@@ -1665,6 +1807,113 @@ function reportError(dialog, error, context = {}) {
   setStatus(dialog, "error", message);
   setSettingsStatus(dialog, "error", message);
   ui.notifications.error(`${MODULE_TITLE}: ${message}`);
+}
+
+function failedItemReportDialogContent() {
+  return `
+    <section class="codex-forge-report-dialog">
+      <p>Tell us what failed when you previewed, created, or used this item.</p>
+      <ul>
+        <li>Describe the mismatch between the prompt and the result.</li>
+        <li>Mention whether the failure happened in preview, on item creation, or during use in chat.</li>
+        <li>Avoid including secrets such as API keys or access tokens.</li>
+      </ul>
+      <p><strong>Included automatically:</strong> the current request, generated specifications JSON, preview notes, provider details, and Foundry/system version data.</p>
+      <label class="codex-forge-report-dialog-field">
+        <span>What went wrong?</span>
+        <textarea name="reportNote" aria-label="Failed item report note" placeholder="Example: Burning Hands showed up in preview, but the created item defaulted to the melee attack and never offered the spell activity."></textarea>
+      </label>
+      <output class="codex-forge-report-dialog-status" data-forge-report-status data-state="idle" aria-live="polite">Your note will be sent with the current preview context.</output>
+    </section>
+  `;
+}
+
+function setFailedItemReportStatus(dialog, state, message) {
+  const output = dialog?.element?.querySelector?.("[data-forge-report-status]");
+  if (!output) return;
+  output.dataset.state = state;
+  output.textContent = message;
+}
+
+async function submitFailedItemReport(parentDialog, userNote) {
+  const provider = reportContextProvider(parentDialog);
+  const providerRecord = getProvider(provider.id);
+  if (!providerRecord || providerRecord.mode !== "network") {
+    throw new Error("Failed-item reports are only available when a network Forge service is active.");
+  }
+  const connection = networkProviderConfiguration(provider.id, provider.configuration);
+  if (!String(connection.endpoint ?? "").trim()) {
+    throw new Error("Configure a Forge-compatible compile endpoint before sending failed-item reports.");
+  }
+  const payload = buildFailedItemReportPayload(parentDialog, userNote);
+  return requestRemoteErrorReport({
+    endpoint: connection.endpoint,
+    token: connection.apiToken,
+    payload
+  });
+}
+
+async function openFailedItemReportDialog(parentDialog) {
+  const availability = failedItemReportAvailability(parentDialog);
+  if (!availability.enabled) {
+    ui.notifications.warn(`${MODULE_TITLE}: ${availability.message}`);
+    return null;
+  }
+
+  const reportDialog = new foundry.applications.api.DialogV2({
+    classes: ["dungeon-masters-forge", "dungeon-masters-forge-report-window"],
+    window: {
+      title: "Report Failed Item",
+      icon: "fa-solid fa-bug",
+      minimizable: false,
+      resizable: true
+    },
+    position: { width: 640, height: 520 },
+    form: { closeOnSubmit: false },
+    content: failedItemReportDialogContent(),
+    buttons: [
+      {
+        action: "cancel",
+        label: "Cancel",
+        icon: "fa-solid fa-xmark",
+        type: "button",
+        callback: (_event, _button, dialog) => {
+          dialog.close();
+        }
+      },
+      {
+        action: "send-report",
+        label: "Send Report",
+        icon: "fa-solid fa-paper-plane",
+        class: "codex-forge-send-report",
+        default: true,
+        type: "button",
+        callback: async (_event, button, dialog) => {
+          try {
+            const note = formControl(button.form, "reportNote").value.trim();
+            if (!note) {
+              setFailedItemReportStatus(dialog, "warning", "Add a short note describing what failed before sending the report.");
+              return;
+            }
+            setFailedItemReportStatus(dialog, "working", "Sending failed-item report...");
+            setStatus(parentDialog, "working", "Sending failed-item report...");
+            await submitFailedItemReport(parentDialog, note);
+            setFailedItemReportStatus(dialog, "success", "Report sent. Thank you — the current preview notes and generated JSON were included.");
+            setStatus(parentDialog, "success", "Failed-item report sent with the current preview notes and generated JSON.");
+            ui.notifications.info(`${MODULE_TITLE}: Failed-item report sent.`);
+            dialog.close();
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            setFailedItemReportStatus(dialog, "error", message);
+            setStatus(parentDialog, "warning", message);
+          }
+        }
+      }
+    ]
+  });
+
+  reportDialog.render({ force: true });
+  return reportDialog;
 }
 
 async function saveDialogState(rawSpecs, config, provider) {

@@ -120,6 +120,13 @@ function cleanText(value, max = 500) {
     .slice(0, max);
 }
 
+function cleanBlockText(value, max = 4000) {
+  return String(value ?? "")
+    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, " ")
+    .trim()
+    .slice(0, max);
+}
+
 function normalizeErrorReport(payload, requestId, client) {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     throw new ServiceError(400, "invalid_error_report", "Error reports must be JSON objects.");
@@ -141,6 +148,40 @@ function normalizeErrorReport(payload, requestId, client) {
       message: cleanText(note?.message, 500)
     })) : []
   })) : [];
+  const compilation = payload.compilation && typeof payload.compilation === "object" && !Array.isArray(payload.compilation)
+    ? {
+        providerLabel: cleanText(payload.compilation.providerLabel, 160),
+        providerMode: cleanText(payload.compilation.providerMode, 80),
+        normalizedRequest: cleanBlockText(payload.compilation.normalizedRequest, 12000),
+        decisions: Array.isArray(payload.compilation.decisions)
+          ? payload.compilation.decisions.slice(0, 20).map(decision => ({
+              name: cleanText(decision?.name, 160),
+              pattern: cleanText(decision?.pattern, 120),
+              unresolvedCount: Number.isFinite(Number(decision?.unresolvedCount)) ? Number(decision.unresolvedCount) : 0
+            }))
+          : [],
+        assumptions: Array.isArray(payload.compilation.assumptions)
+          ? payload.compilation.assumptions.slice(0, 40).map(entry => cleanText(entry, 400)).filter(Boolean)
+          : [],
+        warnings: Array.isArray(payload.compilation.warnings)
+          ? payload.compilation.warnings.slice(0, 40).map(entry => cleanText(entry, 400)).filter(Boolean)
+          : [],
+        deferred: Array.isArray(payload.compilation.deferred)
+          ? payload.compilation.deferred.slice(0, 40).map(entry => cleanText(entry, 400)).filter(Boolean)
+          : [],
+        unresolvedCount: Number.isFinite(Number(payload.compilation.unresolvedCount)) ? Number(payload.compilation.unresolvedCount) : 0
+      }
+    : null;
+  const feedback = payload.feedback && typeof payload.feedback === "object" && !Array.isArray(payload.feedback)
+    ? {
+        kind: cleanText(payload.feedback.kind, 80),
+        userNote: cleanBlockText(payload.feedback.userNote, 4000),
+        requestText: cleanBlockText(payload.feedback.requestText, 12000),
+        generatedSpecsJson: cleanBlockText(payload.feedback.generatedSpecsJson, 60000),
+        statusMessage: cleanText(payload.feedback.statusMessage, 500),
+        includedPreviewNotes: payload.feedback.includedPreviewNotes === true
+      }
+    : null;
 
   return {
     schemaVersion: cleanText(payload.schemaVersion, 20) || "1.0",
@@ -172,7 +213,9 @@ function normalizeErrorReport(payload, requestId, client) {
       requestId: cleanText(payload.error?.requestId, 120),
       stack: Array.isArray(payload.error?.stack) ? payload.error.stack.slice(0, 8).map(line => cleanText(line, 300)).filter(Boolean) : []
     },
-    items
+    items,
+    compilation,
+    feedback
   };
 }
 

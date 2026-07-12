@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 2.23.1-test.20
+
+- Prevented thrown consumable prompts from receiving an invented `+1` magical or attack bonus.
+- Made explicit grenade and flask ranges and area templates override stale model defaults during repair.
+- Added regression coverage for single-target flasks and cone/sphere grenade templates.
+
 - Added the `2.23.1-test.19` tester build. Thrown consumables now normalize into real consumable items during hosted generation, bogus template/spell-attack noise is stripped from flask-style outputs, grenade save templates recover their thrown range and area metadata, and tester previews label those specs as consumable projectiles instead of equipment suites.
 - Added the `2.23.1-test.18` tester build. Preview and review notes now drop stale spell-family warnings once a working SRD spell activity has actually been preserved on the item, reducing false manual-review noise for simple prompt hybrids.
 - Added the `2.23.1-test.17` tester build. Multi-stage SRD spell activities now disambiguate their labels so split spells like Ice Knife no longer appear as duplicate identical buttons in the final item activity list.
