@@ -138,6 +138,20 @@ assert.equal(reroutedStormUtility.spec.saveActivities.length, 1);
 assert.equal(reroutedStormUtility.spec.saveActivities[0].activityName, "Triggered Power");
 assert.equal(reroutedStormUtility.spec.saveActivities[0].target.template.type, "cone");
 
+const staleGrenadeTemplate = repairHybridSpecFromRequest({
+  kind: "chargedSaveDamage",
+  name: "Thunderclap Grenade",
+  save: { ability: "con", dc: 15 },
+  damageParts: [{ number: 3, denomination: 6, bonus: "", types: ["thunder"] }],
+  range: { value: 20, units: "ft" },
+  target: { template: { type: "burst", size: 5, units: "ft" }, prompt: true }
+}, "Create a rare consumable projectile named Thunderclap Grenade. As an action, throw it to a point within 60 feet. Each creature in a 10-foot-radius sphere must make a DC 15 Constitution saving throw, taking 3d6 thunder damage on a failure, or half as much on a success. The grenade is consumed after one use.");
+
+assert.equal(staleGrenadeTemplate.spec.range.value, 60);
+assert.equal(staleGrenadeTemplate.spec.target.template.type, "sphere");
+assert.equal(staleGrenadeTemplate.spec.target.template.size, 10);
+assert.equal(staleGrenadeTemplate.spec.target.prompt, true);
+
 const celestialGlaive = repairHybridSpecFromRequest({
   kind: "artifactWeaponHybrid",
   name: "Radiant Celestial Glaive",

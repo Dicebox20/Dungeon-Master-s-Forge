@@ -468,6 +468,47 @@
   flex: 0 0 auto;
 }
 
+.codex-forge-report-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid rgb(208 180 129 / 16%);
+  border-radius: 6px;
+  background:
+    linear-gradient(180deg, rgb(30 20 18 / 92%), rgb(18 22 26 / 96%)),
+    rgb(18 22 26 / 96%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 3%);
+}
+
+.codex-forge-report-action-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.codex-forge-report-action-copy strong {
+  color: #f3e8da;
+}
+
+.codex-forge-report-action-copy small {
+  color: #cbb8a2;
+  line-height: 1.45;
+}
+
+.codex-forge-report-button {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.codex-forge-report-button:disabled {
+  opacity: 0.6;
+}
+
 .codex-forge-notice-stack {
   display: block;
   border: 1px solid rgb(180 42 51 / 18%);
@@ -743,6 +784,58 @@
 .codex-forge-approval-text {
   color: #f1e7da;
   font-weight: 600;
+}
+
+.codex-forge-report-dialog {
+  display: grid;
+  gap: 12px;
+}
+
+.codex-forge-report-dialog p,
+.codex-forge-report-dialog li {
+  color: #e8ddd0;
+  line-height: 1.5;
+}
+
+.codex-forge-report-dialog ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.codex-forge-report-dialog-field {
+  display: grid;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.codex-forge-report-dialog-field textarea {
+  min-height: 180px;
+  resize: vertical;
+}
+
+.codex-forge-report-dialog-status {
+  display: block;
+  padding: 10px 12px;
+  border: 1px solid rgb(208 180 129 / 16%);
+  border-radius: 6px;
+  background: rgb(255 255 255 / 3%);
+  color: #e8ddd0;
+}
+
+.codex-forge-report-dialog-status[data-state="working"] {
+  color: #f3d39c;
+}
+
+.codex-forge-report-dialog-status[data-state="success"] {
+  color: #92ddb0;
+}
+
+.codex-forge-report-dialog-status[data-state="warning"] {
+  color: #f0c27d;
+}
+
+.codex-forge-report-dialog-status[data-state="error"] {
+  color: #ffb3b0;
 }
 
 .codex-forge-review-summary[hidden] {

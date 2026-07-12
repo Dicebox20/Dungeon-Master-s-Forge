@@ -257,6 +257,9 @@ function detectRarity(text) {
 function detectName(request, fields, subject, assumptions) {
   const explicit = fields["item name"] ?? fields.name;
   if (explicit) return explicit;
+  if (/\balchemist(?:'s)?\s+fire\b/i.test(request)) return "Alchemist Fire";
+  if (/\bacid\s+flask\b/i.test(request)) return "Acid Flask";
+  if (/\bholy\s+water\b/i.test(request)) return "Holy Water";
   const title = firstTitleLine(request);
   if (title) return title;
   const named = request.match(/\b(?:named|called)\s+["']?([^"'.,;\n]+)["']?/i)?.[1]?.trim();

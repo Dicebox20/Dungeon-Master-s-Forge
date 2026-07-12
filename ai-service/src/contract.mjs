@@ -1390,10 +1390,15 @@ function inferThrowableConsumableType(text) {
 
 function inferFeetValue(text, fallback = null) {
   const match = String(text ?? "").match(/\bwithin\s+(\d+)\s*feet?\b/i)
+    ?? String(text ?? "").match(/\brange\s*:\s*(\d+)\s*feet?\b/i)
     ?? String(text ?? "").match(/\brange\s+of\s+(\d+)\s*feet?\b/i)
     ?? String(text ?? "").match(/\bto\s+a\s+point\s+within\s+(\d+)\s*feet?\b/i)
     ?? String(text ?? "").match(/\b(\d+)\s*[- ]?foot\b/i);
   return match ? Number(match[1]) : fallback;
+}
+
+function inferExplicitFeetValue(text) {
+  return inferFeetValue(text, null);
 }
 
 function inferTemplateFromText(text) {
@@ -1432,6 +1437,7 @@ function normalizeThrowableConsumableSpec(spec, requestChunk) {
   if (!looksLikeThrowableConsumableRequest(text)) return spec;
 
   const normalized = clone(spec);
+  const explicitRequestText = compactText(requestChunk);
   const canonicalName = inferThrowableConsumableName(text);
   if (canonicalName) normalized.name = canonicalName;
   normalized.itemType = "consumable";
@@ -1446,19 +1452,22 @@ function normalizeThrowableConsumableSpec(spec, requestChunk) {
     autoDestroy: true
   };
 
-  const explicitMagicalBonus = String(text).match(/\B\+(\d)\b(?!\s*d)/)?.[1] ?? "";
+  const explicitMagicalBonus = explicitRequestText.match(/\B\+(\d)\b(?!\s*d)/)?.[1] ?? "";
   normalized.magicalBonus = explicitMagicalBonus;
   normalized.effects = stripThrowableConsumableNoiseEffects(normalized.effects, text);
 
-  const thrownRange = inferFeetValue(text, 20);
-  const template = inferTemplateFromText(text);
+  const explicitThrownRange = inferExplicitFeetValue(explicitRequestText);
+  const thrownRange = explicitThrownRange ?? inferFeetValue(text, 20);
+  const template = inferTemplateFromText(explicitRequestText) ?? inferTemplateFromText(text);
 
   if (normalized.kind === "chargedSaveDamage") {
     if (!normalized.uses.recovery.length) {
       normalized.uses.recovery = [{ period: "", type: "recoverAll", formula: "" }];
     }
     normalized.range = object(normalized.range) ? normalized.range : {};
-    normalized.range.value = Number.isFinite(Number(normalized.range.value)) ? normalized.range.value : thrownRange;
+    normalized.range.value = explicitThrownRange ?? (
+      Number.isFinite(Number(normalized.range.value)) ? Number(normalized.range.value) : thrownRange
+    );
     normalized.range.units = compactText(normalized.range.units) && compactText(normalized.range.units).toLowerCase() !== "self"
       ? normalized.range.units
       : "ft";
@@ -1472,13 +1481,14 @@ function normalizeThrowableConsumableSpec(spec, requestChunk) {
         ...(object(normalized.target.affects) ? normalized.target.affects : {}),
         type: compactText(normalized.target.affects?.type) || "creature"
       };
-      normalized.target.prompt = normalized.target.prompt ?? true;
+      normalized.target.prompt = true;
     } else {
       normalized.target.affects = {
         ...(object(normalized.target.affects) ? normalized.target.affects : {}),
         count: compactText(normalized.target.affects?.count) || "1",
         type: compactText(normalized.target.affects?.type) || "creature"
       };
+      normalized.target.prompt = true;
     }
     return normalized;
   }
@@ -1488,13 +1498,19 @@ function normalizeThrowableConsumableSpec(spec, requestChunk) {
   const attackActivities = Array.isArray(normalized.attackActivities) ? normalized.attackActivities : [];
   normalized.attackActivities = attackActivities.map(activity => {
     const next = clone(activity);
+    if (!explicitMagicalBonus) next.attackBonus = "";
+    if (Array.isArray(next.damageParts)) {
+      next.damageParts = next.damageParts.filter(part => Number(part?.number) > 0 && Number(part?.denomination) > 0);
+    }
     next.activationType = compactText(next.activationType) || "action";
     next.chargeCost = Number.isFinite(Number(next.chargeCost)) && Number(next.chargeCost) > 0 ? Number(next.chargeCost) : 1;
     next.ability = compactText(next.ability) || "dex";
     next.attackType = compactText(next.attackType) || "ranged";
     next.attackClassification = compactText(next.attackClassification) || "weapon";
     next.range = object(next.range) ? next.range : {};
-    next.range.value = Number.isFinite(Number(next.range.value)) ? next.range.value : thrownRange;
+    next.range.value = explicitThrownRange ?? (
+      Number.isFinite(Number(next.range.value)) ? Number(next.range.value) : thrownRange
+    );
     next.range.units = compactText(next.range.units) && compactText(next.range.units).toLowerCase() !== "self"
       ? next.range.units
       : "ft";
@@ -1508,7 +1524,7 @@ function normalizeThrowableConsumableSpec(spec, requestChunk) {
         ...(object(next.target.affects) ? next.target.affects : {}),
         type: compactText(next.target.affects?.type) || "creature"
       };
-      next.target.prompt = next.target.prompt ?? true;
+      next.target.prompt = true;
     } else {
       next.target.template = {
         count: "",
@@ -1526,7 +1542,7 @@ function normalizeThrowableConsumableSpec(spec, requestChunk) {
         type: compactText(next.target.affects?.type) || "creature",
         special: compactText(next.target.affects?.special) || ""
       };
-      next.target.prompt = next.target.prompt ?? true;
+      next.target.prompt = true;
     }
     return next;
   });

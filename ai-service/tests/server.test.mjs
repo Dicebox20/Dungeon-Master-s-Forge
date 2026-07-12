@@ -58,7 +58,7 @@ test("capabilities endpoint is read-only and does not invoke compilation", async
   assert.equal(calls, 0);
 });
 
-test("error-report endpoint stores anonymous module reports when enabled", async t => {
+test("error-report endpoint stores failed-item feedback with preview context when enabled", async t => {
   const entries = [];
   const app = await runningServer({
     errorReportsEnabled: true
@@ -85,7 +85,25 @@ test("error-report endpoint stores anonymous module reports when enabled", async
       environment: { foundryVersion: "14", systemId: "dnd5e", systemVersion: "5.3.3" },
       provider: { id: "hosted-forge", endpointHost: "forge.example", endpointPath: "/v1/forge/compile", unresolvedPolicy: "review" },
       error: { stage: "compile", name: "Error", message: "Remote provider returned HTTP 502." },
-      items: [{ name: "Storm Blade", kind: "weaponExtraDamage", reviewState: "manual-review", notes: [{ state: "warning", label: "Warning", message: "Review charges." }] }]
+      items: [{ name: "Storm Blade", kind: "weaponExtraDamage", reviewState: "manual-review", notes: [{ state: "warning", label: "Warning", message: "Review charges." }] }],
+      compilation: {
+        providerLabel: "Bring Your Own API",
+        providerMode: "network",
+        normalizedRequest: "Create a storm blade.",
+        decisions: [{ name: "Storm Blade", pattern: "weaponExtraDamage", unresolvedCount: 1 }],
+        assumptions: ["Applied default leveled spell charges."],
+        warnings: ["Spell prompt still defaulted to the base attack."],
+        deferred: [],
+        unresolvedCount: 1
+      },
+      feedback: {
+        kind: "failed-item",
+        userNote: "The preview looked fine, but the created item always defaulted to the base attack.",
+        requestText: "Create a storm blade.",
+        generatedSpecsJson: "[{\"name\":\"Storm Blade\"}]",
+        statusMessage: "Created 1 item.",
+        includedPreviewNotes: true
+      }
     })
   });
   assert.equal(response.status, 202);
@@ -93,6 +111,10 @@ test("error-report endpoint stores anonymous module reports when enabled", async
   assert.equal(entries.length, 1);
   assert.equal(entries[0].module.id, "dungeon-masters-forge");
   assert.equal(entries[0].items[0].name, "Storm Blade");
+  assert.equal(entries[0].feedback.kind, "failed-item");
+  assert.match(entries[0].feedback.userNote, /defaulted to the base attack/i);
+  assert.equal(entries[0].feedback.includedPreviewNotes, true);
+  assert.equal(entries[0].compilation.decisions[0].pattern, "weaponExtraDamage");
 });
 
 test("mock compile completes the Forge 1.0 contract", async t => {
