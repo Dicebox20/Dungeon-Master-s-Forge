@@ -23,6 +23,7 @@ assert.equal(staff.kindLabel, "Multi-spell item");
 assert.ok(staff.mechanics.some(value => value.includes("10 uses; regains 1d6 + 4 at dawn")));
 assert.ok(staff.mechanics.some(value => value.includes("Cast Ice Storm: 4 charges; DC 15 Dexterity save")));
 assert.ok(staff.mechanics.some(value => value.includes("Cast Cone of Cold: 5 charges; DC 15 Constitution save")));
+assert.ok(staff.notes.some(note => note.label === "Attunement" && /Attune this item/i.test(note.message)));
 
 const summon = review("Infernal Calling Stone\nVery rare item requiring attunement. Once per long rest summon a friendly fiend, choosing Demon, Devil, or Yugoloth.");
 assert.equal(summon.kindLabel, "Selectable summon");

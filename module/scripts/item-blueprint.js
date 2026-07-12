@@ -189,7 +189,7 @@ function clearResolvedActivityWarnings(spec) {
     const category = compactText(mechanic?.category).toLowerCase();
     const text = [mechanic?.label, mechanic?.reason, mechanic?.handling].map(compactText).join(" ");
     const mentionsResolvedSpell = spellNames.some(spellName => text.toLowerCase().includes(spellName.toLowerCase()));
-    const staleResolvedSpellNote = /(?:spell[- ]cast activity|save-based effect) was not preserved|cannot encode .* spell|activated spell casting is not supported by .* family|does not support spell activities|chosen weapon family has no supported spell-save activity field|daily spell usage integration|partially represented/i.test(text);
+    const staleResolvedSpellNote = /(?:spell[- ]cast activity|save-based effect) was not preserved|cannot encode .* spell|activated spell casting is not supported by .* family|does not support spell activities|chosen weapon family has no supported spell-save activity field|daily spell usage integration|partially represented|does not support a spell-activation resource model|does not support a separate spell save dc/i.test(text);
     if (mentionsResolvedSpell && ["unmappedspell", "tableadjudication", "spell"].includes(category)) return false;
     if (staleResolvedSpellNote && ["unmappedspell", "tableadjudication", "spell"].includes(category)) return false;
     return true;

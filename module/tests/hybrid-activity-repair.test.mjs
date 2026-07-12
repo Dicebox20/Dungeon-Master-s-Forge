@@ -397,4 +397,24 @@ assert.equal(fallbackDefaults.applied, true);
 assert.equal(fallbackDefaults.spec.magicalBonus, "1");
 assert.equal(fallbackDefaults.spec.saveActivities[0].save.dc, 15);
 
-export const testedHybridRepairCases = 16;
+const ashenPilgrimRider = repairHybridSpecFromRequest({
+  kind: "equipmentPowerSuite",
+  name: "Ashen Pilgrim Staff",
+  weaponType: "simpleM",
+  baseItem: "quarterstaff",
+  damage: { base: { number: 1, denomination: 6, bonus: "@mod", types: ["bludgeoning"] } },
+  magicalBonus: "1",
+  saveActivities: [{
+    activityId: "BurningHands0001",
+    activityName: "Burning Hands",
+    save: { ability: "dex", dc: 15 },
+    damageParts: [{ number: 3, denomination: 6, bonus: "", types: ["fire"] }]
+  }]
+}, "Create a rare quarterstaff. It grants +1 to attack and damage rolls and deals an extra 1d6 fire damage on each hit. It can cast Burning Hands.");
+
+assert.equal(ashenPilgrimRider.applied, true);
+assert.deepEqual(ashenPilgrimRider.spec.extraDamageParts, [
+  { number: 1, denomination: 6, bonus: "", types: ["fire"] }
+]);
+
+export const testedHybridRepairCases = 17;

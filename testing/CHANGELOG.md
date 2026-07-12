@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 2.23.1-test.25
+
+- Recovered missing on-hit weapon damage riders from hybrid staff and weapon requests before rendering the base attack.
+- Removed stale spell-resource and spell-DC review warnings once a real spell activity is present.
+- Added an explicit review note explaining that attunement-gated item powers appear only after the item is attuned.
+
 ## 2.23.1-test.24
 
 - Updated the baked-in Free Forge model request to `gpt-5.4-mini` so it matches the live service allowlist.

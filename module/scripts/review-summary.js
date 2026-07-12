@@ -346,6 +346,20 @@ function summarizeSpec(spec, context = {}) {
     ...references,
     ...unresolved
   ];
+  const hasActivePowers = [
+    ...(spec.activities ?? []),
+    ...(spec.attackActivities ?? []),
+    ...(spec.utilityActivities ?? []),
+    ...(spec.saveActivities ?? [])
+  ].length > 0;
+  if (spec.attunement === "required" && hasActivePowers) {
+    notes.push({
+      state: "assumption",
+      label: "Attunement",
+      message: "Attune this item to use its added powers. Until then, Foundry will offer only the base weapon attack.",
+      handling: "Attune the item on the actor sheet before using its spell or charge activities."
+    });
+  }
 
   const kindLabel = isConsumableProjectileSpec(spec)
     ? "Consumable projectile"
