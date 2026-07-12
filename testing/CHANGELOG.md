@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 2.23.1-test.27
+
+- Moved creation approval beside the failed-item report control as a compact, clearly labeled action.
+- Attempting to create without approval now highlights the approval control before creation is blocked.
+
+## 2.23.1-test.26
+
+- Fixed multi-spell staffs so their normalized attack, utility, and save activities are all created on the final Foundry item.
+
 ## 2.23.1-test.25
 
 - Recovered missing on-hit weapon damage riders from hybrid staff and weapon requests before rendering the base attack.

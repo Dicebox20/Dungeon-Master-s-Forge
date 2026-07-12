@@ -27,6 +27,20 @@ function forceExplicitChoiceOnAttack(activity = {}) {
   }, { inplace: false });
 }
 
+function multiActivityStaffActivityLists(spec = {}) {
+  const lists = {
+    attack: Array.isArray(spec.attackActivities) ? [...spec.attackActivities] : [],
+    save: Array.isArray(spec.saveActivities) ? [...spec.saveActivities] : [],
+    utility: Array.isArray(spec.utilityActivities) ? [...spec.utilityActivities] : []
+  };
+  for (const activity of spec.activities ?? []) {
+    if (activity?.type === "attack" || activity?.attack) lists.attack.push(activity);
+    else if (activity?.type === "utility" || (!activity?.save && !activity?.damageOnSave && !activity?.damageParts?.length)) lists.utility.push(activity);
+    else lists.save.push(activity);
+  }
+  return lists;
+}
+
 async function runDungeonMastersForge(FORGE, ITEMS, { validateOnly = false } = {}) {
   function makeIdentifier(name) {
     return name
@@ -563,7 +577,16 @@ async function runDungeonMastersForge(FORGE, ITEMS, { validateOnly = false } = {
     const created = game.items.get(item.id) ?? item;
     const updateData = {};
     patchWeaponBaseAttack(created, spec, updateData);
-    for (const activitySpec of spec.activities ?? []) {
+    const activityLists = multiActivityStaffActivityLists(spec);
+    for (const activitySpec of activityLists.attack) {
+      const activity = makeAttackActivity(created, spec, activitySpec);
+      updateData[`system.activities.${activity._id}`] = activity;
+    }
+    for (const activitySpec of activityLists.utility) {
+      const activity = makeSuiteUtilityActivity(created, spec, activitySpec);
+      updateData[`system.activities.${activity._id}`] = activity;
+    }
+    for (const activitySpec of activityLists.save) {
       const activity = makeSaveActivity(created, {
         ...activitySpec,
         name: spec.name,
@@ -2139,4 +2162,4 @@ for (const target of targets) {
   };
 }
 
-export { forceExplicitChoiceOnAttack, itemHasExplicitActivityChoices, runDungeonMastersForge };
+export { forceExplicitChoiceOnAttack, itemHasExplicitActivityChoices, multiActivityStaffActivityLists, runDungeonMastersForge };

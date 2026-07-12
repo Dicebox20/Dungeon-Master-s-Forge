@@ -536,16 +536,19 @@ function forgeContent() {
             <strong>Report Failed Item</strong>
             <small data-forge-report-action-text>Available after you preview or validate an item. Opens a separate report window and includes the current request, generated JSON, preview notes, and your note.</small>
           </div>
-          <button type="button" class="dm_forge-report-button" data-action="report-failed-item" disabled>
-            <i class="fa-solid fa-bug"></i>
-            <span>Report Failed Item</span>
-          </button>
+          <div class="dm_forge-report-action-controls">
+            <label class="dm_forge-approval dm_forge-approval-compact" title="Required before creating items: I reviewed these specifications and approve creation.">
+              <input type="checkbox" name="reviewApproval" aria-label="I reviewed these specifications and approve creation.">
+              <span class="dm_forge-approval-box" aria-hidden="true"><i class="fa-solid fa-check"></i></span>
+              <span class="dm_forge-approval-label">Approve creation</span>
+              <span class="dm_forge-approval-required">Approve</span>
+            </label>
+            <button type="button" class="dm_forge-report-button" data-action="report-failed-item" disabled>
+              <i class="fa-solid fa-bug"></i>
+              <span>Report Failed Item</span>
+            </button>
+          </div>
         </section>
-        <label class="dm_forge-approval dm_forge-approval-footer">
-          <input type="checkbox" name="reviewApproval">
-          <span class="dm_forge-approval-box" aria-hidden="true"><i class="fa-solid fa-check"></i></span>
-          <span class="dm_forge-approval-text">I reviewed these specifications and approve creation.</span>
-        </label>
         <output class="dm_forge-message" data-forge-status data-state="idle" aria-live="polite">Ready.</output>
       </section>
     </section>
@@ -737,7 +740,7 @@ function syncCreateAction(dialog) {
   const createButton = dialog.element?.querySelector('button[data-action="create"]');
   if (!(approval instanceof HTMLInputElement) || !(createButton instanceof HTMLButtonElement)) return;
 
-  createButton.disabled = !dialog._dm_forgeReviewValidated || !approval.checked;
+  createButton.disabled = !dialog._dm_forgeReviewValidated;
   createButton.setAttribute("aria-disabled", String(createButton.disabled));
 }
 
@@ -815,7 +818,10 @@ function bindForgeUsability(dialog, element) {
   const specs = formControl(form, "specs");
   const unresolvedPolicy = formControl(form, "unresolvedPolicy");
   const reportButton = form.querySelector('[data-action="report-failed-item"]');
-  approval.addEventListener("change", () => syncCreateAction(dialog));
+  approval.addEventListener("change", () => {
+    approval.closest(".dm_forge-approval")?.classList.remove("dm_forge-approval-needs-attention");
+    syncCreateAction(dialog);
+  });
   unresolvedPolicy.addEventListener("change", () => {
     refreshForgeProviderSummary(dialog, form);
     syncFailedItemReportAction(dialog);
@@ -2399,6 +2405,7 @@ async function openForge() {
             const { request, rawSpecs, specs, approved, provider, config } = readDialogForm(button.form);
             const compileRequest = dialog._dm_forgeCompilation?.request ?? request;
             if (!approved) {
+              formControl(button.form, "reviewApproval").closest(".dm_forge-approval")?.classList.add("dm_forge-approval-needs-attention");
               showDialogView(button.form, "review");
               setStatus(dialog, "warning", "Review the generated specs and check the approval box before creation.");
               ui.notifications.warn(`${MODULE_TITLE}: Review approval is required before creation.`);
