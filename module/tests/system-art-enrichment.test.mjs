@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import {
+  applyConsumableProjectileFallbackArt,
   applyFallbackActivityArt,
   applySpellActivityArt,
   applySystemEquipmentArt,
+  consumableProjectileFallbackImage,
   spellActivityMatches,
   supportsSystemEquipmentArt
 } from "../scripts/system-art-enrichment.js";
@@ -48,4 +50,34 @@ const activityFallback = applyFallbackActivityArt({
 
 assert.equal(activityFallback.img, "systems/dnd5e/icons/svg/spells/fireball.webp");
 
-export const testedSystemArtCases = 8;
+assert.equal(
+  consumableProjectileFallbackImage({ itemType: "consumable", name: "Arc Grenade" }),
+  "icons/weapons/thrown/grenade-energy.webp"
+);
+assert.equal(
+  consumableProjectileFallbackImage({ itemType: "consumable", name: "Frostburst Grenade" }),
+  "icons/weapons/thrown/bomb-fuse-blue.webp"
+);
+assert.equal(
+  consumableProjectileFallbackImage({ itemType: "consumable", name: "Thunderclap Grenade" }),
+  "icons/weapons/thrown/bomb-pressure-black.webp"
+);
+
+const grenadeFallback = applyConsumableProjectileFallbackArt({
+  kind: "chargedSaveDamage",
+  itemType: "consumable",
+  name: "Arc Grenade",
+  img: "icons/svg/item-bag.svg"
+});
+assert.equal(grenadeFallback.applied, true);
+assert.equal(grenadeFallback.spec.img, "icons/weapons/thrown/grenade-energy.webp");
+
+const missingFallback = applyConsumableProjectileFallbackArt({
+  kind: "passiveEffectEquipment",
+  name: "Unpictured Relic",
+  img: "icons/svg/item-bag.svg"
+});
+assert.equal(missingFallback.status, "missing");
+assert.equal(missingFallback.spec.img, "icons/svg/item-bag.svg");
+
+export const testedSystemArtCases = 16;
