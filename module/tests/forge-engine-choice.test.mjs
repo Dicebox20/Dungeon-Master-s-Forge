@@ -24,7 +24,7 @@ globalThis.foundry ??= {
   }
 };
 
-const { forceExplicitChoiceOnAttack, itemHasExplicitActivityChoices } = await import("../scripts/forge-engine.js");
+const { forceExplicitChoiceOnAttack, itemHasExplicitActivityChoices, multiActivityStaffActivityLists } = await import("../scripts/forge-engine.js");
 
 assert.equal(itemHasExplicitActivityChoices({}), false);
 assert.equal(itemHasExplicitActivityChoices({
@@ -53,5 +53,15 @@ assert.equal(guardedAttack.otherActivityId, "none");
 assert.equal(guardedAttack.otherActivityUuid, "");
 assert.equal(guardedAttack.midiProperties.triggeredActivityId, "none");
 assert.equal(guardedAttack.midiProperties.otherActivityCompatible, true);
+
+const staffActivities = multiActivityStaffActivityLists({
+  activities: [{ activityId: "LegacySave000001", activityName: "Legacy Save", save: { ability: "dex", dc: 15 } }],
+  attackActivities: [{ activityId: "SpellAttack000001", activityName: "Arc Bolt", type: "attack" }],
+  saveActivities: [{ activityId: "BurningHands0001", activityName: "Burning Hands", save: { ability: "dex", dc: 15 } }],
+  utilityActivities: [{ activityId: "LightPower000001", activityName: "Ignite Staff", type: "utility" }]
+});
+assert.deepEqual(staffActivities.attack.map(activity => activity.activityName), ["Arc Bolt"]);
+assert.deepEqual(staffActivities.save.map(activity => activity.activityName), ["Burning Hands", "Legacy Save"]);
+assert.deepEqual(staffActivities.utility.map(activity => activity.activityName), ["Ignite Staff"]);
 
 console.log("forge-engine choice tests passed");
