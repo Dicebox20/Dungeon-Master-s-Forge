@@ -457,7 +457,16 @@ const staffCastCostsAndTemplates = repairHybridSpecFromRequest({
 assert.equal(staffCastCostsAndTemplates.applied, true);
 assert.equal(staffCastCostsAndTemplates.spec.saveActivities[0].chargeCost, 2);
 assert.equal(staffCastCostsAndTemplates.spec.saveActivities[0].target.prompt, true);
+assert.deepEqual(staffCastCostsAndTemplates.spec.saveActivities[0].range, { value: 60, units: "ft" });
+assert.equal(staffCastCostsAndTemplates.spec.saveActivities[0].target.template.type, "sphere");
+assert.equal(staffCastCostsAndTemplates.spec.saveActivities[0].target.template.size, 10);
+assert.equal(staffCastCostsAndTemplates.spec.saveActivities[0].damageOnSave, "half");
 assert.equal(staffCastCostsAndTemplates.spec.saveActivities[1].chargeCost, 3);
 assert.equal(staffCastCostsAndTemplates.spec.saveActivities[1].target.prompt, true);
+assert.deepEqual(staffCastCostsAndTemplates.spec.saveActivities[1].range, { value: 120, units: "ft" });
+assert.equal(staffCastCostsAndTemplates.spec.saveActivities[1].target.template.type, "line");
+assert.equal(staffCastCostsAndTemplates.spec.saveActivities[1].target.template.size, 30);
+assert.equal(staffCastCostsAndTemplates.spec.saveActivities[1].target.template.width, 10);
+assert.equal(staffCastCostsAndTemplates.spec.saveActivities[1].damageOnSave, "half");
 
 export const testedHybridRepairCases = 18;

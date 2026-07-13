@@ -91,6 +91,21 @@ const SPELL_PROFILES = Object.freeze([
     chatFlavor: "Cast Shatter using this item's charges."
   }),
   Object.freeze({
+    name: "Tidal Wave",
+    type: "save",
+    defaultChargeCost: 3,
+    save: Object.freeze({ ability: "dex" }),
+    damageOnSave: "half",
+    damageParts: Object.freeze([{ number: 4, denomination: 8, bonus: "", types: Object.freeze(["bludgeoning"]) }]),
+    range: Object.freeze({ value: 120, units: "ft" }),
+    target: Object.freeze({
+      template: { count: "1", type: "line", size: 30, width: 10, units: "ft" },
+      affects: { type: "creature", special: "Creatures in the 30-foot-long, 10-foot-wide area" },
+      prompt: true
+    }),
+    chatFlavor: "Cast Tidal Wave using this item's charges."
+  }),
+  Object.freeze({
     name: "Fireball",
     type: "save",
     defaultChargeCost: 3,
@@ -599,6 +614,56 @@ function addNamedSpellActivities(spec, request) {
     assumptions.push(`Recovered a named ${profile.name} activity from the request text.`);
   }
 
+  return { applied, spec: next, assumptions };
+}
+
+function enrichNamedSpellActivities(spec, request) {
+  if (!SUITE_KINDS.has(spec?.kind)) return { applied: false, spec, assumptions: [] };
+  const mentionedNames = new Set(spellMentions(request).map(profile => profile.name));
+  if (!mentionedNames.size) return { applied: false, spec, assumptions: [] };
+
+  const next = clone(spec);
+  const assumptions = [];
+  const enrichedNames = new Set();
+  let applied = false;
+
+  for (const listName of ["saveActivities", "utilityActivities"]) {
+    if (!Array.isArray(next[listName])) continue;
+    next[listName] = next[listName].map(activity => {
+      const profile = spellProfileForActivityName(activity?.activityName);
+      if (!profile || !mentionedNames.has(profile.name)) return activity;
+
+      const explicitDc = Number(activity?.save?.dc);
+      const enriched = {
+        ...activity,
+        range: clone(profile.range),
+        target: {
+          ...clone(profile.target),
+          prompt: true
+        },
+        duration: clone(profile.duration),
+        chatFlavor: profile.chatFlavor
+      };
+
+      if (profile.type === "save") {
+        enriched.save = {
+          ...clone(profile.save),
+          ...(Number.isFinite(explicitDc) && explicitDc > 0 ? { dc: explicitDc } : {})
+        };
+        enriched.damageOnSave = profile.damageOnSave;
+        enriched.damageParts = clone(profile.damageParts);
+      }
+
+      if (JSON.stringify(enriched) === JSON.stringify(activity)) return activity;
+      applied = true;
+      enrichedNames.add(profile.name);
+      return enriched;
+    });
+  }
+
+  for (const name of enrichedNames) {
+    assumptions.push(`Applied the deterministic ${name} mechanical profile to the generated activity.`);
+  }
   return { applied, spec: next, assumptions };
 }
 
@@ -1456,6 +1521,7 @@ function repairHybridSpecFromRequest(spec, request) {
     recoverWeaponExtraDamage,
     applyHybridDefaults,
     addNamedSpellActivities,
+    enrichNamedSpellActivities,
     addNamedAttackActivities,
     addNamedSaveActivities,
     repairMalformedSaveActivities,

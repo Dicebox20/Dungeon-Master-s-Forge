@@ -311,6 +311,26 @@ const SPELL_LIBRARY = Object.freeze([
     }
   }),
   Object.freeze({
+    name: "Tidal Wave",
+    level: 3,
+    tags: Object.freeze(["bludgeoning"]),
+    save: { ability: "dex" },
+    damageOnSave: "half",
+    damageParts: Object.freeze([{
+      number: 4,
+      denomination: 8,
+      bonus: "",
+      types: Object.freeze(["bludgeoning"]),
+      scaling: Object.freeze({ mode: "", number: 1, formula: "" })
+    }]),
+    range: { value: 120, units: "ft" },
+    target: {
+      template: { count: "1", type: "line", size: 30, width: 10, units: "ft" },
+      affects: { type: "creature", special: "Creatures in the 30-foot-long, 10-foot-wide area" },
+      prompt: true
+    }
+  }),
+  Object.freeze({
     name: "Burning Hands",
     level: 1,
     tags: Object.freeze(["fire"]),
