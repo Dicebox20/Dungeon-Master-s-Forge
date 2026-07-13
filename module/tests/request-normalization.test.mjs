@@ -27,8 +27,31 @@ const alchemistFire = normalizeItemRequest("Create an uncommon flask of Alchemis
 assert.match(alchemistFire.normalizedRequest, /Item name: Alchemist Fire/);
 assert.doesNotMatch(alchemistFire.normalizedRequest, /Magical bonus:/);
 
+const unspecifiedDefaults = normalizeItemRequest("Create a rare longsword that can cast Thunderwave once per day.");
+assert.doesNotMatch(unspecifiedDefaults.normalizedRequest, /Magical bonus:/);
+assert.doesNotMatch(unspecifiedDefaults.normalizedRequest, /Spell save DC:/);
+
 const acidFlask = normalizeItemRequest("Create an uncommon acid flask. As an action, throw it at one creature within 20 feet. On a hit, the target takes 2d6 acid damage. The flask is consumed after one use.");
 assert.doesNotMatch(acidFlask.normalizedRequest, /Magical bonus:/);
+
+const armorAndResistance = normalizeItemRequest("Create a rare suit of half plate called Ashen Bulwark. It is +1 half plate armor, not a shield, and grants resistance to fire damage while equipped. It requires attunement.");
+assert.match(armorAndResistance.normalizedRequest, /Base item: Half Plate/);
+assert.match(armorAndResistance.normalizedRequest, /Resistance to: fire damage/);
+
+const bloomdraught = normalizeItemRequest("Create an uncommon potion called Bloomdraught. As an action, a creature can drink it to regain 3d4 + 3 hit points. It has 1 use and is consumed after drinking.");
+assert.match(bloomdraught.normalizedRequest, /Healing: 3d4 \+ 3 hit points/);
+
+const searingHail = normalizeItemRequest("Create a rare wand called Wand of Searing Hail. It has 6 charges and regains 1d6 charges daily at dawn. As an action, the wielder can spend 1 charge to force creatures in a 15-foot cone to make a DC 14 Dexterity saving throw, taking 4d6 fire damage on a failed save or half as much on a success.");
+assert.match(searingHail.normalizedRequest, /Saving throw: Dexterity DC 14/);
+assert.match(searingHail.normalizedRequest, /Damage on failed save: 4d6 fire; half damage on success/);
+assert.match(searingHail.normalizedRequest, /Charge cost: 1/);
+assert.match(searingHail.normalizedRequest, /Area: 15-foot cone/);
+assert.match(searingHail.normalizedRequest, /Charges: 6 charges; regains 1d6 daily at dawn/);
+assert.doesNotMatch(searingHail.normalizedRequest, /Extra hit damage:/);
+
+const tidesAndThunder = normalizeItemRequest("Create a rare staff called Staff of Tides and Thunder. It has 8 charges and regains 1d6 + 2 charges daily at dawn. As an action, the wielder can spend 2 charges to cast Shatter with a DC 15 save, or spend 3 charges to cast Tidal Wave with a DC 15 save. It requires attunement.");
+assert.match(tidesAndThunder.normalizedRequest, /Spell: Shatter; Tidal Wave/);
+assert.match(tidesAndThunder.normalizedRequest, /Charges: 8 charges; regains 1d6 \+ 2 daily at dawn/);
 
 const alreadyStructured = normalizeItemRequest(`
 Item name: Emberglass Dagger
@@ -41,4 +64,4 @@ Spell usage: once per day
 assert.match(alreadyStructured.normalizedRequest, /Item name: Emberglass Dagger/);
 assert.match(alreadyStructured.normalizedRequest, /Spell: Burning Hands/);
 
-export const testedNormalizationCases = 5;
+export const testedNormalizationCases = 9;

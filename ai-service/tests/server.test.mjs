@@ -117,6 +117,35 @@ test("error-report endpoint stores failed-item feedback with preview context whe
   assert.equal(entries[0].compilation.decisions[0].pattern, "weaponExtraDamage");
 });
 
+test("error-report endpoint returns a specific storage error when persistence fails", async t => {
+  const app = await runningServer({ errorReportsEnabled: true }, {
+    errorReportStore: {
+      async append() {
+        throw new Error("read-only report directory");
+      }
+    }
+  });
+  t.after(app.close);
+  const response = await fetch(`${app.baseUrl}/v1/forge/report-error`, {
+    method: "POST",
+    headers: {
+      Origin: origin,
+      Authorization: "Bearer test-client-token",
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      schemaVersion: "1.0",
+      source: "dungeon-masters-forge-module",
+      module: { id: "dungeon-masters-forge", version: "2.23.0-test.4" },
+      error: { stage: "compile", message: "report test" },
+      feedback: { kind: "failed-item", userNote: "report test" }
+    })
+  });
+  assert.equal(response.status, 503);
+  const body = await response.json();
+  assert.equal(body.error.code, "report_storage_unavailable");
+});
+
 test("mock compile completes the Forge 1.0 contract", async t => {
   const app = await runningServer();
   t.after(app.close);

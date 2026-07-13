@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {
+  applyBaseChassisFallbackArt,
   applyConsumableProjectileFallbackArt,
   applyFallbackActivityArt,
   applySpellActivityArt,
@@ -80,4 +81,13 @@ const missingFallback = applyConsumableProjectileFallbackArt({
 assert.equal(missingFallback.status, "missing");
 assert.equal(missingFallback.spec.img, "icons/svg/item-bag.svg");
 
-export const testedSystemArtCases = 16;
+const wandFallback = applyBaseChassisFallbackArt({
+  kind: "chargedSaveDamage",
+  name: "Wand of Searing Hail",
+  baseItem: "wand",
+  img: "icons/weapons/staves/staff-orante-gold.webp"
+});
+assert.equal(wandFallback.applied, true);
+assert.equal(wandFallback.spec.img, "icons/weapons/wands/wand-gem-red.webp");
+
+export const testedSystemArtCases = 17;

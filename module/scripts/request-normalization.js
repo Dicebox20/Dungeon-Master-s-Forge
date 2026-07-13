@@ -1,6 +1,13 @@
 const ITEM_FIELD_PATTERN = /^\s*Item name\s*:/im;
 
 const BASE_ITEMS = [
+  "half plate",
+  "plate armor",
+  "plate",
+  "chain mail",
+  "scale mail",
+  "studded leather",
+  "leather armor",
   "breastplate",
   "quarterstaff",
   "longsword",
@@ -153,10 +160,7 @@ function detectMagicalBonus(text, baseItem = "", { skipDefault = false } = {}) {
   const attackRolls = /(?:\+\s*(\d)|(\d)\s*\+)\s+to\s+(?:attack|attack rolls?|attack and damage rolls?)/i.exec(text);
   const damageRolls = /(?:\+\s*(\d)|(\d)\s*\+)\s+to\s+damage rolls?/i.exec(text);
   const extracted = attackRolls?.[1] || attackRolls?.[2] || damageRolls?.[1] || damageRolls?.[2] || "";
-  if (extracted) return extracted;
-  if (!baseItem || skipDefault) return "";
-  if (!/\b(?:cast|spell|charges?|damage|resistance|advantage|summon|heal|magical|magic)\b/i.test(text)) return "";
-  return "1";
+  return extracted;
 }
 
 function parseDamageParts(text) {
@@ -184,18 +188,31 @@ function detectAttunement(text, fields = {}) {
   return "";
 }
 
+function detectCastSpellNames(text) {
+  const names = [];
+  const pattern = /\bcast\s+([A-Za-z][A-Za-z'-]*(?:\s+(?:of|the|[A-Za-z][A-Za-z'-]*)){0,4}?)(?=\s+(?:with|using|at|for|from|by|once|twice|thrice|\d+\s+times?)\b|[,.;\n]|$)/gi;
+  for (const match of String(text ?? "").matchAll(pattern)) {
+    const name = compactText(match[1]);
+    if (!name || /\b(?:charge|damage|save|saving|creature|target|action)\b/i.test(name)) continue;
+    names.push(titleCaseWords(name));
+  }
+  return names;
+}
+
 function detectSpellNames(text, fields = {}) {
   const fieldSpells = compactText(fields.spell || fields.spells)
     .split(/\s*[;,/]\s*|\s+\band\b\s+/i)
     .map(spell => compactText(spell))
     .filter(Boolean);
-  const names = new Set();
-  for (const fieldSpell of fieldSpells) names.add(titleCaseWords(fieldSpell));
+  const names = new Map();
+  const addName = spellName => names.set(compactText(spellName).toLowerCase(), spellName);
+  for (const fieldSpell of fieldSpells) addName(titleCaseWords(fieldSpell));
+  for (const spellName of detectCastSpellNames(text)) addName(spellName);
   for (const spellName of SPELL_NAMES) {
     const pattern = new RegExp(`\\b${spellName.replace(/\s+/g, "\\s+")}\\b`, "i");
-    if (pattern.test(text)) names.add(spellName);
+    if (pattern.test(text)) addName(spellName);
   }
-  return [...names];
+  return [...names.values()];
 }
 
 function detectSpellUsage(text) {
@@ -213,15 +230,47 @@ function detectChargeSummary(text) {
   const source = String(text ?? "");
   const max = source.match(/\b(\d+)\s+charges?\b/i)?.[1] ?? "";
   if (!max) return "";
-  const recharge = source.match(/regains?\s+([^.;\n]+?)\s+charges?\s+(?:daily at dawn|at dawn|daily|on a long rest|per long rest|after a long rest|on a short rest|after a short rest)/i)?.[1]?.trim() ?? "";
-  if (recharge) return `${max} charges; regains ${recharge}`;
+  const rechargeMatch = source.match(/regains?\s+([^.;\n]+?)\s+charges?\s+(daily at dawn|at dawn|daily|on a long rest|per long rest|after a long rest|on a short rest|after a short rest)/i);
+  const recharge = rechargeMatch?.[1]?.trim() ?? "";
+  const cadence = rechargeMatch?.[2]?.toLowerCase() ?? "";
+  if (recharge) return `${max} charges; regains ${recharge}${cadence ? ` ${cadence}` : ""}`;
   return `${max} charges`;
 }
 
 function detectSaveDc(text, spellNames = []) {
   const explicit = String(text ?? "").match(/\b(?:spell\s+save\s+)?dc\s*(\d+)\b/i)?.[1];
-  if (explicit) return explicit;
-  return spellNames.some(spell => SAVE_SPELLS.has(spell)) ? "15" : "";
+  return explicit ?? "";
+}
+
+function detectSaveAbility(text) {
+  const match = String(text ?? "").match(/\b(strength|dexterity|constitution|intelligence|wisdom|charisma)\s+sav(?:e|ing throw)\b/i)
+    ?? String(text ?? "").match(/\bsave\s*:\s*(strength|dexterity|constitution|intelligence|wisdom|charisma)\b/i);
+  return match ? titleCaseWords(match[1].toLowerCase()) : "";
+}
+
+function detectSaveActivity(text) {
+  return /\b(?:saving throw|[a-z]+\s+save|save\s*:)\b/i.test(String(text ?? ""));
+}
+
+function detectDamageResistances(text) {
+  const source = String(text ?? "");
+  const damageTypes = ["acid", "cold", "fire", "force", "lightning", "necrotic", "poison", "psychic", "radiant", "thunder"];
+  return damageTypes.filter(type => new RegExp(`\\bresistance to ${type}(?: damage)?\\b`, "i").test(source));
+}
+
+function detectHealingFormula(text) {
+  const match = String(text ?? "").match(/\b(?:regain|restore|heal|healing)\b[^.!?]*?(\d+d\d+(?:\s*[+-]\s*\d+)?)\s+hit points?\b/i);
+  return match?.[1]?.replace(/\s+/g, " ") ?? "";
+}
+
+function detectChargeCost(text) {
+  const match = String(text ?? "").match(/\bspend\s+(\d+)\s+charges?\b/i)
+    ?? String(text ?? "").match(/\buses?\s+(\d+)\s+charges?\b/i);
+  return match ? Number(match[1]) : 0;
+}
+
+function detectHalfOnSuccess(text) {
+  return /\bhalf(?:\s+as\s+much)?\s+(?:damage\s+)?on\s+(?:a\s+)?success\b/i.test(String(text ?? ""));
 }
 
 function detectThrowableConsumable(text, fields = {}) {
@@ -239,9 +288,9 @@ function detectThrownRange(text) {
 }
 
 function detectAreaSummary(text) {
-  const radiusArea = String(text ?? "").match(/\b(\d+)\s*[- ]?(?:foot|feet)\s*[- ]?radius\s+(sphere|cylinder)\b/i);
+  const radiusArea = String(text ?? "").match(/\b(\d+)\s*(?:-|\s)?(?:foot|feet)\s*(?:-|\s)?radius\s+(sphere|cylinder)\b/i);
   if (radiusArea) return `${radiusArea[1]}-foot-radius ${radiusArea[2].toLowerCase()}`;
-  const area = String(text ?? "").match(/\b(\d+)\s*[- ]?(?:foot|feet)\s+(cone|cube|line|sphere|cylinder)\b/i);
+  const area = String(text ?? "").match(/\b(\d+)\s*(?:-|\s)?(?:foot|feet)\s+(cone|cube|line|sphere|cylinder)\b/i);
   if (!area) return "";
   return `${area[1]}-foot ${area[2].toLowerCase()}`;
 }
@@ -261,10 +310,13 @@ function buildLayeredBrief(chunk, extracted) {
   }
 
   const riderLines = [];
-  if (extracted.damageParts.length) {
+  if (extracted.damageParts.length && !extracted.saveActivity) {
     riderLines.push(`Extra hit damage: ${extracted.damageParts.map(part =>
       `${part.number}d${part.denomination}${part.bonus ? ` ${part.bonus}` : ""} ${part.type.toLowerCase()}`
     ).join("; ")}`);
+  }
+  if (extracted.damageResistances.length) {
+    riderLines.push(`Resistance to: ${extracted.damageResistances.map(type => `${type} damage`).join("; ")}`);
   }
   if (riderLines.length) {
     sections.push(["Complexity layer 2 - Passive riders", ...riderLines].join("\n"));
@@ -282,7 +334,22 @@ function buildLayeredBrief(chunk, extracted) {
 
   const activityLines = [];
   if (extracted.spellNames.length) activityLines.push(`Spell: ${extracted.spellNames.join("; ")}`);
-  if (extracted.saveDc) activityLines.push(`Spell save DC: ${extracted.saveDc}`);
+  if (extracted.healingFormula) activityLines.push(`Healing: ${extracted.healingFormula} hit points`);
+  if (extracted.saveActivity) {
+    activityLines.push("Activation: Action");
+    if (extracted.saveAbility || extracted.saveDc) {
+      activityLines.push(`Saving throw: ${extracted.saveAbility || "Dexterity"} DC ${extracted.saveDc || "15"}`);
+    }
+    if (extracted.damageParts.length) {
+      activityLines.push(`Damage on failed save: ${extracted.damageParts.map(part =>
+        `${part.number}d${part.denomination}${part.bonus ? ` ${part.bonus}` : ""} ${part.type.toLowerCase()}`
+      ).join("; ")}${extracted.halfOnSuccess ? "; half damage on success" : ""}`);
+    }
+    if (extracted.chargeCost) activityLines.push(`Charge cost: ${extracted.chargeCost}`);
+    if (extracted.areaSummary) activityLines.push(`Area: ${extracted.areaSummary}`);
+  } else if (extracted.saveDc) {
+    activityLines.push(`Spell save DC: ${extracted.saveDc}`);
+  }
   if (extracted.throwableConsumable) {
     activityLines.push("Activation: Throw as an action");
     if (extracted.throwRange) activityLines.push(`Range: ${extracted.throwRange}`);
@@ -310,6 +377,12 @@ function normalizeSingleItemRequest(chunk) {
     spellNames: detectSpellNames(original, fields),
     spellUsage: detectSpellUsage(original),
     saveDc: detectSaveDc(original, detectSpellNames(original, fields)),
+    saveAbility: detectSaveAbility(original),
+    saveActivity: detectSaveActivity(original),
+    damageResistances: detectDamageResistances(original),
+    healingFormula: detectHealingFormula(original),
+    chargeCost: detectChargeCost(original),
+    halfOnSuccess: detectHalfOnSuccess(original),
     chargeSummary: detectChargeSummary(original),
     attunement: detectAttunement(original, fields),
     throwableConsumable,
@@ -339,12 +412,6 @@ function normalizeItemRequest(request) {
   const notes = [];
   if (items.some(item => item.changed)) {
     notes.push("Converted the request into a layered Forge brief before compilation.");
-  }
-  if (items.some(item => item.extracted.magicalBonus === "1" && !/\+\s*1\b/.test(item.original))) {
-    notes.push("Defaulted missing magical bonus hints to +1 for magical weapon or armor bases.");
-  }
-  if (items.some(item => item.extracted.saveDc === "15" && !/\bdc\s*\d+\b/i.test(item.original))) {
-    notes.push("Defaulted unspecified spell save DC hints to 15 for leveled save spells.");
   }
   return {
     originalRequest,

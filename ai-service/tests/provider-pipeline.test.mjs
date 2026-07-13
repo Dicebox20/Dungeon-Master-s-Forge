@@ -309,7 +309,7 @@ test("retryable validation failures send a repair hint on the second OpenAI atte
   }));
 
   assert.equal(result.specs[0].name, "Shepherd's Reliquary");
-  assert.equal(result.specs[0].kind, "chargedSaveDamage");
+  assert.equal(result.specs[0].kind, "multiActivityStaff");
   assert.equal(captures.length, 2);
   assert.equal(captures[0].body.input.length, 2);
   assert.equal(captures[1].body.input.length, 3);

@@ -6,12 +6,25 @@ import {
   compileWithProvider,
   getProvider,
   listProviders,
+  mechanicsRequestForCompilation,
   networkProviderConfiguration,
   normalizeProviderConfiguration,
   partitionProviderConfiguration,
   providerReadiness,
   providerDefaults
 } from "../scripts/providers.js";
+
+assert.equal(mechanicsRequestForCompilation({
+  originalRequest: "Create a wand with a save cone.",
+  request: "Base item: Wand\nSaving throw: Dexterity DC 14"
+}), "Create a wand with a save cone.");
+assert.equal(mechanicsRequestForCompilation({
+  request: "Base item: Wand"
+}, "Create a fallback wand."), "Create a fallback wand.");
+assert.equal(mechanicsRequestForCompilation({
+  normalizedRequest: "Base item: Wand"
+}), "Base item: Wand");
+assert.equal(mechanicsRequestForCompilation(null), "");
 
 const providers = listProviders();
 assert.deepEqual(providers.map(provider => provider.id), ["local-rules", "bring-your-own", "hosted-forge"]);

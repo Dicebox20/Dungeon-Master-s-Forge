@@ -208,6 +208,76 @@ test("single-activity staff output is normalized to charged save damage", () => 
   assert.equal(result.specs[0].damageParts[0].types[0], "cold");
 });
 
+test("single-activity quarterstaff output remains a staff suite", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a rare quarterstaff called Ashen Pilgrim Staff. It has 7 charges. As an action, spend 1 charge to cast Burning Hands."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "multiActivityStaff",
+      name: "Ashen Pilgrim Staff",
+      description: "A quarterstaff with one charged spell.",
+      uses: { max: "7", recovery: [{ period: "dawn", type: "formula", formula: "1d6 + 1" }] },
+      activities: [{
+        activityName: "Burning Hands",
+        activityId: "BurningHands00001",
+        chargeCost: 1,
+        save: { ability: "dex", dc: 15 },
+        damageParts: [{ number: 3, denomination: 6, bonus: "", types: ["fire"] }]
+      }]
+    }]
+  }, request, { makeId: ids() });
+  assert.equal(result.specs[0].kind, "multiActivityStaff");
+});
+
+test("charged save output for an explicit staff is promoted back to a staff suite", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a rare staff called Staff of Tides and Thunder. It has 8 charges and can cast Shatter for 2 charges."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "chargedSaveDamage",
+      name: "Staff of Tides and Thunder",
+      description: "A staff with a charged Shatter power.",
+      uses: { max: "8", recovery: [{ period: "dawn", type: "formula", formula: "1d6 + 2" }] },
+      activityId: "ShatterPower0001",
+      activityName: "Shatter",
+      chargeCost: 2,
+      save: { ability: "con", dc: 15 },
+      damageOnSave: "half",
+      damageParts: [{ number: 3, denomination: 8, bonus: "", types: ["thunder"] }]
+    }]
+  }, request, { makeId: ids() });
+  assert.equal(result.specs[0].kind, "multiActivityStaff");
+  assert.equal(result.specs[0].activities[0].activityName, "Shatter");
+  assert.equal(result.specs[0].itemType, "equipment");
+});
+
+test("nested charged save output for an explicit staff is promoted back to a staff suite", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a rare staff called Staff of Tides and Thunder. It has 8 charges and can cast Shatter for 2 charges."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "chargedSaveDamage",
+      name: "Staff of Tides and Thunder",
+      description: "A staff with a nested charged Shatter power.",
+      uses: { max: "8", recovery: [{ period: "dawn", type: "formula", formula: "1d6 + 2" }] },
+      activities: [{
+        activityId: "ShatterPower0001",
+        activityName: "Shatter",
+        chargeCost: 2,
+        save: { ability: "con", dc: 15 },
+        damageOnSave: "half",
+        damageParts: [{ number: 3, denomination: 8, bonus: "", types: ["thunder"] }]
+      }]
+    }]
+  }, request, { makeId: ids() });
+  assert.equal(result.specs[0].kind, "multiActivityStaff");
+  assert.equal(result.specs[0].activities[0].activityName, "Shatter");
+  assert.equal(result.specs[0].itemType, "equipment");
+});
+
 test("multi-activity staff specs recover missing shared uses from request text", () => {
   const request = validateForgeRequest(envelope({
     request: "Create a rare quarterstaff called Shepherd's Reliquary. It has 8 charges and regains 1d6 + 2 charges daily at dawn. As an action, the wielder can spend 1 charge to restore 2d8 + 2 hit points to a creature they touch, spend 2 charges to cast Shatter at DC 14, or spend 3 charges to summon a friendly wolf for 1 hour. It requires attunement."
@@ -1332,4 +1402,171 @@ test("throwable consumables discard model-invented attack bonuses but keep expli
   }, explicit, { makeId: ids() });
   assert.equal(explicitResult.specs[0].magicalBonus, "1");
   assert.equal(explicitResult.specs[0].attackActivities[0].attackBonus, "");
+});
+
+test("weapon-shaped flask output is rerouted to a consumable attack suite", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create an uncommon acid flask. As an action, throw it at one creature within 20 feet. On a hit, the target takes 2d6 acid damage. The flask is consumed after one use."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "weaponExtraDamage",
+      name: "Acid Flask",
+      description: "A thrown flask.",
+      weaponType: "simpleR",
+      baseItem: "flask",
+      damage: { base: { number: 1, denomination: 4, bonus: "@mod", types: ["bludgeoning"] } },
+      extraDamageParts: [{ number: 2, denomination: 6, bonus: "", types: ["acid"] }]
+    }]
+  }, request, { makeId: ids() });
+
+  const spec = result.specs[0];
+  assert.equal(spec.kind, "equipmentPowerSuite");
+  assert.equal(spec.itemType, "consumable");
+  assert.equal(spec.uses.autoDestroy, true);
+  assert.equal(spec.attackActivities.length, 1);
+  assert.equal(spec.attackActivities[0].range.value, 20);
+  assert.equal(spec.attackActivities[0].target.prompt, true);
+  assert.equal(spec.magicalBonus, "");
+});
+
+test("weapon-shaped grenade save output is rerouted to charged save damage", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a rare grenade. As an action, throw it to a point within 60 feet. Each creature in a 10-foot-radius sphere must make a DC 15 Dexterity saving throw, taking 4d6 fire damage on a failed save, or half as much on a success. The grenade is consumed after one use."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "artifactWeaponHybrid",
+      name: "Pyre Grenade",
+      description: "A thrown explosive.",
+      weaponType: "simpleR",
+      baseItem: "grenade",
+      save: { ability: "dex", dc: 15 },
+      damageParts: [{ number: 4, denomination: 6, bonus: "", types: ["fire"] }]
+    }]
+  }, request, { makeId: ids() });
+
+  const spec = result.specs[0];
+  assert.equal(spec.kind, "chargedSaveDamage");
+  assert.equal(spec.itemType, "consumable");
+  assert.equal(spec.range.value, 60);
+  assert.equal(spec.target.template.size, 10);
+  assert.equal(spec.target.prompt, true);
+});
+
+test("explicit armor chassis overrides a contradictory shield model output", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a rare suit of half plate called Ashen Bulwark. It is +1 half plate armor, not a shield, and grants resistance to fire damage while equipped. It requires attunement."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "shieldArmorBonus",
+      name: "Ashen Bulwark",
+      description: "A magic shield.",
+      armorValue: 2,
+      magicalBonus: "1",
+      baseItem: "shield",
+      equipmentType: "shield"
+    }]
+  }, request, { makeId: ids() });
+
+  const spec = result.specs[0];
+  assert.equal(spec.baseItem, "halfplate");
+  assert.equal(spec.equipmentType, "medium");
+  assert.equal(spec.armorValue, 15);
+  assert.equal(spec.effects[0].changes.some(change => change.key === "system.traits.dr.value" && change.value === "fire"), true);
+});
+
+test("explicit passive resistance is restored when the model only returns AC", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a rare cloak called Cloak of the Stormwatch. While worn, it grants +1 AC and resistance to lightning damage. It requires attunement."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "passiveEffectEquipment",
+      name: "Cloak of the Stormwatch",
+      description: "A protective cloak.",
+      effects: [{ name: "Stormwatch Guard", changes: [{ key: "system.attributes.ac.bonus", mode: "ADD", value: "1" }] }]
+    }]
+  }, request, { makeId: ids() });
+
+  assert.equal(result.specs[0].effects[0].changes.some(change => change.key === "system.traits.dr.value" && change.value === "lightning"), true);
+});
+
+test("explicit healing formula replaces a generic healing consumable payload", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create an uncommon potion called Bloomdraught. As an action, a creature can drink it to regain 3d4 + 3 hit points. It has 1 use and is consumed after drinking."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "chargedHealing",
+      name: "Bloomdraught",
+      description: "A healing potion.",
+      uses: { max: "1", recovery: [], autoDestroy: true },
+      healing: { number: 1, denomination: 4, bonus: "", types: ["healing"] }
+    }]
+  }, request, { makeId: ids() });
+
+  assert.deepEqual(result.specs[0].healing, { number: 3, denomination: 4, bonus: "+3", types: ["healing"] });
+});
+
+test("wand save-and-template request becomes a save activity instead of on-hit weapon damage", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a rare wand called Wand of Searing Hail. It has 6 charges and regains 1d6 charges daily at dawn. As an action, the wielder can force creatures in a 15-foot cone to make a DC 14 Dexterity saving throw, taking 4d6 fire damage on a failed save or half as much on a success."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "artifactWeaponHybrid",
+      name: "Wand of Searing Hail",
+      description: "A wand that deals extra fire damage.",
+      uses: { max: "6", recovery: [{ period: "dawn", type: "formula", formula: "1d6" }] },
+      extraDamageParts: [{ number: 4, denomination: 6, bonus: "", types: ["fire"] }]
+    }]
+  }, request, { makeId: ids() });
+
+  const spec = result.specs[0];
+  assert.equal(spec.kind, "chargedSaveDamage");
+  assert.equal(spec.equipmentType, "wand");
+  assert.equal(spec.save.ability, "dex");
+  assert.equal(spec.save.dc, 14);
+  assert.equal(spec.target.template.type, "cone");
+  assert.equal(spec.target.template.size, 15);
+  assert.equal(spec.damageParts[0].types[0], "fire");
+});
+
+test("wand save activity survives the layered Forge brief", () => {
+  const request = validateForgeRequest(envelope({
+    request: `Item name: Wand of Searing Hail
+
+Complexity layer 1 - Base chassis
+Base item: Wand
+Rarity: Rare
+
+Complexity layer 3 - Resource model
+Spell usage: uses charges
+Charges: 6 charges; regains 1d6
+
+Complexity layer 4 - Named activities
+Activation: Action
+Saving throw: Dexterity DC 14
+Damage on failed save: 4d6 fire; half damage on success
+Charge cost: 1
+Area: 15-foot cone`
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "artifactWeaponHybrid",
+      name: "Wand of Searing Hail",
+      description: "A wand that deals extra fire damage.",
+      uses: { max: "6", recovery: [{ period: "dawn", type: "formula", formula: "1d6" }] },
+      extraDamageParts: [{ number: 4, denomination: 6, bonus: "", types: ["fire"] }]
+    }]
+  }, request, { makeId: ids() });
+
+  const spec = result.specs[0];
+  assert.equal(spec.kind, "chargedSaveDamage");
+  assert.equal(spec.save.ability, "dex");
+  assert.equal(spec.save.dc, 14);
+  assert.equal(spec.target.template.type, "cone");
+  assert.equal(spec.target.template.size, 15);
 });

@@ -280,6 +280,10 @@ function inferCastChargeCost(text, spellName, fallback = "") {
   return inferChargeCost(text, `(?:to\\s+)?cast\\s+${escaped}\\b`, fallback);
 }
 
+function castActivityName(name) {
+  return compactText(name).replace(/^cast\s+/i, "");
+}
+
 function inferSummonChargeCost(text, creatureLabel, fallback = "") {
   const escaped = creatureLabel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+");
   const direct = compactText(text).match(new RegExp(`(?:spend\\s+)?(\\d+)\\s*charges?\\s+to\\s+summon\\s+[^.]*${escaped}\\b`, "i"))?.[1];
@@ -799,7 +803,7 @@ function repairMalformedSaveActivities(spec, request) {
       nextActivity.range = clone(template.range);
       nextActivity.target = clone(template.target);
       applied = true;
-    } else if (template && !hasPrompt) {
+    } else if ((template || hasTemplate) && !hasPrompt) {
       nextActivity.target = {
         ...(clone(current?.target) ?? {}),
         prompt: true
@@ -815,11 +819,18 @@ function repairMalformedSaveActivities(spec, request) {
       }
     }
 
-    if ((nextActivity.chargeCost == null || nextActivity.chargeCost === "") && /\bcharges?\b/i.test(source)) {
-      const inferredCost = inferChargeCost(source, /\b(?:damage|cone|cube|line|sphere|cylinder|save|saving throw)\b/.source, "");
+    if (/\bcharges?\b/i.test(source)) {
+      const activityName = castActivityName(nextActivity.activityName);
+      const namedCost = activityName ? inferCastChargeCost(request, activityName, "") : "";
+      const inferredCost = namedCost !== ""
+        ? namedCost
+        : inferChargeCost(source, /\b(?:damage|cone|cube|line|sphere|cylinder|save|saving throw)\b/.source, "");
       if (inferredCost !== "") {
-        nextActivity.chargeCost = inferredCost;
-        applied = true;
+        const currentCost = Number(nextActivity.chargeCost);
+        if (!Number.isFinite(currentCost) || currentCost !== Number(inferredCost)) {
+          nextActivity.chargeCost = inferredCost;
+          applied = true;
+        }
       }
     }
 

@@ -2,6 +2,49 @@
 
 ## Unreleased
 
+## 2.23.1-test.35
+
+- Enabled template placement prompts whenever a generated save activity already contains a structured area template.
+- Recovered explicit per-spell costs from phrases such as "spend 3 charges to cast Tidal Wave," including when the model supplied a stale zero cost.
+- Added regression coverage for multi-spell staff template prompting and charge consumption.
+
+## 2.23.1-test.34
+
+- Preserved every explicitly named spell in layered Forge requests so later activities such as Tidal Wave are no longer silently dropped from multi-spell items.
+- Preferred exact Foundry system chassis artwork over generic or mismatched model-selected artwork during item creation.
+- Added a bundled wand-art fallback when no matching system item image is available.
+- Added regressions for multi-spell staff normalization and mismatched wand artwork.
+
+## 2.23.1-test.33
+
+- Restored the original human request as the input to legacy mechanics planning, repair, SRD spell reconciliation, attunement alignment, validation, and item creation stages.
+- Kept the layered Forge brief provider-facing so structured compilation no longer erases details needed by older deterministic repair passes.
+- Preserved charge recovery timing such as daily at dawn, long rest, and short rest while normalizing charge pools.
+- Added regression guards for mechanics-request selection, validation and creation routing, and recovery cadence preservation.
+
+## 2.23.1-test.32
+
+- Preserved save ability, save DC, area template, charge cost, failed-save damage, and half-on-success clauses in the layered Forge brief.
+- Prevented activated wand and rod powers from being mislabeled as passive on-hit damage before reaching the Forge AI service.
+- Preserved explicit armor chassis, damage resistance, and healing formulas in structured requests.
+- Added regression coverage for the reported Wand of Searing Hail layered-brief failure.
+
+## 2.23.1-test.31
+
+- Corrected explicit armor prompts such as "half plate, not a shield" before Foundry rendering.
+- Restored explicit damage resistances and healing formulas when a remote model returns an incomplete passive or potion payload.
+- Converted wand and rod save/template requests into real save activities instead of treating their damage as an on-hit weapon rider.
+- Removed the failed-item-report information panel and streamlined the bottom action bar to a single `Approve` control.
+
+## 2.23.1-test.30
+
+- Kept unspecified magical bonuses and spell save DCs out of the remote model brief so post-compile defaults cannot be mistaken for user instructions.
+- Preserved one-power staff and quarterstaff outputs as staff activity suites instead of collapsing them into save-only items.
+- Promoted save-only model output back to a staff suite when the request explicitly names a staff or quarterstaff.
+- Rerouted weapon-shaped flasks and grenades into consumable activity families before provider-side validation.
+- Returned a specific `503 report_storage_unavailable` error when failed-item feedback cannot be persisted.
+- Added regression coverage for the reported staff, consumable, grenade, and failed-report cases.
+
 ## 2.23.1-test.29
 
 - Restored a minimized Forge window when the Items sidebar hammer is selected again.
