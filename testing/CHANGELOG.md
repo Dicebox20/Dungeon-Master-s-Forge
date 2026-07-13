@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 2.23.1-test.36
+
+- Added a deterministic Tidal Wave spell profile with its 120-foot range, 30-by-10-foot line template, Dexterity save, 4d8 bludgeoning damage, half damage on a successful save, and 3-charge cost.
+- Enriched existing named spell activities when generated mechanics are present but stale, instead of only repairing missing activities.
+- Added regression coverage for exact Shatter and Tidal Wave targeting, templates, save behavior, and charge costs on multi-spell staffs.
+
 ## 2.23.1-test.35
 
 - Enabled template placement prompts whenever a generated save activity already contains a structured area template.

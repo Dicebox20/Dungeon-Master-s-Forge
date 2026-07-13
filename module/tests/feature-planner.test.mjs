@@ -9,7 +9,7 @@ const plan = await planItemFeatures(request, {
 assert.deepEqual(namedSpellRequests(request), ["Fog Cloud", "Tidal Wave", "Ice Storm"]);
 assert.ok(plan.native.some(entry => entry.label === "System spell: Fog Cloud"));
 assert.ok(plan.native.some(entry => entry.label === "System spell: Ice Storm"));
-assert.ok(plan.manual.some(entry => entry.label === "Unavailable system spell: Tidal Wave"));
+assert.ok(plan.native.some(entry => entry.label === "Deterministic local spell: Tidal Wave"));
 assert.ok(plan.manual.some(entry => entry.label === "Conditional summon"));
 assert.ok(plan.manual.some(entry => entry.label === "Shared conditional-use limit"));
 
@@ -46,7 +46,7 @@ assert.ok(layeredPlan.native.some(entry => entry.label === "System spell: Burnin
 
 const planned = applyFeaturePlanToSpec({ name: "Tidebreaker Sovereign" }, plan);
 assert.equal(planned.applied, true);
-assert.equal(planned.spec.unresolvedMechanics.length, 3);
+assert.equal(planned.spec.unresolvedMechanics.length, 2);
 assert.ok(planned.spec.unresolvedMechanics.every(entry => /^[A-Za-z0-9]{16}$/.test(entry.id)));
 assert.equal(applyFeaturePlanToSpec(planned.spec, plan).applied, false);
 
