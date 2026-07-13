@@ -6,6 +6,7 @@ import {
   compileWithProvider,
   getProvider,
   listProviders,
+  mechanicsRequestForCompilation,
   networkProviderConfiguration,
   partitionProviderConfiguration,
   providerReadiness,
@@ -51,7 +52,7 @@ import { sanitizeForgeSpec } from "./forge-spec-integrity.js";
 import { repairHybridSpecFromRequest } from "./hybrid-activity-repair.js";
 import { buildLayeredItemBlueprint } from "./item-blueprint.js";
 import { applyDefaultLeveledSpellCharges, applyForgeSpecDefaults, autoSelectSrdChoiceSpells, dedupeRecognizedSpellActivities, reconcilePlannedSrdSpellActivities, repairNamedSrdSpellActivities } from "./srd-spell-enrichment.js";
-import { applyConsumableProjectileFallbackArt, applyFallbackActivityArt, applySpellActivityArt, applySystemEquipmentArt, needsFallbackItemArt } from "./system-art-enrichment.js";
+import { applyBaseChassisFallbackArt, applyConsumableProjectileFallbackArt, applyFallbackActivityArt, applySpellActivityArt, applySystemEquipmentArt, needsFallbackItemArt } from "./system-art-enrichment.js";
 import {
   PREVIOUS_PACKAGE_ID,
   MODULE_ID,
@@ -531,22 +532,15 @@ function forgeContent() {
       <section class="dm_forge-bottom-tray">
         <div class="dm_forge-compile-report" data-forge-compile-report hidden></div>
         <div class="dm_forge-notice-stack" data-forge-notices hidden></div>
-        <section class="dm_forge-report-action" data-forge-report-action>
-          <div class="dm_forge-report-action-copy">
-            <strong>Report Failed Item</strong>
-            <small data-forge-report-action-text>Available after you preview or validate an item. Opens a separate report window and includes the current request, generated JSON, preview notes, and your note.</small>
-          </div>
-          <label class="dm_forge-approval dm_forge-approval-compact" title="Required before creating items: I reviewed these specifications and approve creation.">
-            <input type="checkbox" name="reviewApproval" aria-label="I reviewed these specifications and approve creation.">
-            <span class="dm_forge-approval-box" aria-hidden="true"><i class="fa-solid fa-check"></i></span>
-            <span class="dm_forge-approval-label">Approve creation</span>
-            <span class="dm_forge-approval-required">Approve</span>
-          </label>
-          <button type="button" class="dm_forge-report-button" data-action="report-failed-item" disabled>
-            <i class="fa-solid fa-bug"></i>
-            <span>Report Failed Item</span>
-          </button>
-        </section>
+        <label class="dm_forge-approval dm_forge-approval-compact" title="Required before creating items: review the generated specifications, then approve creation.">
+          <input type="checkbox" name="reviewApproval" aria-label="Approve creation after reviewing the specifications.">
+          <span class="dm_forge-approval-box" aria-hidden="true"><i class="fa-solid fa-check"></i></span>
+          <span class="dm_forge-approval-label">Approve</span>
+        </label>
+        <button type="button" class="dm_forge-report-button" data-action="report-failed-item" disabled hidden>
+          <i class="fa-solid fa-bug"></i>
+          <span>Report Failed Item</span>
+        </button>
         <output class="dm_forge-message" data-forge-status data-state="idle" aria-live="polite">Ready.</output>
       </section>
     </section>
@@ -754,6 +748,7 @@ function relocateBottomActions(dialog) {
 
   if (compileButton instanceof HTMLButtonElement) compileButton.after(approvalLabel);
   if (validateButton instanceof HTMLButtonElement) validateButton.before(reportButton);
+  reportButton.hidden = false;
   footer.classList.add("dm_forge-actions-footer");
 }
 
@@ -1224,7 +1219,7 @@ function applySystemWeaponBase(spec, profile) {
     range: profile.range,
     mastery: spec.mastery || profile.mastery,
     weight: normalizeWeight(spec.weight, profile.weight ?? 0),
-    img: spec.img || profile.img
+    img: profile.img || spec.img
   };
 }
 
@@ -1255,7 +1250,7 @@ function applySystemEquipmentBase(spec, profile) {
     armorDex: spec.armorDex ?? profile.armorDex ?? null,
     strength: spec.strength ?? profile.strength ?? null,
     weight: normalizeWeight(spec.weight, profile.weight ?? 0),
-    img: spec.img || profile.img
+    img: profile.img || spec.img
   };
 }
 
@@ -1325,6 +1320,16 @@ async function enrichSpecsWithSystemReferences(specs, requestText = "") {
         nextSpec = applySpellActivityArt(nextSpec, reference.name, resolution.match.img);
       }
     }
+    const baseChassisArt = applyBaseChassisFallbackArt(nextSpec, requestText);
+    nextSpec = baseChassisArt.spec;
+    if (baseChassisArt.applied) {
+      systemReferences.push({
+        kind: "art",
+        name: `${nextSpec.name} Foundry core art`,
+        label: "Foundry core image",
+        message: "Used bundled Foundry base-item art because no compatible system item image was available."
+      });
+    }
     nextSpec = applyFallbackActivityArt(nextSpec);
     const projectileArt = applyConsumableProjectileFallbackArt(nextSpec, requestText);
     nextSpec = projectileArt.spec;
@@ -1350,8 +1355,9 @@ async function enrichSpecsWithSystemReferences(specs, requestText = "") {
 async function enrichCompilationWithSrdSpellChoices(compilation) {
   const items = Array.isArray(compilation?.specs) ? compilation.specs : [];
   if (!items.length) return compilation;
+  const mechanicsRequest = mechanicsRequestForCompilation(compilation);
 
-  const featurePlan = await planItemFeatures(compilation.request, {
+  const featurePlan = await planItemFeatures(mechanicsRequest, {
     resolveSpell: resolveSpellByName
   });
   let applied = false;
@@ -1362,27 +1368,27 @@ async function enrichCompilationWithSrdSpellChoices(compilation) {
 
   for (const spec of items) {
     const planned = applyFeaturePlanToSpec(spec, featurePlan);
-    const repairedHybrid = repairHybridSpecFromRequest(planned.spec, compilation.request);
-    const result = await autoSelectSrdChoiceSpells(repairedHybrid.spec, compilation.request, {
+    const repairedHybrid = repairHybridSpecFromRequest(planned.spec, mechanicsRequest);
+    const result = await autoSelectSrdChoiceSpells(repairedHybrid.spec, mechanicsRequest, {
       resolveSpell: resolveSpellByName,
       resolveSpellDocument: resolution => resolveSystemDocument(resolution)
     });
-    const repaired = await repairNamedSrdSpellActivities(result.spec, compilation.request, {
+    const repaired = await repairNamedSrdSpellActivities(result.spec, mechanicsRequest, {
       resolveSpell: resolveSpellByName,
       resolveSpellDocument: resolution => resolveSystemDocument(resolution)
     });
-    const reconciled = await reconcilePlannedSrdSpellActivities(repaired.spec, featurePlan, compilation.request, {
+    const reconciled = await reconcilePlannedSrdSpellActivities(repaired.spec, featurePlan, mechanicsRequest, {
       resolveSpell: resolveSpellByName,
       resolveSpellDocument: resolution => resolveSystemDocument(resolution)
     });
-    const deduped = dedupeRecognizedSpellActivities(reconciled.spec, compilation.request);
+    const deduped = dedupeRecognizedSpellActivities(reconciled.spec, mechanicsRequest);
     const defaulted = applyForgeSpecDefaults(deduped.spec);
-    const charged = await applyDefaultLeveledSpellCharges(defaulted.spec, compilation.request, {
+    const charged = await applyDefaultLeveledSpellCharges(defaulted.spec, mechanicsRequest, {
       resolveSpell: resolveSpellByName,
       resolveSpellDocument: resolution => resolveSystemDocument(resolution)
     });
-    const blueprinted = buildLayeredItemBlueprint(charged.spec, compilation.request);
-    const attunementAligned = alignSpecAttunementToRequest(blueprinted.spec, compilation.request);
+    const blueprinted = buildLayeredItemBlueprint(charged.spec, mechanicsRequest);
+    const attunementAligned = alignSpecAttunementToRequest(blueprinted.spec, mechanicsRequest);
     const sanitized = sanitizeForgeSpec(attunementAligned.spec);
     specs.push(sanitized.spec);
     if (planned.applied) applied = true;
@@ -2339,7 +2345,8 @@ async function openForge() {
               }
             });
             const compilation = await enrichCompilationWithSrdSpellChoices(remoteCompilation);
-            const validation = await validateSpecs(compilation.specs, compilation.request ?? request);
+            const mechanicsRequest = mechanicsRequestForCompilation(compilation, request);
+            const validation = await validateSpecs(compilation.specs, mechanicsRequest);
             const preparedCompilation = compilationWithPreparedSpecs(compilation, validation.specs);
             const rawSpecs = JSON.stringify(validation.specs, null, 2);
             formControl(button.form, "specs").value = rawSpecs;
@@ -2418,7 +2425,7 @@ async function openForge() {
         callback: async (_event, button, dialog) => {
           try {
             const { request, rawSpecs, specs, approved, provider, config } = readDialogForm(button.form);
-            const compileRequest = dialog._dm_forgeCompilation?.request ?? request;
+            const mechanicsRequest = mechanicsRequestForCompilation(dialog._dm_forgeCompilation, request);
             if (!approved) {
               formControl(button.form, "reviewApproval").closest(".dm_forge-approval")?.classList.add("dm_forge-approval-needs-attention");
               showDialogView(button.form, "review");
@@ -2427,7 +2434,7 @@ async function openForge() {
               return;
             }
             setStatus(dialog, "working", "Creating approved world documents...");
-            const validation = await validateSpecs(specs, compileRequest);
+            const validation = await validateSpecs(specs, mechanicsRequest);
             if (provider.configuration.unresolvedPolicy === "block" && validation.unresolvedMechanicCount) {
               setStatus(dialog, "warning", `${validation.unresolvedMechanicCount} unresolved mechanic${validation.unresolvedMechanicCount === 1 ? " blocks" : "s block"} item creation under the selected policy.`);
               return;
@@ -2439,7 +2446,7 @@ async function openForge() {
               saveDialogState(preparedRawSpecs, config, provider),
               game.settings.set(MODULE_ID, "lastRequest", request)
             ]);
-            const result = await createFromSpecs(validation.specs, config, compileRequest);
+            const result = await createFromSpecs(validation.specs, config, mechanicsRequest);
             const actorText = result.actors.length ? ` and ${result.actors.length} summon actor${result.actors.length === 1 ? "" : "s"}` : "";
             const unresolvedCount = validation.specs.reduce((total, spec) => total + (spec.unresolvedMechanics?.length ?? 0), 0);
             const unresolvedText = unresolvedCount

@@ -417,4 +417,47 @@ assert.deepEqual(ashenPilgrimRider.spec.extraDamageParts, [
   { number: 1, denomination: 6, bonus: "", types: ["fire"] }
 ]);
 
-export const testedHybridRepairCases = 17;
+const staffCastCostsAndTemplates = repairHybridSpecFromRequest({
+  kind: "multiActivityStaff",
+  name: "Staff of Tides and Thunder",
+  baseItem: "staff",
+  uses: { max: 8, recovery: [{ period: "dawn", type: "formula", formula: "1d6 + 2" }] },
+  saveActivities: [
+    {
+      activityId: "CastShatter00001",
+      activityName: "Cast Shatter",
+      activationType: "action",
+      chargeCost: 0,
+      range: { units: "self" },
+      target: {
+        affects: { count: "", type: "creature" },
+        template: { type: "sphere", size: "10", count: "1", units: "ft" },
+        prompt: false
+      },
+      save: { ability: "con", dc: 15 },
+      damageParts: [{ number: 3, denomination: 8, bonus: "", types: ["thunder"] }]
+    },
+    {
+      activityId: "CastTidalWave01",
+      activityName: "Cast Tidal Wave",
+      activationType: "action",
+      chargeCost: 0,
+      range: { units: "self" },
+      target: {
+        affects: { count: "", type: "creature" },
+        template: { type: "cube", size: "30", count: "1", units: "ft" },
+        prompt: false
+      },
+      save: { ability: "dex", dc: 15 },
+      damageParts: [{ number: 4, denomination: 8, bonus: "", types: ["bludgeoning"] }]
+    }
+  ]
+}, "Create a rare staff called Staff of Tides and Thunder. It has 8 charges and regains 1d6 + 2 charges daily at dawn. As an action, the wielder can spend 2 charges to cast Shatter with a DC 15 save, or spend 3 charges to cast Tidal Wave with a DC 15 save. It requires attunement.");
+
+assert.equal(staffCastCostsAndTemplates.applied, true);
+assert.equal(staffCastCostsAndTemplates.spec.saveActivities[0].chargeCost, 2);
+assert.equal(staffCastCostsAndTemplates.spec.saveActivities[0].target.prompt, true);
+assert.equal(staffCastCostsAndTemplates.spec.saveActivities[1].chargeCost, 3);
+assert.equal(staffCastCostsAndTemplates.spec.saveActivities[1].target.prompt, true);
+
+export const testedHybridRepairCases = 18;

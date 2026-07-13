@@ -20,7 +20,7 @@ const ARMOR_PROFILES = Object.freeze([
   { pattern: /\bsplint(?:\s+armor)?\b/i, equipmentType: "heavy", baseItem: "splint", armorValue: 17, armorDex: null, weight: 60, strength: 15, label: "Splint Armor" },
   { pattern: /\bchain\s+mail\b/i, equipmentType: "heavy", baseItem: "chainmail", armorValue: 16, armorDex: null, weight: 55, strength: 13, label: "Chain Mail" },
   { pattern: /\bring\s+mail\b/i, equipmentType: "heavy", baseItem: "ringmail", armorValue: 14, armorDex: null, weight: 40, label: "Ring Mail" },
-  { pattern: /\bhalf\s+plate\b/i, equipmentType: "medium", baseItem: "halfplate", armorValue: 15, armorDex: 2, weight: 40, label: "Half Plate" },
+  { pattern: /\bhalf\s*plate\b/i, equipmentType: "medium", baseItem: "halfplate", armorValue: 15, armorDex: 2, weight: 40, label: "Half Plate" },
   { pattern: /\bbreastplate\b/i, equipmentType: "medium", baseItem: "breastplate", armorValue: 14, armorDex: 2, weight: 20, label: "Breastplate" },
   { pattern: /\bscale\s+mail\b/i, equipmentType: "medium", baseItem: "scalemail", armorValue: 14, armorDex: 2, weight: 45, label: "Scale Mail" },
   { pattern: /\bhide(?:\s+armor)?\b/i, equipmentType: "medium", baseItem: "hide", armorValue: 12, armorDex: 2, weight: 12, label: "Hide Armor" },

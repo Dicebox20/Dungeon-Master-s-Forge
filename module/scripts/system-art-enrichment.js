@@ -20,6 +20,10 @@ const CONSUMABLE_PROJECTILE_ART = Object.freeze({
   thunder: "icons/weapons/thrown/bomb-pressure-black.webp"
 });
 
+const BASE_CHASSIS_ART = Object.freeze({
+  wand: "icons/weapons/wands/wand-gem-red.webp"
+});
+
 function compact(value) {
   return String(value ?? "").trim();
 }
@@ -68,6 +72,23 @@ function applyConsumableProjectileFallbackArt(spec = {}, requestText = "") {
   if (!needsFallbackItemArt(spec?.img)) return { applied: false, status: "existing", spec };
   const img = consumableProjectileFallbackImage(spec, requestText);
   if (!img) return { applied: false, status: "missing", spec };
+  return {
+    applied: true,
+    status: "fallback",
+    img,
+    spec: { ...spec, img }
+  };
+}
+
+function applyBaseChassisFallbackArt(spec = {}, requestText = "") {
+  const source = [spec.name, spec.baseItem, spec.equipmentType, requestText].filter(Boolean).join(" ");
+  if (!/\bwand\b/i.test(source)) return { applied: false, status: "missing", spec };
+
+  const current = compact(spec.img);
+  const incompatible = needsFallbackItemArt(current) || /\/staves?\//i.test(current);
+  if (!incompatible) return { applied: false, status: "existing", spec };
+
+  const img = BASE_CHASSIS_ART.wand;
   return {
     applied: true,
     status: "fallback",
@@ -138,8 +159,10 @@ function applyFallbackActivityArt(spec) {
 }
 
 export {
+  BASE_CHASSIS_ART,
   CONSUMABLE_PROJECTILE_ART,
   SYSTEM_EQUIPMENT_ART_FAMILIES,
+  applyBaseChassisFallbackArt,
   applyConsumableProjectileFallbackArt,
   applySpellActivityArt,
   applyFallbackActivityArt,

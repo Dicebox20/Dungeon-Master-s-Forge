@@ -897,7 +897,7 @@ function extractExtraDamagePartsFromText(text) {
 
 function extractHealingPartFromText(text) {
   const normalizedText = compactText(text);
-  const match = /\b(?:regain|restore|heals?|healing)\b[^.]*?(\d+\s*d\s*\d+(?:\s*[+-]\s*\d+)?)\s+hit points?\b/i.exec(normalizedText);
+  const match = /\b(?:regain|restore|heals?|healing\s*:?)\b[^.]*?(\d+\s*d\s*\d+(?:\s*[+-]\s*\d+)?)\s+hit points?\b/i.exec(normalizedText);
   if (!match) return null;
   const dice = parseDiceExpression(match[1]);
   if (!dice) return null;
@@ -907,6 +907,118 @@ function extractHealingPartFromText(text) {
     bonus: dice.bonus,
     types: ["healing"]
   };
+}
+
+const ARMOR_CHASSIS = Object.freeze([
+  { pattern: /\bhalf\s*plate\b/i, equipmentType: "medium", baseItem: "halfplate", armorValue: 15, armorDex: 2, weight: 40, label: "half plate" },
+  { pattern: /\bbreastplate\b/i, equipmentType: "medium", baseItem: "breastplate", armorValue: 14, armorDex: 2, weight: 20, label: "breastplate" },
+  { pattern: /\bscale\s+mail\b/i, equipmentType: "medium", baseItem: "scalemail", armorValue: 14, armorDex: 2, weight: 45, label: "scale mail" },
+  { pattern: /\bplate(?:\s+armor)?\b/i, equipmentType: "heavy", baseItem: "plate", armorValue: 18, armorDex: null, weight: 65, strength: 15, label: "plate armor" },
+  { pattern: /\bchain\s+mail\b/i, equipmentType: "heavy", baseItem: "chainmail", armorValue: 16, armorDex: null, weight: 55, strength: 13, label: "chain mail" },
+  { pattern: /\bstudded\s+leather(?:\s+armor)?\b/i, equipmentType: "light", baseItem: "studded", armorValue: 12, armorDex: null, weight: 13, label: "studded leather" },
+  { pattern: /\bleather(?:\s+armor)?\b/i, equipmentType: "light", baseItem: "leather", armorValue: 11, armorDex: null, weight: 10, label: "leather armor" }
+]);
+
+const DAMAGE_RESISTANCE_TYPES = Object.freeze([
+  "acid", "cold", "fire", "force", "lightning", "necrotic", "poison", "psychic", "radiant", "thunder"
+]);
+
+function explicitArmorProfile(text) {
+  return ARMOR_CHASSIS.find(profile => profile.pattern.test(text)) ?? null;
+}
+
+function explicitMagicalBonus(text) {
+  const match = /\B\+(\d+)\b(?!\s*d)/i.exec(compactText(text));
+  return match?.[1] ?? "";
+}
+
+function requestedResistanceTypes(text) {
+  const source = compactText(text);
+  return DAMAGE_RESISTANCE_TYPES.filter(type => new RegExp(`\\b(?:resistance to\\s+|resistance\\s*:\\s*)${type}(?: damage)?\\b`, "i").test(source));
+}
+
+function normalizeExplicitArmorChassis(spec, requestChunk) {
+  const profile = explicitArmorProfile(requestChunk);
+  if (!profile) return spec;
+
+  const normalized = clone(spec);
+  normalized.kind = "shieldArmorBonus";
+  normalized.itemType = "equipment";
+  normalized.equipmentType = profile.equipmentType;
+  normalized.baseItem = profile.baseItem;
+  normalized.armorValue = profile.armorValue;
+  normalized.armorDex = profile.armorDex;
+  normalized.weight = normalized.weight ?? profile.weight;
+  if (profile.strength != null) normalized.strength = normalized.strength ?? profile.strength;
+  const bonus = explicitMagicalBonus(requestChunk);
+  normalized.magicalBonus = bonus || String(normalized.magicalBonus ?? "").trim() || "1";
+  return normalized;
+}
+
+function normalizeRequestedResistances(spec, requestChunk) {
+  const resistances = requestedResistanceTypes(requestChunk);
+  if (!resistances.length || !["passiveEffectEquipment", "shieldArmorBonus"].includes(spec.kind)) return spec;
+
+  const normalized = clone(spec);
+  const effects = Array.isArray(normalized.effects) ? normalized.effects.filter(effect => object(effect)) : [];
+  const effect = effects[0] ?? { name: `${normalized.name} Benefits`, changes: [] };
+  const changes = Array.isArray(effect.changes) ? effect.changes.filter(change => object(change) && compactText(change.key)) : [];
+  for (const type of resistances) {
+    if (!changes.some(change => change.key === "system.traits.dr.value" && comparableText(change.value) === type)) {
+      changes.push({ key: "system.traits.dr.value", mode: "ADD", value: type });
+    }
+  }
+  effect.changes = changes;
+  effects[0] = effect;
+  normalized.effects = effects;
+  return normalized;
+}
+
+function extractSaveDamagePartFromText(text) {
+  const match = /\b(?:taking|dealing|deals?|damage\s+on\s+(?:a\s+)?failed\s+save\s*:)\s+(\d+\s*d\s*\d+(?:\s*[+-]\s*\d+)?)\s+([a-z]+)(?:\s+damage)?\b/i.exec(compactText(text));
+  if (!match) return null;
+  const dice = parseDiceExpression(match[1]);
+  if (!dice) return null;
+  return { ...dice, types: [match[2].toLowerCase()] };
+}
+
+function normalizeWandSaveActivity(spec, requestChunk) {
+  const text = compactText(requestChunk);
+  if (!/\b(?:wand|rod)\b/i.test(text) || !/\b(?:saving throw|[a-z]+\s+save|save\s*:)\b/i.test(text)) return spec;
+  const damage = extractSaveDamagePartFromText(text);
+  if (!damage) return spec;
+
+  const template = inferTemplateFromText(text);
+  const saveAbility = inferExplicitSaveAbility(text)
+    || ({ strength: "str", dexterity: "dex", constitution: "con", intelligence: "int", wisdom: "wis", charisma: "cha" }[
+      text.match(/\bsaving throw\s*:\s*(strength|dexterity|constitution|intelligence|wisdom|charisma)\b/i)?.[1]?.toLowerCase()
+    ] ?? "dex");
+  const saveDc = Number.parseInt(text.match(/\bdc\s*(\d+)/i)?.[1] ?? "", 10);
+  if (!template || !Number.isFinite(saveDc)) return spec;
+
+  const normalized = clone(spec);
+  normalized.kind = "chargedSaveDamage";
+  normalized.itemType = "equipment";
+  normalized.equipmentType = /\brod\b/i.test(text) ? "rod" : "wand";
+  normalized.baseItem = normalized.equipmentType;
+  normalized.activityName = compactText(normalized.activityName) || `Cast ${normalized.name}`;
+  normalized.activationType = "action";
+  normalized.chargeCost = Number(normalized.chargeCost) > 0 ? Number(normalized.chargeCost) : 1;
+  normalized.save = { ability: saveAbility, dc: saveDc };
+  normalized.damageOnSave = /half(?:\s+as\s+much)?\s+(?:damage\s+)?on\s+(?:a\s+)?success/i.test(text) ? "half" : "none";
+  normalized.damageParts = [damage];
+  normalized.target = {
+    ...(object(normalized.target) ? normalized.target : {}),
+    template,
+    affects: { type: "creature" },
+    prompt: true
+  };
+  normalized.range = { value: null, units: "self" };
+  delete normalized.weaponType;
+  delete normalized.damage;
+  delete normalized.extraDamageParts;
+  delete normalized.properties;
+  return normalized;
 }
 
 function normalizeWeaponExtraDamageParts(spec, requestChunk) {
@@ -1248,7 +1360,12 @@ function inferSpecKind(spec, requestChunk, supportedKinds) {
   return candidates[0]?.kind ?? "";
 }
 
-function normalizeSingleActivityStaff(spec) {
+function requestUsesStaffWeaponBase(requestChunk) {
+  const text = compactText(requestChunk);
+  return /\b(?:quarterstaff|staff)\b/i.test(text) && !/\b(?:wand|rod)\b/i.test(text);
+}
+
+function normalizeSingleActivityStaff(spec, requestChunk) {
   if (spec.kind !== "multiActivityStaff" || !Array.isArray(spec.activities) || spec.activities.length !== 1) return spec;
   if (
     object(spec.healing)
@@ -1257,6 +1374,9 @@ function normalizeSingleActivityStaff(spec) {
     || object(spec.profile?.actor)
     || (Array.isArray(spec.summonProfiles) && spec.summonProfiles.some(profile => object(profile)))
   ) return spec;
+  // A real staff still needs its base weapon attack alongside a single named
+  // power. Only collapse wand/rod-shaped one-power outputs into save damage.
+  if (requestUsesStaffWeaponBase(requestChunk)) return spec;
   const activity = spec.activities[0];
   if (!object(activity) || !object(activity.save) || !Array.isArray(activity.damageParts)) return spec;
   const normalized = clone(spec);
@@ -1272,6 +1392,62 @@ function normalizeSingleActivityStaff(spec) {
   normalized.damageOnSave = activity.damageOnSave ?? normalized.damageOnSave ?? "half";
   normalized.damageParts = activity.damageParts;
   delete normalized.activities;
+  return normalized;
+}
+
+function promoteChargedStaffSpec(spec, requestChunk) {
+  if (spec.kind !== "chargedSaveDamage" || !requestUsesStaffWeaponBase(requestChunk)) return spec;
+
+  const activityCandidates = [
+    ...(Array.isArray(spec.activities) ? spec.activities : []),
+    ...(Array.isArray(spec.saveActivities) ? spec.saveActivities : []),
+    ...(Array.isArray(spec.utilityActivities) ? spec.utilityActivities : [])
+  ].filter(activity => object(activity) && object(activity.save) && Array.isArray(activity.damageParts) && activity.damageParts.length);
+  const topLevelPower = object(spec.save) && Array.isArray(spec.damageParts) && spec.damageParts.length
+    ? {
+        activityId: spec.activityId,
+        activityName: spec.activityName,
+        activationType: spec.activationType,
+        chargeCost: spec.chargeCost,
+        range: spec.range,
+        target: spec.target,
+        duration: spec.duration,
+        save: spec.save,
+        damageOnSave: spec.damageOnSave,
+        damageParts: spec.damageParts
+      }
+    : null;
+  const powers = topLevelPower ? [topLevelPower, ...activityCandidates] : activityCandidates;
+  if (!powers.length) return spec;
+
+  const normalized = clone(spec);
+  normalized.kind = "multiActivityStaff";
+  normalized.itemType = "equipment";
+  normalized.baseItem = normalized.baseItem || "quarterstaff";
+  normalized.activities = powers.map((power, index) => ({
+    activityId: power.activityId,
+    activityName: power.activityName || `Charged Power ${index + 1}`,
+    activationType: power.activationType || "action",
+    chargeCost: power.chargeCost ?? 1,
+    range: power.range,
+    target: power.target,
+    duration: power.duration,
+    save: power.save,
+    damageOnSave: power.damageOnSave || "half",
+    damageParts: power.damageParts
+  }));
+  delete normalized.activityId;
+  delete normalized.activityName;
+  delete normalized.activationType;
+  delete normalized.chargeCost;
+  delete normalized.range;
+  delete normalized.target;
+  delete normalized.duration;
+  delete normalized.save;
+  delete normalized.damageOnSave;
+  delete normalized.damageParts;
+  delete normalized.saveActivities;
+  delete normalized.utilityActivities;
   return normalized;
 }
 
@@ -1469,6 +1645,47 @@ function normalizeThrowableConsumableSpec(spec, requestChunk) {
   const template = inferTemplateFromText(explicitRequestText) ?? inferTemplateFromText(text);
   const explicitSaveAbility = inferExplicitSaveAbility(explicitRequestText);
 
+  const directWeaponKind = ["weaponExtraDamage", "weaponConditionOnHit", "artifactWeaponHybrid"].includes(normalized.kind);
+  if (directWeaponKind) {
+    const saveActivity = [
+      ...(Array.isArray(normalized.saveActivities) ? normalized.saveActivities : []),
+      ...(Array.isArray(normalized.activities) ? normalized.activities : [])
+    ].find(activity => object(activity?.save) && Array.isArray(activity?.damageParts));
+    if (saveActivity || (object(normalized.save) && Array.isArray(normalized.damageParts))) {
+      const source = saveActivity ?? normalized;
+      normalized.kind = "chargedSaveDamage";
+      normalized.activityId = normalized.activityId ?? source.activityId;
+      normalized.activityName = normalized.activityName ?? source.activityName ?? "Throw";
+      normalized.save = source.save;
+      normalized.damageParts = source.damageParts;
+      delete normalized.saveActivities;
+      delete normalized.activities;
+    } else {
+      const existingAttack = (Array.isArray(normalized.attackActivities) ? normalized.attackActivities : [])
+        .find(activity => Array.isArray(activity?.damageParts));
+      const damageParts = existingAttack?.damageParts
+        ?? normalized.extraDamageParts
+        ?? normalized.damageParts
+        ?? (object(normalized.damage) ? [normalized.damage.base] : []);
+      normalized.kind = "equipmentPowerSuite";
+      normalized.attackActivities = existingAttack
+        ? [existingAttack]
+        : damageParts.filter(part => object(part) && Number(part.denomination) > 0).length
+          ? [{
+              activityName: "Throw",
+              activationType: "action",
+              chargeCost: 1,
+              damageParts: damageParts.filter(part => object(part) && Number(part.denomination) > 0)
+            }]
+          : [];
+      delete normalized.weaponType;
+      delete normalized.baseItem;
+      delete normalized.damage;
+      delete normalized.extraDamageParts;
+      delete normalized.conditionOnHit;
+    }
+  }
+
   if (normalized.kind === "chargedSaveDamage") {
     if (!normalized.uses.recovery.length) {
       normalized.uses.recovery = [{ period: "", type: "recoverAll", formula: "" }];
@@ -1664,6 +1881,14 @@ function normalizeHealingFromText(spec, requestChunk) {
   if (spec.kind !== "chargedHealing") return spec;
   const normalized = clone(spec);
   const healing = object(normalized.healing) ? normalized.healing : {};
+  // The request is the source of truth when it explicitly supplies a healing
+  // formula. Smaller models often emit the chassis correctly but replace the
+  // requested dice with a generic potion value.
+  const explicit = extractHealingPartFromText(requestChunk);
+  if (explicit) {
+    normalized.healing = explicit;
+    return normalized;
+  }
   const needsHealingRecovery = !hasMeaningfulNumericValue(healing.number)
     || !hasMeaningfulNumericValue(healing.denomination)
     || normalizeDamageTypes(healing.types, []).length === 0;
@@ -1684,12 +1909,16 @@ function normalizeRecoverableModelSlip(spec, requestChunk, supportedKinds) {
   let normalized = clone(spec);
   if (!compactText(normalized.kind)) normalized.kind = inferSpecKind(normalized, requestChunk, supportedKinds);
   normalized = normalizeMissingUses(normalized, requestChunk);
+  normalized = normalizeExplicitArmorChassis(normalized, requestChunk);
+  normalized = normalizeRequestedResistances(normalized, requestChunk);
   normalized = normalizeThrowableConsumableSpec(normalized, requestChunk);
   normalized = normalizeNativeEnchant(normalized, requestChunk, supportedKinds);
   normalized = normalizeNativeSummonShape(normalized, requestChunk, supportedKinds);
   normalized = normalizeConditionOnHit(normalized, requestChunk);
   normalized = normalizeWeaponExtraDamageParts(normalized, requestChunk);
-  normalized = normalizeSingleActivityStaff(normalized);
+  normalized = normalizeWandSaveActivity(normalized, requestChunk);
+  normalized = promoteChargedStaffSpec(normalized, requestChunk);
+  normalized = normalizeSingleActivityStaff(normalized, requestChunk);
   normalized = normalizeMixedStaffSuite(normalized, requestChunk);
   normalized = normalizeSharedActivitySuite(normalized, requestChunk);
   normalized = normalizeSuiteSummonShape(normalized);

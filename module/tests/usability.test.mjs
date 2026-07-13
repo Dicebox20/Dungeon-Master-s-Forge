@@ -81,6 +81,9 @@ assert.match(script, /relocateBottomActions/);
 assert.match(styles, /\.dm_forge-actions-footer/);
 assert.match(styles, /\.dm_forge-report-dialog/);
 assert.match(script, /minimizable: true/);
+assert.match(script, /const mechanicsRequest = mechanicsRequestForCompilation\(compilation\);/);
+assert.match(script, /const validation = await validateSpecs\(compilation\.specs, mechanicsRequest\);/);
+assert.match(script, /const result = await createFromSpecs\(validation\.specs, config, mechanicsRequest\);/);
 assert.match(styles, /\.dm_forge-settings-shell > \.form-footer button[\s\S]*color: #f6ebe2/);
 assert.match(forgeEngine, /function compactText\(value\)/);
 assert.match(forgeEngine, /override: Boolean\(hasExplicitRange \|\| range\.override === true\)/);
@@ -91,4 +94,4 @@ assert.doesNotMatch(script, /planningTier/);
 assert.doesNotMatch(script, /tierReview/);
 assert.doesNotMatch(settingsTemplate, /Planning tier/);
 
-export const testedUsabilityContractCount = 81;
+export const testedUsabilityContractCount = 84;

@@ -171,7 +171,9 @@ const validators = {
   },
   multiActivityStaff(spec) {
     validateUses(spec);
-    const activities = requireArray(spec, spec.activities, "activities", 2);
+    // A staff with one named power still needs to retain its base weapon
+    // attack; the module adds that attack from the quarterstaff base.
+    const activities = requireArray(spec, spec.activities, "activities", 1);
     activities.forEach((activity, index) => {
       validateActivity(spec, activity, `activities[${index}]`);
       validateSave(spec, activity.save, `activities[${index}].save`);

@@ -314,7 +314,13 @@ function createForgeServer(options) {
         }
         const payload = await readJsonBody(request, config.bodyLimitBytes);
         const normalized = normalizeErrorReport(payload, requestId, client);
-        await errorReportStore.append(normalized);
+        try {
+          const stored = await errorReportStore.append(normalized);
+          if (!stored) throw new ServiceError(503, "report_storage_unavailable", "Anonymous item reports are not enabled on this Forge service.");
+        } catch (error) {
+          if (error instanceof ServiceError) throw error;
+          throw new ServiceError(503, "report_storage_unavailable", "The Forge AI service could not store this item report.", { cause: error });
+        }
         sendJson(response, 202, { status: "accepted", stored: true, requestId });
         return;
       }

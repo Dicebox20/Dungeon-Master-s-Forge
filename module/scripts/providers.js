@@ -272,6 +272,20 @@ async function compileWithProvider(request, options = {}) {
   };
 }
 
+function mechanicsRequestForCompilation(compilation, fallback = "") {
+  const candidates = [
+    compilation?.originalRequest,
+    fallback,
+    compilation?.request,
+    compilation?.normalizedRequest
+  ];
+  for (const candidate of candidates) {
+    const value = String(candidate ?? "").trim();
+    if (value) return value;
+  }
+  return "";
+}
+
 export {
   DEFAULT_PROVIDER_ID,
   HOSTED_PROVIDER_ID,
@@ -279,6 +293,7 @@ export {
   compileWithProvider,
   getProvider,
   listProviders,
+  mechanicsRequestForCompilation,
   networkProviderConfiguration,
   normalizeProviderConfiguration,
   partitionProviderConfiguration,
