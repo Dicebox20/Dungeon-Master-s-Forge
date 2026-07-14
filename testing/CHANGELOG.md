@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 2.23.1-test.39
+
+- Reissued the tester package from the reconciled beta mechanics after the public-history cleanup.
+- Includes the verified multi-spell, enchantment, summon, attunement, and hybrid-item repairs from the current tester source.
+
 ## 2.23.1-test.38
 
 - Removed duplicated on-hit weapon rider damage from separately named activated save activities.
