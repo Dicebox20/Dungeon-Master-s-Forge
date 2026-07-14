@@ -132,7 +132,7 @@
 - Changed the install identity to `dungeon-masters-forge`, migrated legacy settings, and retained read compatibility for legacy generated-item flags.
 - Added the `2.22.0-test.5` tester build for service `1.6.0`.
 - Displayed safe structured remote error messages, error codes, and request IDs instead of reducing service failures to a bare HTTP status.
-- Removed the obsolete user-facing planning warnings; launch-day release plans do not gate module features.
+- Removed obsolete user-facing planning warnings; no launch-day feature gates are active.
 - Added a disabled-by-default Free Forge release configuration for a baked HTTPS endpoint.
 - Enabled private release builds to select Free Forge automatically on first launch without endpoint or token entry.
 - Unified remote connection checks and compilation across Bring Your Own API and Free Forge providers.
