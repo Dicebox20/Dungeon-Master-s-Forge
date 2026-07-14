@@ -41,7 +41,12 @@ const unspecifiedDcWand = compileItemRequest(`
 Stormglass Wand
 Rare wand requiring attunement. As an action, unleash a 15-foot cone that forces a Constitution save or takes 4d8 thunder damage.
 `);
-assert.equal(unspecifiedDcWand.specs[0].save?.dc, 15);
+assert.equal(unspecifiedDcWand.specs[0].save?.dc, 13);
+
+const deafeningMace = compileItemRequest("Create a rare magical mace that grants +1 to attack and damage rolls. On a hit, the target must succeed on a DC 13 Constitution saving throw or be deafened until the start of your next turn.");
+assert.equal(deafeningMace.specs[0].kind, "weaponConditionOnHit");
+assert.equal(deafeningMace.specs[0].conditionOnHit.condition, "deafened");
+assert.deepEqual(deafeningMace.specs[0].conditionOnHit.save, { ability: "con", dc: 13 });
 
 const summon = compileItemRequest("Create a rare item that summons a friendly wolf once per long rest.");
 assert.equal(summon.specs[0].kind, "nativeSummon");
@@ -136,6 +141,12 @@ assert.equal(emberOil.specs[0].duration.seconds, 3600);
 assert.equal(emberOil.specs[0].restrictions.type, "weapon");
 assert.equal(emberOil.specs[0].uses.autoDestroy, true);
 assert.deepEqual(emberOil.specs[0].enchantChanges.map(change => change.key), ["system.properties", "system.damage.parts"]);
+assert.deepEqual(emberOil.specs[0].enchantChanges[1].value.damage, {
+  number: 1,
+  denomination: 4,
+  bonus: "",
+  types: ["fire"]
+});
 assert.match(emberOil.specs[0].activityId, /^[A-Za-z0-9]{16}$/);
 assert.match(emberOil.specs[0].effectId, /^[A-Za-z0-9]{16}$/);
 

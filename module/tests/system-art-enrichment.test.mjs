@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {
   applyBaseChassisFallbackArt,
+  applyCategoryItemFallbackArt,
   applyConsumableProjectileFallbackArt,
   applyFallbackActivityArt,
   applySpellActivityArt,
@@ -81,6 +82,24 @@ const missingFallback = applyConsumableProjectileFallbackArt({
 assert.equal(missingFallback.status, "missing");
 assert.equal(missingFallback.spec.img, "icons/svg/item-bag.svg");
 
+const cloakFallback = applyCategoryItemFallbackArt({
+  kind: "passiveEffectEquipment",
+  name: "Cloak of the Stormwatch",
+  img: "icons/svg/item-bag.svg"
+});
+assert.equal(cloakFallback.applied, true);
+assert.equal(cloakFallback.spec.img, "icons/equipment/back/cloak-hooded-blue.webp");
+
+const potionFallback = applyCategoryItemFallbackArt({
+  kind: "chargedHealing",
+  itemType: "consumable",
+  name: "Bloomdraught",
+  description: "An uncommon healing potion.",
+  img: "icons/svg/item-bag.svg"
+});
+assert.equal(potionFallback.applied, true);
+assert.equal(potionFallback.spec.img, "icons/consumables/potions/potion-bottle-corked-blue.webp");
+
 const wandFallback = applyBaseChassisFallbackArt({
   kind: "chargedSaveDamage",
   name: "Wand of Searing Hail",
@@ -90,4 +109,4 @@ const wandFallback = applyBaseChassisFallbackArt({
 assert.equal(wandFallback.applied, true);
 assert.equal(wandFallback.spec.img, "icons/weapons/wands/wand-gem-red.webp");
 
-export const testedSystemArtCases = 17;
+export const testedSystemArtCases = 21;

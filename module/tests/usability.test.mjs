@@ -99,5 +99,6 @@ assert.match(forgeEngine, /function activityConsumption\(chargeCost = 1, scaling
 assert.match(forgeEngine, /function activityConsumptionNone\(\)[\s\S]*spellSlot: false/);
 assert.doesNotMatch(script, /planningTier/);
 assert.doesNotMatch(script, /tierReview/);
+assert.doesNotMatch(settingsTemplate, /Planning tier/);
 
 export const testedUsabilityContractCount = 86;

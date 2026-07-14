@@ -73,6 +73,61 @@ assert.equal(fiendStaff.spec.summonProfiles.length, 3);
 assert.equal(fiendStaff.spec.summonActivity.activityName, "Summon Fiend");
 assert.equal(fiendStaff.spec.summonActivity.chargeCost, 4);
 
+const infernalCalling = repairHybridSpecFromRequest({
+  kind: "casterUtilityEquipment",
+  name: "Infernal Calling Stone",
+  uses: { spent: 0, max: "1", recovery: [{ period: "lr", type: "recoverAll" }] },
+  utilityActivities: [
+    { activityId: "InfernalCall0001", activityName: "Infernal Calling" }
+  ]
+}, "Create a very rare wondrous item requiring attunement. Once per long rest, as an action, summon a friendly fiend spirit within 90 feet. Choose Demon, Devil, or Yugoloth. The summon lasts 1 hour and requires concentration.");
+
+assert.equal(infernalCalling.applied, true);
+assert.equal(infernalCalling.spec.kind, "nativeMultiProfileSummon");
+assert.deepEqual(infernalCalling.spec.summonProfiles.map(profile => profile.profileName), ["Demon", "Devil", "Yugoloth"]);
+assert.match(infernalCalling.spec.summonActivity.activityId, /^[A-Za-z0-9]{16}$/);
+assert.equal(infernalCalling.spec.summonActivity.chargeCost, 1);
+assert.equal(infernalCalling.spec.summonActivity.duration.concentration, true);
+assert.deepEqual(infernalCalling.spec.utilityActivities, []);
+
+const directInfernalCalling = repairHybridSpecFromRequest({
+  kind: "nativeMultiProfileSummon",
+  name: "Infernal Calling Stone",
+  uses: { spent: 0, max: "1", recovery: [{ period: "lr", type: "recoverAll" }] },
+  summonProfiles: [
+    { profileId: "InfernalDemon001", profileName: "Demon", actor: { name: "Demon", type: "fiend" } },
+    { profileId: "InfernalDevil001", profileName: "Devil", actor: { name: "Devil", type: "fiend" } },
+    { profileId: "InfernalYugol001", profileName: "Yugoloth", actor: { name: "Yugoloth", type: "fiend" } }
+  ],
+  unresolvedMechanics: [{
+    category: "unmappedSpell",
+    label: "Infernal calling effect",
+    reason: "The request does not provide a supported spell, summon profile, or declarative utility effect beyond limited-use casting."
+  }]
+}, "Once per long rest, as an action, summon a friendly fiend spirit within 90 feet. Choose Demon, Devil, or Yugoloth. The summon lasts 1 hour and requires concentration.");
+
+assert.equal(directInfernalCalling.spec.kind, "nativeMultiProfileSummon");
+assert.match(directInfernalCalling.spec.summonActivity.activityId, /^[A-Za-z0-9]{16}$/);
+assert.equal(directInfernalCalling.spec.summonActivity.range.value, 90);
+assert.equal(directInfernalCalling.spec.summonActivity.range.units, "ft");
+assert.equal(directInfernalCalling.spec.summonActivity.duration.value, 1);
+assert.equal(directInfernalCalling.spec.summonActivity.duration.units, "hour");
+assert.equal(directInfernalCalling.spec.unresolvedMechanics, undefined);
+assert.equal(directInfernalCalling.spec.summonActivity.duration.concentration, true);
+
+const wardedInfernalCalling = repairHybridSpecFromRequest({
+  kind: "casterUtilityEquipment",
+  name: "Warded Infernal Calling Stone",
+  uses: { spent: 0, max: "1", recovery: [{ period: "lr", type: "recoverAll" }] },
+  effects: [{ effectId: "InfernalWard0001", name: "Infernal Ward", changes: [{ key: "system.attributes.ac.bonus", mode: "ADD", value: "1" }] }],
+  utilityActivities: [
+    { activityId: "WardedCall000001", activityName: "Infernal Calling" }
+  ]
+}, "Create a very rare wondrous item. Once per long rest, summon a friendly fiend spirit within 90 feet. Choose Demon, Devil, or Yugoloth.");
+
+assert.equal(wardedInfernalCalling.spec.kind, "casterUtilityEquipment");
+assert.equal(wardedInfernalCalling.spec.effects.length, 1);
+
 const cinderwake = repairHybridSpecFromRequest({
   kind: "shieldArmorBonus",
   name: "Cinderwake Aegis",
@@ -198,6 +253,48 @@ assert.equal(frostwaveHybrid.spec.utilityActivities[1].activityName, "Summon Ree
 assert.equal(frostwaveHybrid.spec.utilityActivities[2].activityName, "Summon Wolf");
 assert.equal(frostwaveHybrid.spec.summonProfiles, undefined);
 assert.equal(frostwaveHybrid.spec.summonActivity, undefined);
+
+const quietThunder = repairHybridSpecFromRequest({
+  kind: "weaponExtraDamage",
+  name: "Mace of Quiet Thunder",
+  baseItem: "mace",
+  weaponType: "simpleM",
+  extraDamageParts: [{ number: 1, denomination: 6, bonus: "", types: ["thunder"] }]
+}, "Create a rare magical mace that grants +1 to attack and damage rolls. On a hit, the target must succeed on a DC 13 Constitution saving throw or be deafened until the start of your next turn.");
+
+assert.equal(quietThunder.spec.kind, "weaponConditionOnHit");
+assert.equal(quietThunder.spec.conditionOnHit.condition, "deafened");
+assert.equal(quietThunder.spec.conditionOnHit.durationSeconds, 6);
+
+const wolfcall = repairHybridSpecFromRequest({
+  kind: "artifactWeaponHybrid",
+  name: "Wolfcall Trident",
+  baseItem: "trident",
+  weaponType: "martialM",
+  uses: { max: "1", recovery: [{ period: "lr", type: "recoverAll" }] }
+}, "Once per long rest, as an action, it summons a friendly wolf within 30 feet for 1 hour.");
+
+assert.equal(wolfcall.spec.summonActivity.activityName, "Summon Wolf");
+assert.equal(wolfcall.spec.summonActivity.chargeCost, 1);
+
+const stormwake = repairHybridSpecFromRequest({
+  kind: "artifactWeaponHybrid",
+  name: "Stormwake Spear",
+  extraDamageParts: [{ number: 1, denomination: 6, bonus: "", types: ["lightning"] }],
+  saveActivities: [{
+    activityId: "StormwakePower01",
+    activityName: "Triggered Power",
+    save: { ability: "dex", dc: 13 },
+    damageParts: [{ number: 1, denomination: 6, bonus: "", types: ["lightning"] }]
+  }, {
+    activityId: "StormwakeWave001",
+    activityName: "Cast Thunderwave",
+    save: { ability: "con", dc: 13 },
+    damageParts: [{ number: 2, denomination: 8, bonus: "", types: ["thunder"] }]
+  }]
+}, "It deals an extra 1d6 lightning damage on a hit and can cast Thunderwave once per dawn at DC 13.");
+
+assert.deepEqual(stormwake.spec.saveActivities.map(activity => activity.activityName), ["Cast Thunderwave"]);
 
 const frostwaveSplitExistingSummon = repairHybridSpecFromRequest({
   kind: "equipmentPowerSuite",
@@ -395,7 +492,7 @@ const fallbackDefaults = repairHybridSpecFromRequest({
 
 assert.equal(fallbackDefaults.applied, true);
 assert.equal(fallbackDefaults.spec.magicalBonus, "1");
-assert.equal(fallbackDefaults.spec.saveActivities[0].save.dc, 15);
+assert.equal(fallbackDefaults.spec.saveActivities[0].save.dc, 13);
 
 const ashenPilgrimRider = repairHybridSpecFromRequest({
   kind: "equipmentPowerSuite",
@@ -469,4 +566,132 @@ assert.equal(staffCastCostsAndTemplates.spec.saveActivities[1].target.template.s
 assert.equal(staffCastCostsAndTemplates.spec.saveActivities[1].target.template.width, 10);
 assert.equal(staffCastCostsAndTemplates.spec.saveActivities[1].damageOnSave, "half");
 
-export const testedHybridRepairCases = 18;
+const solarJudgmentPassives = repairHybridSpecFromRequest({
+  kind: "artifactWeaponHybrid",
+  name: "Solar Judgment",
+  baseItem: "longsword",
+  passiveEffects: [{
+    effectId: "SolarFireResist1",
+    name: "Fire Resistance",
+    changes: [{ key: "system.traits.dr.value", mode: "ADD", value: "fire" }]
+  }]
+}, "Create an artifact greatsword requiring attunement. It grants the wielder +1 AC and resistance to fire damage while attuned. As a bonus action, it can ignite as a bonus action to shed bright light for 20 feet and dim light for 20 more feet.");
+
+assert.equal(solarJudgmentPassives.applied, true);
+assert.equal(solarJudgmentPassives.spec.passiveEffects.length, 2);
+assert.deepEqual(solarJudgmentPassives.spec.passiveEffects[1].changes, [
+  { key: "system.attributes.ac.bonus", mode: "ADD", value: "1" }
+]);
+assert.equal(solarJudgmentPassives.spec.toggleLight.activationType, "bonus");
+assert.equal(solarJudgmentPassives.spec.toggleLight.bright, 20);
+assert.equal(solarJudgmentPassives.spec.toggleLight.dim, 40);
+
+const solarGenericResistance = repairHybridSpecFromRequest({
+  kind: "artifactWeaponHybrid",
+  name: "Solar Judgment",
+  effects: [{
+    effectId: "SolarFireResist1",
+    name: "Fire Resistance",
+    changes: [{ key: "system.traits.dr.value", mode: "ADD", value: "fire" }]
+  }]
+}, "Create an artifact greatsword requiring attunement. It grants resistance to fire damage while attuned.");
+
+assert.equal(solarGenericResistance.applied, true);
+assert.equal(solarGenericResistance.spec.effects, undefined);
+assert.deepEqual(solarGenericResistance.spec.passiveEffects, [{
+  effectId: "SolarFireResist1",
+  name: "Fire Resistance",
+  changes: [{ key: "system.traits.dr.value", mode: "ADD", value: "fire" }]
+}]);
+
+const nightfallDarkvision = repairHybridSpecFromRequest({
+  kind: "artifactWeaponHybrid",
+  name: "Nightfall Longbow",
+  baseItem: "longbow"
+}, "Create an artifact longbow requiring attunement. The wielder gains darkvision out to 60 feet while attuned.");
+
+assert.equal(nightfallDarkvision.applied, true);
+assert.deepEqual(nightfallDarkvision.spec.passiveEffects, [{
+  effectId: nightfallDarkvision.spec.passiveEffects[0].effectId,
+  name: "Nightfall Longbow Darkvision",
+  changes: [{ key: "system.attributes.senses.ranges.darkvision", mode: "ADD", value: "60" }]
+}]);
+
+const coilstingRider = repairHybridSpecFromRequest({
+  kind: "artifactWeaponHybrid",
+  name: "Coilsting Glaive",
+  extraDamageParts: [{ number: 1, denomination: 6, bonus: "", types: ["lightning"] }],
+  saveActivities: [{
+    activityId: "CoilstingSurge01",
+    activityName: "Triggered Power",
+    save: { ability: "con", dc: 14 },
+    damageParts: [
+      { number: 1, denomination: 6, bonus: "", types: ["lightning"] },
+      { number: 3, denomination: 6, bonus: "", types: ["thunder"] }
+    ]
+  }]
+}, "Create a glaive that deals an extra 1d6 lightning damage on every hit. Spend 1 charge to force creatures in a 15-foot cone to make a DC 14 Constitution saving throw, taking 3d6 thunder damage on a failed save.");
+
+assert.equal(coilstingRider.applied, true);
+assert.deepEqual(coilstingRider.spec.saveActivities[0].damageParts, [
+  { number: 3, denomination: 6, bonus: "", types: ["thunder"] }
+]);
+
+const namedCoilstingRider = repairHybridSpecFromRequest({
+  kind: "equipmentPowerSuite",
+  name: "Coilsting Glaive",
+  extraDamageParts: [{ number: 1, denomination: 6, bonus: "", types: ["lightning"] }],
+  saveActivities: [{
+    activityId: "CoilstingPulse01",
+    activityName: "Coilsting Pulse",
+    chargeCost: 1,
+    save: { ability: "con", dc: 14 },
+    damageParts: [
+      { number: 1, denomination: 6, bonus: "", types: ["lightning"] },
+      { number: 3, denomination: 6, bonus: "", types: ["thunder"] }
+    ]
+  }]
+}, "Create a rare glaive that deals an extra 1d6 lightning damage on every hit. Spend 1 charge to force creatures in a 15-foot cone to make a DC 14 Constitution saving throw, taking 3d6 thunder damage on a failed save or half as much on a success.");
+
+assert.equal(namedCoilstingRider.applied, true);
+assert.deepEqual(namedCoilstingRider.spec.saveActivities[0].damageParts, [
+  { number: 3, denomination: 6, bonus: "", types: ["thunder"] }
+]);
+
+const mooncallSummon = repairHybridSpecFromRequest({
+  kind: "nativeEnchant",
+  name: "Mooncall Unguent",
+  uses: { max: "1", spent: 0, recovery: [] }
+}, "Create a consumable oil. When the oil is used, it also summons a friendly wolf for 10 minutes. The oil has 1 use and is consumed after use.");
+
+assert.equal(mooncallSummon.applied, true);
+assert.equal(mooncallSummon.spec.summonActivity.activityName, "Summon Wolf");
+assert.equal(mooncallSummon.spec.summonActivity.duration.units, "minute");
+
+const whisperglassAttack = repairHybridSpecFromRequest({
+  kind: "casterUtilityEquipment",
+  name: "Whisperglass Circlet",
+  utilityActivities: [{ activityId: "DetectThoughts0001", activityName: "Detect Thoughts" }],
+  saveActivities: [{
+    activityId: "PsychicDamage0001",
+    activityName: "Detect Thoughts",
+    save: { ability: "wis", dc: 15 },
+    damageParts: [{ number: 4, denomination: 8, bonus: "", types: ["psychic"] }]
+  }]
+}, "Create a circlet. It can cast Detect Thoughts once per long rest. As an action, the wearer can spend 1 charge to make a ranged spell attack against one creature within 90 feet, dealing 4d8 psychic damage on a hit.");
+
+assert.equal(whisperglassAttack.applied, true);
+assert.equal(whisperglassAttack.spec.utilityActivities[0].duration.concentration, true);
+assert.equal(whisperglassAttack.spec.attackActivities[0].activityName, "Psychic Bolt");
+assert.equal(whisperglassAttack.spec.attackActivities[0].range.value, 90);
+assert.equal(whisperglassAttack.spec.saveActivities.some(activity => activity.activityName === "Detect Thoughts"), false);
+
+const defaultSaveDc = repairHybridSpecFromRequest({
+  kind: "equipmentPowerSuite",
+  name: "Default Save",
+  saveActivities: [{ activityId: "DefaultSave00001", activityName: "Triggered Power", save: { ability: "dex" } }]
+}, "Create an item with a Dexterity saving throw.");
+
+assert.equal(defaultSaveDc.spec.saveActivities[0].save.dc, 13);
+
+export const testedHybridRepairCases = 25;

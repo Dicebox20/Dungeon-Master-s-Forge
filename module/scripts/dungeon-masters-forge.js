@@ -52,7 +52,7 @@ import { sanitizeForgeSpec } from "./forge-spec-integrity.js";
 import { repairHybridSpecFromRequest } from "./hybrid-activity-repair.js";
 import { buildLayeredItemBlueprint } from "./item-blueprint.js";
 import { applyDefaultLeveledSpellCharges, applyForgeSpecDefaults, autoSelectSrdChoiceSpells, dedupeRecognizedSpellActivities, reconcilePlannedSrdSpellActivities, repairNamedSrdSpellActivities } from "./srd-spell-enrichment.js";
-import { applyBaseChassisFallbackArt, applyConsumableProjectileFallbackArt, applyFallbackActivityArt, applySpellActivityArt, applySystemEquipmentArt, needsFallbackItemArt } from "./system-art-enrichment.js";
+import { applyBaseChassisFallbackArt, applyCategoryItemFallbackArt, applyConsumableProjectileFallbackArt, applyFallbackActivityArt, applySpellActivityArt, applySystemEquipmentArt, needsFallbackItemArt } from "./system-art-enrichment.js";
 import {
   PREVIOUS_PACKAGE_ID,
   MODULE_ID,
@@ -294,14 +294,17 @@ function requestedAttunementState(requestText = "") {
   const text = String(requestText ?? "").trim();
   if (!text) return null;
   if (/\b(?:does not require attunement|no attunement|attunement\s*:\s*(?:not required|no|none))\b/i.test(text)) return "";
-  if (/\b(?:requires? attunement|required by|attunement\s*:\s*required)\b/i.test(text)) return "required";
+  if (/\b(?:requires?|requiring|required by|attunement\s*:\s*required)\b/i.test(text)) return "required";
   return null;
 }
 
-function alignSpecAttunementToRequest(spec, requestText = "") {
+function alignSpecAttunementToRequest(spec, requestText = "", { preserveExistingWhenUnspecified = false } = {}) {
   if (!spec || typeof spec !== "object" || Array.isArray(spec)) return { applied: false, spec };
   const requested = requestedAttunementState(requestText);
   if (requested == null) {
+    // Review-time validation must not discard a GM's explicit JSON edit just because
+    // the original request did not state an attunement preference.
+    if (preserveExistingWhenUnspecified) return { applied: false, spec };
     if (!String(spec.attunement ?? "").trim()) return { applied: false, spec };
     return {
       applied: true,
@@ -332,7 +335,9 @@ function repairSpecsForValidation(specs, requestText = "") {
     const defaulted = applyForgeSpecDefaults(repaired.spec);
     const deduped = dedupeRecognizedSpellActivities(defaulted.spec, repairContext);
     const blueprinted = buildLayeredItemBlueprint(deduped.spec, repairContext);
-    const attunementAligned = alignSpecAttunementToRequest(blueprinted.spec, requestText);
+    const attunementAligned = alignSpecAttunementToRequest(blueprinted.spec, requestText, {
+      preserveExistingWhenUnspecified: true
+    });
     return attunementAligned.spec;
   });
 }
@@ -387,7 +392,13 @@ async function validateSpecs(input, requestText = "") {
 async function createFromSpecs(input, configOverrides = {}, requestText = "") {
   assertEnvironment({ requireGM: true });
   const specs = await prepareSpecsForForge(input, requestText);
-  await runDungeonMastersForge(currentConfig(configOverrides), specs, { validateOnly: true });
+  return createPreparedSpecs(specs, configOverrides);
+}
+
+async function createPreparedSpecs(specs, configOverrides = {}) {
+  assertEnvironment({ requireGM: true });
+  // The engine validates immediately before creation, so an approved UI draft does
+  // not need a second template/reference preparation pass.
   return runDungeonMastersForge(currentConfig(configOverrides), specs);
 }
 
@@ -445,28 +456,18 @@ function providerStatusSnapshot(providerId, configuration, connection = null) {
   };
 }
 
-function forgeProviderSummaryHTML(unresolvedPolicy) {
-  const configuredProvider = configuredProviderState({ unresolvedPolicy });
-  const snapshot = providerStatusSnapshot(configuredProvider.id, configuredProvider.configuration);
+function forgeFooterProviderStatusHTML(snapshot) {
   return `
-    <section class="dm_forge-provider-summary">
-      <div class="dm_forge-provider-summary-copy">
-        <strong>${escapeHTML(snapshot.provider?.label ?? "Provider")}</strong>
-        <span class="dm_forge-provider-summary-meta">
-          <i class="fa-solid ${escapeHTML(snapshot.icon)}"></i>
-        <span data-forge-provider-summary-text>${escapeHTML(snapshot.message)}</span>
-      </span>
-    </div>
-    </section>
+    <output class="dm_forge-footer-provider-status" data-forge-footer-provider-status data-state="${escapeHTML(snapshot.state)}" aria-live="polite">
+      <i class="fa-solid ${escapeHTML(snapshot.icon)}"></i>
+      <span>${escapeHTML(snapshot.message)}</span>
+    </output>
   `;
 }
 
 function forgeContent() {
   const specs = game.settings.get(MODULE_ID, "lastSpecs") || JSON.stringify(EXAMPLE_SPECS, null, 2);
   const request = game.settings.get(MODULE_ID, "lastRequest") || "";
-  const itemFolder = game.settings.get(MODULE_ID, "itemFolderName");
-  const actorFolder = game.settings.get(MODULE_ID, "actorFolderName");
-  const replaceExisting = game.settings.get(MODULE_ID, "replaceExisting");
   const unresolvedPolicy = currentUnresolvedPolicy();
 
   return `
@@ -480,7 +481,6 @@ function forgeContent() {
           <header class="dm_forge-pane-header">
             <h2><span class="dm_forge-step" aria-hidden="true">1</span><i class="fa-solid fa-feather-pointed"></i><span>Description</span></h2>
           </header>
-          ${forgeProviderSummaryHTML(unresolvedPolicy)}
           <div class="dm_forge-provider-controls dm_forge-request-controls">
             <label>
               <span>Unresolved mechanics</span>
@@ -504,20 +504,6 @@ function forgeContent() {
             <h2><span class="dm_forge-step" aria-hidden="true">2</span><i class="fa-solid fa-scroll"></i><span>Result</span></h2>
           </header>
           <div class="dm_forge-review-summary" data-forge-preview hidden></div>
-          <div class="dm_forge-options">
-            <label>
-              <span>Item folder</span>
-              <input type="text" name="itemFolderName" value="${escapeHTML(itemFolder)}">
-            </label>
-            <label>
-              <span>Summon actor folder</span>
-              <input type="text" name="actorFolderName" value="${escapeHTML(actorFolder)}">
-            </label>
-            <label class="dm_forge-toggle">
-              <input type="checkbox" name="replaceExisting" ${replaceExisting ? "checked" : ""}>
-              <span>Replace matching items and summon actors</span>
-            </label>
-          </div>
 
           <details class="dm_forge-advanced">
             <summary><i class="fa-solid fa-code"></i><span>Advanced specification editor</span></summary>
@@ -564,11 +550,7 @@ function readDialogForm(form) {
     specs: normalizeSpecs(rawSpecs),
     approved: formControl(form, "reviewApproval").checked,
     provider,
-    config: {
-      itemFolderName: formControl(form, "itemFolderName").value.trim() || "Dungeon Master's Forge V2",
-      actorFolderName: formControl(form, "actorFolderName").value.trim() || "Dungeon Master's Forge V2 Summons",
-      replaceExistingWorldDocuments: formControl(form, "replaceExisting").checked
-    }
+    config: currentConfig()
   };
 }
 
@@ -715,6 +697,12 @@ function refreshForgeProviderSummary(dialog, form) {
   if (label) label.textContent = snapshot.provider?.label ?? "Provider";
   if (text) text.textContent = snapshot.message;
   if (icon) icon.className = `fa-solid ${snapshot.icon}`;
+  const footerStatus = dialog.element?.querySelector("[data-forge-footer-provider-status]");
+  const footerIcon = footerStatus?.querySelector("i");
+  const footerText = footerStatus?.querySelector("span");
+  if (footerStatus) footerStatus.dataset.state = snapshot.state;
+  if (footerIcon) footerIcon.className = `fa-solid ${snapshot.icon}`;
+  if (footerText) footerText.textContent = snapshot.message;
   if (compileButton instanceof HTMLButtonElement) compileButton.disabled = !snapshot.readiness.ready;
 }
 
@@ -747,6 +735,13 @@ function relocateBottomActions(dialog) {
   if (!(footer instanceof HTMLElement) || !(approvalLabel instanceof HTMLElement) || !(reportButton instanceof HTMLButtonElement)) return;
 
   if (compileButton instanceof HTMLButtonElement) compileButton.after(approvalLabel);
+  if (!footer.querySelector("[data-forge-footer-provider-status]")) {
+    const provider = activeProviderState({
+      unresolvedPolicy: formControl(form, "unresolvedPolicy").value
+    });
+    const snapshot = providerStatusSnapshot(provider.id, provider.configuration, dialog._dm_forgeProviderConnection);
+    approvalLabel.insertAdjacentHTML("afterend", forgeFooterProviderStatusHTML(snapshot));
+  }
   if (validateButton instanceof HTMLButtonElement) validateButton.before(reportButton);
   reportButton.hidden = false;
   footer.classList.add("dm_forge-actions-footer");
@@ -1340,22 +1335,33 @@ async function enrichSpecsWithSystemReferences(specs, requestText = "") {
         label: "Foundry core image",
         message: "Used bundled Foundry consumable-projectile art because no exact system item image was available."
       });
-    } else if (needsFallbackItemArt(nextSpec.img)) {
-      systemReferences.push({
-        kind: "art",
-        name: `${nextSpec.name} missing art`,
-        label: "Item image",
-        message: "No matching system or bundled Foundry image was found; the generic item image is being used."
-      });
+    } else {
+      const categoryArt = applyCategoryItemFallbackArt(nextSpec, requestText);
+      nextSpec = categoryArt.spec;
+      if (categoryArt.applied) {
+        systemReferences.push({
+          kind: "art",
+          name: `${nextSpec.name} Foundry core art`,
+          label: "Foundry core image",
+          message: "Used a bundled Foundry image based on the item category because no exact system item image was available."
+        });
+      } else if (needsFallbackItemArt(nextSpec.img)) {
+        systemReferences.push({
+          kind: "art",
+          name: `${nextSpec.name} missing art`,
+          label: "Item image",
+          message: "No matching system or bundled Foundry image was found; the generic item image is being used."
+        });
+      }
     }
     return systemReferences.length ? { ...nextSpec, systemReferences: uniqueReferences(systemReferences) } : nextSpec;
   }));
 }
 
-async function enrichCompilationWithSrdSpellChoices(compilation) {
+async function enrichCompilationWithSrdSpellChoices(compilation, requestText = "") {
   const items = Array.isArray(compilation?.specs) ? compilation.specs : [];
   if (!items.length) return compilation;
-  const mechanicsRequest = mechanicsRequestForCompilation(compilation);
+  const mechanicsRequest = mechanicsRequestForCompilation(compilation, requestText);
 
   const featurePlan = await planItemFeatures(mechanicsRequest, {
     resolveSpell: resolveSpellByName
@@ -2083,6 +2089,9 @@ class ForgeSettingsApplication extends FormApplication {
       providerToken: provider.configuration.apiToken,
       rememberProviderToken,
       anonymousErrorReports: currentAnonymousErrorReportsEnabled(),
+      itemFolderName: game.settings.get(MODULE_ID, "itemFolderName"),
+      actorFolderName: game.settings.get(MODULE_ID, "actorFolderName"),
+      replaceExisting: game.settings.get(MODULE_ID, "replaceExisting"),
       providerStatusIcon: snapshot.icon,
       providerStatusState: snapshot.state,
       providerStatusMessage: snapshot.message
@@ -2205,7 +2214,10 @@ class ForgeSettingsApplication extends FormApplication {
     const providerState = settingsFormProviderState(form);
     await Promise.all([
       persistProviderState(providerState),
-      game.settings.set(MODULE_ID, "anonymousErrorReports", formControl(form, "anonymousErrorReports").checked)
+      game.settings.set(MODULE_ID, "anonymousErrorReports", formControl(form, "anonymousErrorReports").checked),
+      game.settings.set(MODULE_ID, "itemFolderName", formControl(form, "itemFolderName").value.trim() || "Dungeon Master's Forge V2"),
+      game.settings.set(MODULE_ID, "actorFolderName", formControl(form, "actorFolderName").value.trim() || "Dungeon Master's Forge V2 Summons"),
+      game.settings.set(MODULE_ID, "replaceExisting", formControl(form, "replaceExisting").checked)
     ]);
     if (forgeDialog?.rendered) {
       refreshForgeProviderSummary(forgeDialog, forgeDialog.element?.querySelector("form"));
@@ -2344,7 +2356,7 @@ async function openForge() {
                 supportedKinds: SUPPORTED_SPEC_KINDS
               }
             });
-            const compilation = await enrichCompilationWithSrdSpellChoices(remoteCompilation);
+            const compilation = await enrichCompilationWithSrdSpellChoices(remoteCompilation, request);
             const mechanicsRequest = mechanicsRequestForCompilation(compilation, request);
             const validation = await validateSpecs(compilation.specs, mechanicsRequest);
             const preparedCompilation = compilationWithPreparedSpecs(compilation, validation.specs);
@@ -2446,7 +2458,7 @@ async function openForge() {
               saveDialogState(preparedRawSpecs, config, provider),
               game.settings.set(MODULE_ID, "lastRequest", request)
             ]);
-            const result = await createFromSpecs(validation.specs, config, mechanicsRequest);
+            const result = await createPreparedSpecs(validation.specs, config);
             const actorText = result.actors.length ? ` and ${result.actors.length} summon actor${result.actors.length === 1 ? "" : "s"}` : "";
             const unresolvedCount = validation.specs.reduce((total, spec) => total + (spec.unresolvedMechanics?.length ?? 0), 0);
             const unresolvedText = unresolvedCount

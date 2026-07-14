@@ -24,7 +24,7 @@ globalThis.foundry ??= {
   }
 };
 
-const { forceExplicitChoiceOnAttack, itemHasExplicitActivityChoices, multiActivityStaffActivityLists } = await import("../scripts/forge-engine.js");
+const { forceExplicitChoiceOnAttack, forceSummonUseConfirmation, itemHasExplicitActivityChoices, multiActivityStaffActivityLists } = await import("../scripts/forge-engine.js");
 
 assert.equal(itemHasExplicitActivityChoices({}), false);
 assert.equal(itemHasExplicitActivityChoices({
@@ -53,6 +53,21 @@ assert.equal(guardedAttack.otherActivityId, "none");
 assert.equal(guardedAttack.otherActivityUuid, "");
 assert.equal(guardedAttack.midiProperties.triggeredActivityId, "none");
 assert.equal(guardedAttack.midiProperties.otherActivityCompatible, true);
+
+const summonWithConfirmation = forceSummonUseConfirmation({
+  midiProperties: { forceConsumeDialog: "default", autoConsume: false }
+}, { profileCount: 3, useCost: 1 });
+assert.equal(summonWithConfirmation.midiProperties.forceConsumeDialog, "always");
+assert.equal(summonWithConfirmation.midiProperties.autoConsume, false);
+
+assert.equal(
+  forceSummonUseConfirmation({ midiProperties: { forceConsumeDialog: "default" } }, { profileCount: 1, useCost: 1 }).midiProperties.forceConsumeDialog,
+  "always"
+);
+assert.deepEqual(
+  forceSummonUseConfirmation({ midiProperties: { forceConsumeDialog: "default" } }, { profileCount: 3, useCost: 0 }),
+  { midiProperties: { forceConsumeDialog: "default" } }
+);
 
 const staffActivities = multiActivityStaffActivityLists({
   activities: [{ activityId: "LegacySave000001", activityName: "Legacy Save", save: { ability: "dex", dc: 15 } }],

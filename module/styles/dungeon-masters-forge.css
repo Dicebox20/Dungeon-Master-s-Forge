@@ -818,8 +818,27 @@
   margin-right: 2px;
 }
 
+.dungeon-masters-forge .form-footer.dm_forge-actions-footer .dm_forge-footer-provider-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  margin-inline: auto;
+  color: var(--color-text-subtle);
+  font-size: var(--font-size-12);
+  white-space: nowrap;
+}
+
+.dungeon-masters-forge .form-footer.dm_forge-actions-footer .dm_forge-footer-provider-status[data-state="ready"] i {
+  color: #73c991;
+}
+
+.dungeon-masters-forge .form-footer.dm_forge-actions-footer .dm_forge-footer-provider-status[data-state="warning"] {
+  color: #e5a15d;
+}
+
 .dungeon-masters-forge .form-footer.dm_forge-actions-footer [data-action="report-failed-item"] {
-  margin-left: auto;
+  margin-left: 0;
 }
 
 .dungeon-masters-forge .form-footer.dm_forge-actions-footer [data-action="create"] {

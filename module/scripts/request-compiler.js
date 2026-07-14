@@ -2,7 +2,7 @@ import { splitItemRequests } from "./request-normalization.js";
 import { consumableProjectileFallbackImage } from "./system-art-enrichment.js";
 
 const COMPILER_VERSION = "2.4.0";
-const DEFAULT_SAVE_DC = 15;
+const DEFAULT_SAVE_DC = 13;
 
 const KNOWN_CASTING_SPELLS = /\b(?:clairvoyance|command|ice\s+storm|cone\s+of\s+cold|flame\s+strike|burning\s+hands|thunderwave|ice\s+knife|ray\s+of\s+sickness)\b/i;
 
@@ -839,7 +839,8 @@ function compileWeapon(context) {
   }
 
   const magicalBonus = request.match(/\+(\d+)\b/)?.[1] ?? "";
-  const condition = lower.includes("poisoned") ? "poisoned" : null;
+  const condition = ["blinded", "charmed", "deafened", "frightened", "paralyzed", "poisoned", "prone", "restrained", "stunned", "unconscious"]
+    .find(status => new RegExp(`\\b${status}\\b`, "i").test(lower)) ?? null;
   const save = parseSave(request, rarity);
   const durationSeconds = Number(request.match(/\b(\d+)\s+seconds?\b/i)?.[1] ?? 30);
   const kind = condition && save ? "weaponConditionOnHit" : "weaponExtraDamage";

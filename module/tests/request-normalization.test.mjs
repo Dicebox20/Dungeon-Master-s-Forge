@@ -64,4 +64,14 @@ Spell usage: once per day
 assert.match(alreadyStructured.normalizedRequest, /Item name: Emberglass Dagger/);
 assert.match(alreadyStructured.normalizedRequest, /Spell: Burning Hands/);
 
-export const testedNormalizationCases = 9;
+const inlineNameField = normalizeItemRequest("Name: Ashen Signet. Create a rare magical signet ring that grants resistance to fire damage while worn.");
+assert.match(inlineNameField.normalizedRequest, /Item name: Ashen Signet/);
+assert.doesNotMatch(inlineNameField.normalizedRequest, /Item name: Ashen Signet\. Create/);
+
+const leadingTitle = normalizeItemRequest("Wand of Searing Hail. Create a rare wand with 7 charges that regains 1d6 + 1 charges at dawn. It casts Ice Storm for 4 charges.");
+assert.match(leadingTitle.normalizedRequest, /Item name: Wand of Searing Hail/);
+
+const quotedNamedItem = normalizeItemRequest('Create a legendary trident named "Frostwave Trident" with 12 charges that regains 1d8 + 4 charges daily at dawn.');
+assert.match(quotedNamedItem.normalizedRequest, /Item name: Frostwave Trident/);
+
+export const testedNormalizationCases = 12;

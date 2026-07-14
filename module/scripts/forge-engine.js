@@ -27,6 +27,14 @@ function forceExplicitChoiceOnAttack(activity = {}) {
   }, { inplace: false });
 }
 
+function forceSummonUseConfirmation(activity = {}, { profileCount = 0, useCost = 0 } = {}) {
+  // Keep the native summon dialog ahead of Midi-QOL's automatic resource consumption.
+  if (!activity?.midiProperties || !useCost) return activity;
+  return foundry.utils.mergeObject(foundry.utils.deepClone(activity), {
+    midiProperties: { forceConsumeDialog: "always" }
+  }, { inplace: false });
+}
+
 function multiActivityStaffActivityLists(spec = {}) {
   const lists = {
     attack: Array.isArray(spec.attackActivities) ? [...spec.attackActivities] : [],
@@ -190,6 +198,14 @@ async function runDungeonMastersForge(FORGE, ITEMS, { validateOnly = false } = {
         }
       ]
     };
+  }
+
+  function useCostForActivity(chargeCost, uses = {}) {
+    const explicit = Number(chargeCost);
+    if (Number.isFinite(explicit) && explicit > 0) return explicit;
+
+    const available = Number(uses?.max);
+    return Number.isFinite(available) && available > 0 ? 1 : 0;
   }
 
   function durationData(duration = {}) {
@@ -547,7 +563,15 @@ async function runDungeonMastersForge(FORGE, ITEMS, { validateOnly = false } = {
     return game.items.get(created.id) ?? created;
   }
 
-  async function createMultiActivityStaff(spec, folder) {
+  async function createMultiActivityStaff(spec, folder, actorFolder) {
+    const actorsByProfileId = new Map();
+    const createdActors = [];
+    for (const profile of allSummonProfiles(spec)) {
+      const actor = await createSummonProfileActor(spec, actorFolder, profile);
+      actorsByProfileId.set(profile.profileId, actor);
+      createdActors.push(actor);
+    }
+
     const item = await createWorldItem(spec, {
       name: spec.name,
       type: suiteItemType(spec),
@@ -571,7 +595,12 @@ async function runDungeonMastersForge(FORGE, ITEMS, { validateOnly = false } = {
           hp: null,
           speed: null
         }, { inplace: false }),
-      effects: []
+      effects: [],
+      flags: actorsByProfileId.size ? {
+        [MODULE_ID]: {
+          summonActorUuids: Object.fromEntries(Array.from(actorsByProfileId.entries()).map(([id, actor]) => [id, actor.uuid]))
+        }
+      } : {}
     }, folder);
 
     const created = game.items.get(item.id) ?? item;
@@ -583,7 +612,9 @@ async function runDungeonMastersForge(FORGE, ITEMS, { validateOnly = false } = {
       updateData[`system.activities.${activity._id}`] = activity;
     }
     for (const activitySpec of activityLists.utility) {
-      const activity = makeSuiteUtilityActivity(created, spec, activitySpec);
+      const activity = summonProfilesFromActivity(activitySpec).length
+        ? summonActivityDocument(created, spec, activitySpec, actorsByProfileId)
+        : makeSuiteUtilityActivity(created, spec, activitySpec);
       updateData[`system.activities.${activity._id}`] = activity;
     }
     for (const activitySpec of activityLists.save) {
@@ -595,22 +626,52 @@ async function runDungeonMastersForge(FORGE, ITEMS, { validateOnly = false } = {
       });
       updateData[`system.activities.${activity._id}`] = activity;
     }
+    if ((spec.summonProfiles ?? []).length) {
+      const activity = summonActivityDocument(created, spec, spec.summonActivity ?? spec, actorsByProfileId);
+      updateData[`system.activities.${activity._id}`] = activity;
+    }
     await created.update(updateData);
-    return game.items.get(created.id) ?? created;
+    const resolved = game.items.get(created.id) ?? created;
+    return createdActors.length ? { item: resolved, actors: createdActors } : resolved;
   }
 
   function enchantChange(change) {
     let value = change.value;
-    if (value && typeof value === "object" && value.damage) value = JSON.stringify(damageData(value.damage));
+    if (change.key === "system.damage.parts") {
+      const damage = value?.damage ?? value;
+      if (damage && typeof damage === "object") {
+        value = JSON.stringify(damageData(damage));
+      } else if (typeof damage === "string") {
+        const match = damage.match(/(\d+)\s*d\s*(\d+)(?:\s*([+-])\s*(\d+))?\s+([a-z]+)/i);
+        if (match) {
+          const [, number, denomination, sign = "", bonus = "", type] = match;
+          value = JSON.stringify(damageData({
+            number: Number(number),
+            denomination: Number(denomination),
+            bonus: bonus ? `${sign}${bonus}` : "",
+            types: [type.toLowerCase()]
+          }));
+        }
+      }
+    }
     return {
       key: change.key,
-      mode: modeValue(change.mode),
+      type: "add",
       value: String(value),
+      phase: change.phase ?? "initial",
       priority: change.priority ?? 20
     };
   }
 
-  async function createNativeEnchant(spec, folder) {
+  async function createNativeEnchant(spec, folder, actorFolder) {
+    const actorsByProfileId = new Map();
+    const createdActors = [];
+    for (const profile of allSummonProfiles(spec)) {
+      const actor = await createSummonProfileActor(spec, actorFolder, profile);
+      actorsByProfileId.set(profile.profileId, actor);
+      createdActors.push(actor);
+    }
+
     const item = await createWorldItem(spec, {
       name: spec.name,
       type: spec.itemType ?? "consumable",
@@ -633,22 +694,28 @@ async function runDungeonMastersForge(FORGE, ITEMS, { validateOnly = false } = {
           transfer: false,
           disabled: false,
           duration: spec.duration?.seconds ? { seconds: spec.duration.seconds } : {},
-          changes: (spec.enchantChanges ?? []).map(enchantChange),
+          system: { changes: (spec.enchantChanges ?? []).map(enchantChange) },
           flags: { [MODULE_ID]: { effect: "native-enchantment" } }
         }
-      ]
+      ],
+      flags: actorsByProfileId.size ? {
+        [MODULE_ID]: {
+          summonActorUuids: Object.fromEntries(Array.from(actorsByProfileId.entries()).map(([id, actor]) => [id, actor.uuid]))
+        }
+      } : {}
     }, folder);
 
     const created = game.items.get(item.id) ?? item;
     const EnchantActivity = CONFIG.DND5E.activityTypes.enchant.documentClass;
     const activity = new EnchantActivity({}, { parent: created }).toObject();
+    const useCost = useCostForActivity(spec.chargeCost, spec.uses);
     const activityData = foundry.utils.mergeObject(activity, {
       _id: assertActivityId(spec.activityId),
       type: "enchant",
       name: spec.activityName ?? `Apply ${spec.name}`,
       img: spec.activityImg ?? spec.img,
       activation: { type: spec.activationType ?? "action", value: null, condition: "", override: false },
-      consumption: activityConsumption(spec.chargeCost ?? 1, spec.chargeScaling),
+      consumption: useCost ? activityConsumption(useCost, spec.chargeScaling) : activityConsumptionNone(),
       description: { chatFlavor: spec.chatFlavor ?? "" },
       duration: durationData(spec.duration),
       effects: [
@@ -676,8 +743,14 @@ async function runDungeonMastersForge(FORGE, ITEMS, { validateOnly = false } = {
         requireMagic: false
       }
     }, { inplace: false });
-    await created.update({ [`system.activities.${activityData._id}`]: activityData });
-    return game.items.get(created.id) ?? created;
+    const updateData = { [`system.activities.${activityData._id}`]: activityData };
+    if ((spec.summonProfiles ?? []).length) {
+      const summon = summonActivityDocument(created, spec, spec.summonActivity ?? spec, actorsByProfileId);
+      updateData[`system.activities.${summon._id}`] = summon;
+    }
+    await created.update(updateData);
+    const resolved = game.items.get(created.id) ?? created;
+    return createdActors.length ? { item: resolved, actors: createdActors } : resolved;
   }
 
   async function createSummonActor(spec, folder) {
@@ -719,10 +792,12 @@ async function runDungeonMastersForge(FORGE, ITEMS, { validateOnly = false } = {
             units: actorSpec.movement?.units ?? "ft"
           },
           senses: {
-            darkvision: actorSpec.darkvision ?? 0,
-            blindsight: 0,
-            tremorsense: 0,
-            truesight: 0,
+            ranges: {
+              darkvision: actorSpec.darkvision ?? 0,
+              blindsight: 0,
+              tremorsense: 0,
+              truesight: 0
+            },
             units: "ft",
             special: actorSpec.senses ?? ""
           }
@@ -806,13 +881,14 @@ async function runDungeonMastersForge(FORGE, ITEMS, { validateOnly = false } = {
     const created = game.items.get(item.id) ?? item;
     const SummonActivity = CONFIG.DND5E.activityTypes.summon.documentClass;
     const activity = new SummonActivity({}, { parent: created }).toObject();
+    const useCost = useCostForActivity(spec.chargeCost, spec.uses);
     const activityData = foundry.utils.mergeObject(activity, {
       _id: assertActivityId(spec.activityId),
       type: "summon",
       name: spec.activityName ?? `Summon ${spec.profileName ?? summonActor.name}`,
       img: spec.activityImg ?? spec.summonActor?.img ?? spec.img,
       activation: { type: spec.activationType ?? "action", value: null, condition: "", override: false },
-      consumption: activityConsumption(spec.chargeCost ?? 1, spec.chargeScaling),
+      consumption: useCost ? activityConsumption(useCost, spec.chargeScaling) : activityConsumptionNone(),
       description: { chatFlavor: spec.chatFlavor ?? "" },
       duration: durationData(spec.duration),
       effects: [],
@@ -1010,10 +1086,22 @@ ${activitySpec.macroCommand}
     };
   }
 
-  function suiteEffectDocuments(spec) {
-    const effects = (spec.effects ?? [])
+  function passiveEffectDocuments(spec) {
+    const seen = new Set();
+    return [...(spec.effects ?? []), ...(spec.passiveEffects ?? [])]
       .filter(effect => effect && typeof effect === "object")
+      .filter(effect => {
+        const key = String(effect.effectId ?? effect.id ?? "")
+          || `${String(effect.name ?? "")}|${JSON.stringify(effect.changes ?? [])}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
       .map(effect => transferEffectFromSpec(spec, effect));
+  }
+
+  function suiteEffectDocuments(spec) {
+    const effects = passiveEffectDocuments(spec);
     for (const activitySpec of spec.utilityActivities ?? []) {
       if (!Array.isArray(activitySpec?.enchantChanges) || !activitySpec.enchantChanges.length || !activitySpec.effectId) continue;
       effects.push({
@@ -1024,7 +1112,7 @@ ${activitySpec.macroCommand}
         transfer: false,
         disabled: false,
         duration: activitySpec.duration?.seconds ? { seconds: activitySpec.duration.seconds } : {},
-        changes: activitySpec.enchantChanges.map(enchantChange),
+        system: { changes: activitySpec.enchantChanges.map(enchantChange) },
         flags: { [MODULE_ID]: { effect: "suite-enchantment" } }
       });
     }
@@ -1324,10 +1412,12 @@ ${activitySpec.macroCommand}
             units: movement.units ?? "ft"
           },
           senses: {
-            darkvision: actorSpec.darkvision ?? 0,
-            blindsight: actorSpec.blindsight ?? 0,
-            tremorsense: actorSpec.tremorsense ?? 0,
-            truesight: actorSpec.truesight ?? 0,
+            ranges: {
+              darkvision: actorSpec.darkvision ?? 0,
+              blindsight: actorSpec.blindsight ?? 0,
+              tremorsense: actorSpec.tremorsense ?? 0,
+              truesight: actorSpec.truesight ?? 0
+            },
             units: "ft",
             special: actorSpec.senses ?? ""
           }
@@ -1418,6 +1508,9 @@ ${activitySpec.macroCommand}
   function summonActivityDocument(item, spec, activitySpec, actorsByProfileId) {
     const SummonActivity = CONFIG.DND5E.activityTypes.summon.documentClass;
     const baseActivity = new SummonActivity({}, { parent: item }).toObject();
+    const useCost = useCostForActivity(activitySpec.chargeCost, spec.uses);
+    const activityId = activitySpec.activityId
+      ?? generatedDocumentId(`${spec.name} ${activitySpec.activityName ?? "Summon"}`);
     const summonProfiles = summonProfilesFromActivity(activitySpec).length
       ? summonProfilesFromActivity(activitySpec)
       : (spec.summonProfiles ?? []);
@@ -1436,13 +1529,13 @@ ${activitySpec.macroCommand}
     });
     const creatureSizes = Array.from(new Set(summonProfiles.map(profile => profile.actor?.size ?? "med")));
     const creatureTypes = Array.from(new Set(summonProfiles.map(profile => profile.actor?.type ?? "beast")));
-    return foundry.utils.mergeObject(baseActivity, {
-      _id: assertActivityId(activitySpec.activityId),
+    const activity = foundry.utils.mergeObject(baseActivity, {
+      _id: assertActivityId(activityId),
       type: "summon",
       name: activitySpec.activityName ?? `Summon ${spec.name}`,
       img: activitySpec.activityImg ?? spec.img,
       activation: { type: activitySpec.activationType ?? "action", value: null, condition: activitySpec.activationCondition ?? "", override: false },
-      consumption: activitySpec.chargeCost ? activityConsumption(activitySpec.chargeCost, activitySpec.chargeScaling) : activityConsumptionNone(),
+      consumption: useCost ? activityConsumption(useCost, activitySpec.chargeScaling) : activityConsumptionNone(),
       description: { chatFlavor: activitySpec.chatFlavor ?? "" },
       duration: durationData(activitySpec.duration),
       effects: [],
@@ -1473,6 +1566,7 @@ ${activitySpec.macroCommand}
         requireMagic: true
       }
     }, { inplace: false });
+    return forceSummonUseConfirmation(activity, { profileCount: profiles.length, useCost });
   }
 
   async function createNativeMultiProfileSummon(spec, itemFolder, actorFolder) {
@@ -1744,7 +1838,7 @@ ui.notifications.info(ITEM_NAME + " light toggled on.");
   }
 
   async function createArtifactWeaponHybrid(spec, folder, actorFolder) {
-    const effects = (spec.passiveEffects ?? []).map(effect => transferEffectFromSpec(spec, effect));
+    const effects = passiveEffectDocuments(spec);
     if (spec.toggleLight) effects.push(lightTriggerEffect(spec.toggleLight));
     const actorsByProfileId = new Map();
     const createdActors = [];
@@ -2132,7 +2226,7 @@ for (const target of targets) {
 
   for (const spec of ITEMS) {
     const factory = FACTORIES[spec.kind];
-    const result = ["nativeSummon", "nativeMultiProfileSummon", "casterUtilityEquipment", "equipmentPowerSuite", "legendaryEquipmentSuite", "artifactWeaponHybrid"].includes(spec.kind)
+    const result = ["nativeSummon", "nativeMultiProfileSummon", "nativeEnchant", "casterUtilityEquipment", "equipmentPowerSuite", "legendaryEquipmentSuite", "artifactWeaponHybrid", "multiActivityStaff"].includes(spec.kind)
       ? await factory(spec, itemFolder, actorFolder)
       : await factory(spec, itemFolder);
 
@@ -2162,4 +2256,4 @@ for (const target of targets) {
   };
 }
 
-export { forceExplicitChoiceOnAttack, itemHasExplicitActivityChoices, multiActivityStaffActivityLists, runDungeonMastersForge };
+export { forceExplicitChoiceOnAttack, forceSummonUseConfirmation, itemHasExplicitActivityChoices, multiActivityStaffActivityLists, runDungeonMastersForge };

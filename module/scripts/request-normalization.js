@@ -97,10 +97,20 @@ function parseFields(request) {
   return fields;
 }
 
+function explicitNameValue(value) {
+  const text = compactText(value);
+  if (!text) return "";
+  const beforeInstruction = text.match(/^(.{2,80}?)[.!?]\s+(?=(?:make|create|build|design|craft|generate)\b)/i)?.[1];
+  return compactText(beforeInstruction ?? text);
+}
+
 function firstTitleLine(request) {
   const line = String(request ?? "").split(/\r?\n/).map(value => value.trim()).find(Boolean) ?? "";
-  if (!line || line.includes(":") || line.length > 80 || /^(make|create|build|design|craft|generate)\b/i.test(line)) return "";
-  return line;
+  if (!line || line.includes(":") || /^(make|create|build|design|craft|generate)\b/i.test(line)) return "";
+  const beforeInstruction = line.match(/^(.{2,80}?)[.!?]\s+(?=(?:make|create|build|design|craft|generate)\b)/i)?.[1];
+  if (beforeInstruction) return compactText(beforeInstruction);
+  if (line.length > 80) return "";
+  return compactText(line);
 }
 
 function splitItemRequests(request) {
@@ -143,15 +153,15 @@ function detectRarity(text, fields = {}) {
 }
 
 function detectExplicitName(text, fields = {}) {
-  const explicit = compactText(fields["item name"] ?? fields.name);
+  const explicit = explicitNameValue(fields["item name"] ?? fields.name);
   if (explicit) return explicit;
   if (/\balchemist(?:'s)?\s+fire\b/i.test(text)) return "Alchemist Fire";
   if (/\bacid\s+flask\b/i.test(text)) return "Acid Flask";
   if (/\bholy\s+water\b/i.test(text)) return "Holy Water";
   const title = firstTitleLine(text);
   if (title) return title;
-  const named = String(text ?? "").match(/\b(?:named|called)\s+["']?([^"'.,;\n]+)["']?/i)?.[1]?.trim();
-  return named ?? "";
+  const named = String(text ?? "").match(/\b(?:named|called)\s+(?:"([^"]+)"|'([^']+)'|(.+?))(?=\s+(?:with|that|which|who|it|once|as|while|requiring|requires)\b|[.,;\n]|$)/i);
+  return compactText(named?.[1] ?? named?.[2] ?? named?.[3]);
 }
 
 function detectMagicalBonus(text, baseItem = "", { skipDefault = false } = {}) {

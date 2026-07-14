@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
-import { applyDefaultLeveledSpellCharges, applyForgeSpecDefaults, autoSelectSrdChoiceSpells, dedupeRecognizedSpellActivities, reconcilePlannedSrdSpellActivities, repairNamedSrdSpellActivities, requestedSpellChoiceCount } from "../scripts/srd-spell-enrichment.js";
+import { SPELL_LIBRARY, applyDefaultLeveledSpellCharges, applyForgeSpecDefaults, autoSelectSrdChoiceSpells, dedupeRecognizedSpellActivities, reconcilePlannedSrdSpellActivities, repairNamedSrdSpellActivities, requestedSpellChoiceCount } from "../scripts/srd-spell-enrichment.js";
 
 assert.equal(requestedSpellChoiceCount("It has 10 charges with 3 spells of your choice."), 3);
+
+const detectThoughtsProfile = SPELL_LIBRARY.find(profile => profile.name === "Detect Thoughts");
+assert.equal(detectThoughtsProfile.duration.concentration, true);
+assert.equal(detectThoughtsProfile.range.units, "self");
 
 const compatibleSpell = name => ({
   status: "compatible",
@@ -411,6 +415,7 @@ const repairedStaffActivity = await repairNamedSrdSpellActivities({
   activities: [{
     activityId: "StaffFireball001",
     activityName: "Cast Fireball",
+    chargeCost: 5,
     damageParts: [{ number: 8, denomination: 6, bonus: "", types: ["fire"] }],
     save: { ability: "dex", dc: 15 }
   }]
@@ -420,6 +425,8 @@ const repairedStaffActivity = await repairNamedSrdSpellActivities({
 });
 
 assert.equal(repairedStaffActivity.applied, true);
+assert.equal(repairedStaffActivity.spec.activities[0].save.dc, 13, "A stale generated DC must not override the unspecified-DC baseline.");
+assert.equal(repairedStaffActivity.spec.activities[0].chargeCost, 1, "A non-charge spell use must not retain a stale spell-level cost.");
 assert.equal(repairedStaffActivity.spec.activities[0].target.template.type, "sphere");
 assert.equal(repairedStaffActivity.spec.activities[0].target.template.size, 20);
 assert.equal(repairedStaffActivity.spec.activities[0].range.value, 150);
@@ -631,7 +638,7 @@ const defaultedSpec = applyForgeSpecDefaults({
 
 assert.equal(defaultedSpec.applied, true);
 assert.equal(defaultedSpec.spec.magicalBonus, "1");
-assert.equal(defaultedSpec.spec.saveActivities[0].save.dc, 15);
+assert.equal(defaultedSpec.spec.saveActivities[0].save.dc, 13);
 
 const sanitizedArmorBonus = applyForgeSpecDefaults({
   kind: "shieldArmorBonus",
