@@ -6,7 +6,7 @@
 - Added first-launch migration for legacy world and client settings without overwriting settings already stored under the new package ID.
 - Kept legacy generated-item flags readable while writing all new document flags under `dungeon-masters-forge`.
 - Displayed safe structured remote error messages, error codes, and request IDs instead of reducing service failures to a bare HTTP status.
-- Removed the obsolete user-facing planning-tier warnings; launch-day support tiers do not gate module features.
+- Removed obsolete user-facing planning-tier warnings; no launch-day feature gates are active.
 - Added a disabled-by-default Free Forge release configuration for a baked HTTPS endpoint.
 - Enabled private release builds to select Free Forge automatically on first launch without endpoint or token entry.
 - Unified remote connection checks and compilation across Bring Your Own API and Free Forge providers.
