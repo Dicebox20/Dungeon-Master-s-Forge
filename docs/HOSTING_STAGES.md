@@ -38,7 +38,7 @@ Plain-language test:
 
 "Can a few outside testers install, connect, and use it without chaos?"
 
-## Stage 3: Safe For Public project Hosting
+## Stage 3: Safe For Public Hosting
 
 This is the bar for offering hosted generation as a real public service.
 
@@ -46,7 +46,6 @@ Must be true:
 
 - the permanent project hostname and TLS certificate are active
 - the stable module manifest uses the production endpoint
-- project messaging does not imply access control features that are not active
 - abuse protection and rate limiting are in place
 - uptime expectations are realistic
 - support burden is manageable
@@ -63,12 +62,10 @@ Current project position:
 - **Local use:** ready
 - **Invited tester hosting:** active through the `2.23.0-test.2` package-identity migration candidate; local compile-and-create smoke pass is complete, with second-machine confirmation still pending
 - **Public free hosting:** technically live, pending the permanent hostname and stable-manifest promotion gate
-- **project access control hosting:** intentionally deferred at launch
 
 ## Recommended Launch Sequence
 
 1. Launch the module publicly.
 2. Promote the verified Free Forge tester path to the stable manifest.
 3. Keep Bring Your Own API as an optional independent workflow.
-4. Use early release as a community-oriented planning milestone.
-5. Add hosted access and access control logic later when Stage 3 is genuinely ready.
+4. Add hosted access controls later when Stage 3 is genuinely ready.

@@ -82,22 +82,13 @@ Do not clear daily or monthly quota rows casually during public use; reserve res
 
 Do not delete the testing branch while any tester installation still uses its manifest.
 
-## 5. project Quiet Launch
-
-Publish only the launch-day tiers:
-
-- **Apprentice (Free):** module access plus 20 hosted generation requests per calendar month
-- **launch access:** No additional product gate at launch
-
-Link project visitors to the GitHub README, stable manifest, known limitations, and bug-report template. Avoid advertising access control checks, image generation, scene transfer, or other roadmap features as available.
-
-## 6. Foundry Staff Submission Pass
+## 5. Foundry Staff Submission Pass
 
 1. Re-read `docs/FOUNDRY_SUBMISSION_BRIEF.md`.
 2. Confirm the final package media is human-authored and current.
 3. Confirm the package description and README explain that generation happens only at runtime in response to a GM prompt.
 4. Confirm the listing belongs in the `AI Tools` category.
-5. Keep the install links, screenshots, demo prompts, and support links identical across Foundry and project surfaces.
+5. Keep the install links, screenshots, demo prompts, and support links consistent across public project surfaces.
 
 ## First 24 Hours
 
