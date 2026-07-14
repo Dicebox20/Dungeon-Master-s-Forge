@@ -14,7 +14,7 @@ Updated: 2026-07-03
 - A local true AI compile has succeeded end to end without creating a world document during the smoke proof.
 - The official Droplet service runs `1.6.0` behind HTTPS with bounded model-output retry and preserved rollback backups.
 - The official Droplet service now has a documented quota-maintenance path for trusted tester resets via `npm run quota:admin`.
-- A separate `2.23.0-test.2` manifest migrates the package identity, automatically connects invited testers to Free Forge, removes obsolete project planning gates, and includes the current live-tester normalization repairs.
+- A separate `2.23.0-test.2` manifest migrates the package identity, automatically connects invited testers to Free Forge, and includes the current live-tester normalization repairs.
 - The public manifest and stable release ZIP target now agree on `2.23.0` in the workspace, and the module suite will fail fast if that archive goes missing locally.
 - A live Foundry pass on the current machine now succeeds through hosted Free Forge compile, review, approval, and item creation for a simple `weaponExtraDamage` item.
 
@@ -29,12 +29,10 @@ Updated: 2026-07-03
    - leave the service terminal open during local testing if detached launchers do not stay alive reliably
 6. Repeat one Foundry-side hosted Free Forge live compile on a second machine, specifically using one mixed-family prompt from the `hybrid` regression pack.
 
-## Needed Before project Promotion
+## Needed Before Public Promotion
 
-1. Review [PROJECT_LAUNCH_CHECKLIST.md](./PROJECT_LAUNCH_CHECKLIST.md) and keep it aligned with the real release state.
-2. Review [FOUNDRY_SUBMISSION_BRIEF.md](./FOUNDRY_SUBMISSION_BRIEF.md) and keep the staff-facing answers aligned with the real release state.
-3. Keep README language explicit about the difference between the hosted Free Forge tester lane and the stable public release.
-4. Keep project copy explicit about the real hosted limits, current staging/launch status, and fallback Bring Your Own API support.
+1. Review [FOUNDRY_SUBMISSION_BRIEF.md](./FOUNDRY_SUBMISSION_BRIEF.md) and keep the staff-facing answers aligned with the real release state.
+2. Keep README language explicit about the difference between the hosted Free Forge tester lane and the stable public release.
 5. Gather at least one clean screenshot of:
    - the split Description/Result workflow
    - a successful generated item in Foundry
@@ -64,6 +62,5 @@ Updated: 2026-07-03
 ## Still Deferred
 
 - Automatic Hosted/Free Forge access in the stable manifest until the project-owned hostname and final public-module smoke pass exist
-- project access control enforcement
 - Active ally auras without a compatible automation path
 - Cauldron of Plentiful Resources integration until a compatible release exists

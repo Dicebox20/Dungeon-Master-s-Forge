@@ -69,10 +69,8 @@
 - Secret-free provider configuration profile export/import contract. Implemented in V2.12.
 - Bring Your Own API adapter, configuration UI, readiness gating, and mocked transport tests. Implemented in V2.15.
 - Remote health checks and mock-vs-live connection verification. Implemented in V2.18.
-- Tier catalog scaffolding and stable feature ids for future Hosted Forge access control checks. Implemented in workspace.
-- Tier-aware offline request review notes keyed to a selected planning tier. Implemented in workspace.
 - Disabled-by-default Free Forge release configuration and automatic first-launch provider selection for private hosted builds. Implemented in workspace; public activation waits for a stable HTTPS hostname.
-- Hosted generation service with project access control checks.
+- Hosted generation service with production authentication and abuse protection.
 - Server-side secrets, usage limits, logging controls, and abuse protection.
 - Optional item-image generation after text generation is stable.
 - Opt-in remote error report uploads to the hosted Droplet, with explicit GM consent, API-key redaction, prompt/item/world-data exclusion by default, request limits, and retention controls.
@@ -116,7 +114,7 @@
 - Add a Founding Tier track for item-linked and spell-linked scene transfer mechanics that build on the stable V2 item engine instead of replacing it.
 - Support reviewed pocket-dimension and maze-style transfers through premade, configurable scene templates rather than unrestricted map generation.
 - Add optional Monk's Active Tile Triggers integration for supported transfer, return, exit, and fail-state flows when a compatible version is detected.
-- Add early supporter item-icon image generation as an optional premium pass that can create bespoke item icons for generated items without changing the portable mechanical output.
+- Add optional bespoke item-icon image generation without changing the portable mechanical output.
 - Generate safe transfer/return utilities for mechanics such as pocket dimensions, cursed keys, Maze variants, banishment-style realm effects, and similar isolated-scene powers.
 - Keep all realm-transfer features opt-in, clearly labeled as advanced automation, and separate from the portable baseline item output.
 
@@ -128,9 +126,7 @@
 - Explain that private provider credentials should not be shared in chats, screenshots, videos, logs, GitHub, Reddit, Discord, or other public places.
 - Document that custom and local endpoints must speak the Dungeon Master's Forge compile contract; local model support is not plug-and-play unless an adapter returns the Forge format reliably.
 - Document supported item families, known limitations, review notes, Foundry AI Tools policy framing, roadmap, changelog, and FAQ.
-- Prepare a project launch packet that stays honest about launch-day scope: Free tier is real access, early supporter is support-first, and project access controls are not active yet.
 - Prepare a Foundry staff handoff packet with compliance notes, install links, smoke-test notes, and the exact hosted-service behavior expected during review.
-- Add public links for project, Ko-fi, YouTube, X/Twitter, Threads, Instagram, Reddit, and Discord when launch materials are finalized.
 - Track future GitHub issue conversion with labels such as `bug`, `release-blocker`, `byo-api`, `item-mapping`, `documentation`, `testing`, `foundry-policy`, and `marketing`.
 
 ## Deferred Automation

@@ -136,7 +136,7 @@ The Forge window's **Diagnostics** command runs six high-risk compiler families 
 
 The confirmed factory list and implementation notes are in `docs/supported-patterns.md`. The Bring Your Own API network envelope is documented in `docs/provider-contract.md`.
 
-Current milestones and deferred automation are tracked in `ROADMAP.md`. Tier planning and early access control scaffolding live in `docs/project-tiers.md` and `docs/tier-gating-plan.md`, with an offline planning-tier review pass now available in the Forge settings workflow.
+Current milestones and deferred automation are tracked in `ROADMAP.md`.
 
 ## Scope
 

@@ -111,7 +111,6 @@ Then:
 ## Current Known Limits
 
 - Free Forge is a temporary tester service and still uses a staging hostname.
-- project access control enforcement is not live yet.
 - On some local Windows setups, the reference AI service is more reliable when left running in an open terminal window during testing.
 - Ally aura automation is still deferred.
 - Class-resource restoration automation is still deferred.

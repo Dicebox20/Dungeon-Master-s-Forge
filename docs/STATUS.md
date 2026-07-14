@@ -22,7 +22,6 @@ Historical validation notes below still mention earlier `2.23.0-test.*` smoke pa
 - Synced the public module tests, docs, examples, and the live provider-draft compile fix needed for the `2.21.7` candidate.
 - Added LAN-testing guidance for the reference AI service so other trusted computers can reach the Forge endpoint on a private network.
 - Synced the reference AI service and module docs forward to the new client-key OpenAI flow for Bring Your Own API.
-- Added a dedicated project launch checklist to keep launch-facing work separate from the long-term roadmap.
 - Added a trusted-tester quickstart and basic GitHub issue templates so outside testers have a cleaner launch path.
 - Promoted the compact review-note badge polish into the packaged `2.21.7` build and installed it into Foundry while the app was closed.
 - Restored the missing Items sidebar Forge launcher in the tested `2.21.7` build and rebuilt the release ZIPs after live verification.
@@ -74,7 +73,6 @@ Historical validation notes below still mention earlier `2.23.0-test.*` smoke pa
 - Read-only native DND5e resolution now covers modern spell, equipment, actor, monster feature, and roll-table lookup without mutating compendium content.
 - The reference AI service supports private server-key, personal client-key, and bounded public free-tier deployments. Service `1.6.0` is live on the official Droplet with a 20-generation calendar-month client allowance and one bounded invalid-output retry; Hosted Forge remains disabled in the stable public module until a project-owned hostname and final module smoke pass exist.
 - Cauldron of Plentiful Resources remains optional and deferred because its current release is incompatible with this Foundry version.
-- The launch-day project plan is now centered on a real free public tier plus a support-first early supporter tier, with access control-gated hosting deferred.
 - The roadmap now tracks charge-scaled multi-spell items where spell level is the default charge cost and extra charge spend can upcast supported SRD spells.
 - Exact-name SRD spell requests should prefer system-native spell activity provenance before falling back to synthesized activities when the Foundry DND5e schema allows it.
 - Opt-in remote error report uploads are now tracked as a hosted-support improvement. They should remain disabled until redaction, consent, retention, and rate limits are implemented.
@@ -127,4 +125,3 @@ Historical validation notes below still mention earlier `2.23.0-test.*` smoke pa
 See:
 
 - `docs/RELEASE_TASKS.md`
-- `docs/PROJECT_LAUNCH_CHECKLIST.md`

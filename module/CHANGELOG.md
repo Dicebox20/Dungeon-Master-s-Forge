@@ -6,7 +6,7 @@
 - Added first-launch migration for legacy world and client settings without overwriting settings already stored under the new package ID.
 - Kept legacy generated-item flags readable while writing all new document flags under `dungeon-masters-forge`.
 - Displayed safe structured remote error messages, error codes, and request IDs instead of reducing service failures to a bare HTTP status.
-- Removed the obsolete user-facing project planning tier and tier-review warnings; launch-day support tiers do not gate module features.
+- Removed the obsolete user-facing planning-tier warnings; launch-day support tiers do not gate module features.
 - Added a disabled-by-default Free Forge release configuration for a baked HTTPS endpoint.
 - Enabled private release builds to select Free Forge automatically on first launch without endpoint or token entry.
 - Unified remote connection checks and compilation across Bring Your Own API and Free Forge providers.
@@ -71,8 +71,8 @@
 
 ## 2.21.2 - 2026-06-29
 
-- Added early supporter roadmap coverage for optional bespoke item-icon image generation.
-- Synced the packaged module contents after the crash so the installed archive, roadmap, and project tier notes match the current workspace.
+- Added roadmap coverage for optional bespoke item-icon image generation.
+- Synced the packaged module contents after the crash so the installed archive and roadmap match the current workspace.
 
 ## 2.21.1 - 2026-06-29
 
@@ -140,7 +140,7 @@
 - Persisted endpoint and model as client settings while keeping API tokens out of Foundry settings and diagnostics.
 - Gated remote compilation on provider readiness and retained normal Foundry validation and explicit approval before creation.
 - Added mocked provider-adapter coverage without making real network requests or using credentials.
-- Kept Hosted Forge disabled pending authentication, access control, rate-limit, and abuse-protection work.
+- Kept Hosted Forge disabled pending authentication, rate-limit, and abuse-protection work.
 
 ## 2.14.0 - 2026-06-27
 

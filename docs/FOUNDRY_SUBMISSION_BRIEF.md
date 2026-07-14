@@ -52,7 +52,6 @@ The public package surface should remain human-authored and curated:
 - changelog notes
 - screenshots
 - demo video narration
-- project copy
 - Foundry listing copy
 
 Generated runtime items are user-created world content, not packaged release assets.
@@ -94,7 +93,6 @@ If Foundry staff ask what should be tested, the most useful smoke pass is:
 
 - hybrid requests can still surface manual-review notes when multiple mechanics collide
 - unsupported or underspecified mechanics should degrade into readable review notes instead of silent automation
-- project access control enforcement is not active at launch
 - advanced scene-transfer features, aura automation, and premium image generation remain roadmap items
 
 ## Submission Packet Checklist
