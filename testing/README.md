@@ -1,26 +1,245 @@
-# Dungeon Master's Forge Tester Channel
+# Dungeon Master's Forge Tester Guide
 
-This channel is for invited pre-launch testers. It uses the new `dungeon-masters-forge` package identity and automatically selects the hosted **Free Forge** provider.
+Welcome, and thank you for helping us test Dungeon Master's Forge. This is a temporary pre-launch tester channel for Foundry VTT and DND5e.
 
-## Install
+## Contents
 
-Paste this URL into Foundry VTT's **Install Module** manifest field:
+- [Start Here](#start-here)
+- [Install the Tester Build](#install-the-tester-build)
+- [Run Your First Test](#run-your-first-test)
+- [Prompt Guidelines](#prompt-guidelines)
+- [What Free Forge Can Do](#what-free-forge-can-do)
+- [Current Free Forge Limits](#current-free-forge-limits)
+- [What We Need From Testers](#what-we-need-from-testers)
+- [Report a Problem](#report-a-problem)
+- [Bring Your Own API](#bring-your-own-api)
+- [Keep API Keys Safe](#keep-api-keys-safe)
+- [Feedback Template](#feedback-template)
 
-`https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/dm_forge/tester/testing/module.json`
+## Start Here
 
-If a previous package version is installed, disable it before enabling **Dungeon Master's Forge V2**. Keep it installed through the first launch so the new module can copy its saved settings. Existing generated-item flags remain compatible. Free Forge does not require an endpoint, API token, or personal OpenAI key.
+The easiest way to help is:
 
-## Testing Allowance
+1. Install the tester build.
+2. Leave the provider set to **Free Forge**.
+3. Try a few item prompts.
+4. Review the preview and notes before creating anything.
+5. Tell us what worked and what did not.
 
-- 20 generation requests per client per calendar month
-- Temporary burst and global daily safeguards also apply
-- Failed or rejected generation attempts may count against the allowance
+We are trying to make Foundry item creation easier for people who are not comfortable writing JavaScript or building item data by hand.
 
-This is a temporary testing channel. Its hosted endpoint and update path may change before launch. Do not redistribute it as the final public release.
+## Install the Tester Build
 
-## Build
+1. In Foundry VTT, open **Add-on Modules**.
+2. Click **Install Module**.
+3. Paste this manifest URL:
 
-- Version: `2.23.1-test.36`
-- Archive SHA-256: `FE45ECB7A84E37FDE6E0663E73B12DF5627E28198F6E544A4D0B3E046977F86E`
-- Core module and AI-service regression ring: passing locally
-- Live service: `1.6.0` with bounded invalid-output retry and structured request-id errors
+   `https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/dm_forge/tester/testing/module.json`
+
+4. Install or update **Dungeon Master's Forge**.
+5. Enable the module in your test world.
+6. Open **Game Settings > Configure Settings > Module Settings > Dungeon Master's Forge**.
+7. Confirm that the provider is **Free Forge**.
+8. Click **Check Connection** before your first live test.
+
+The current tester build is `2.23.1-test.43`. Free Forge does not require a personal endpoint, API token, or OpenAI key.
+
+## Run Your First Test
+
+Start with a simple prompt such as:
+
+```text
+Create an uncommon dagger named "Emberglass Dagger" that deals an extra 1d4 fire damage on a hit.
+```
+
+Then:
+
+1. Click **Preview**.
+2. Read the generated item summary.
+3. Read the review notes, including any warnings or Free Forge limitations.
+4. If the result matches your request, check **Approve**.
+5. Click **Create Items**.
+6. Open the created item in Foundry and check its activities, damage, effects, charges, and targeting.
+
+Do not approve an item just to make a test pass. If the result is wrong, keep the item unapproved and report what happened.
+
+## Prompt Guidelines
+
+Choose the kind of test you want before writing the prompt.
+
+### If You Want the Best Chance of Success
+
+Use precise language and leave as few choices as possible for the AI:
+
+1. Name the exact item type, such as longsword, wand, potion, or shield.
+2. Give the item a unique name.
+3. State exact bonuses, dice, damage types, save abilities, DCs, durations, ranges, and targets.
+4. State the number of charges, the cost of each power, and how the charges recover.
+5. Name the spell or SRD creature exactly when you want one specific supported entry.
+6. Say whether attunement is required or not required.
+7. Keep unrelated mechanics in separate prompts when possible.
+
+Example:
+
+```text
+Create a rare longsword named "Ashfang". It requires attunement, gives a +1 magical bonus, and deals an extra 1d6 fire damage on every hit. On a hit, the target makes a DC 13 Constitution save; on a failure, it is poisoned for 1 minute. It has 6 charges, all charges recover on a long rest, and it can cast Burning Hands for 2 charges.
+```
+
+### If You Want to Test the Language Model
+
+Speak plainly, the way you would normally describe an item to another person. Try ordinary wording, typos, slang, incomplete details, and different sentence structures. Do not rewrite the prompt to make it easier after a failure; the wording itself is the test.
+
+When testing everyday language, pay attention to whether the Forge:
+
+- understands the item you meant
+- preserves the important mechanics
+- makes a reasonable assumption and labels it clearly
+- leaves an unsupported detail for manual review instead of inventing a working effect
+- explains any Free Forge limitation honestly
+
+Both styles are useful. Precise prompts test whether a supported mechanic works, while plain-language prompts test the quality of the model interpretation and review process.
+
+## What Free Forge Can Do
+
+Free Forge is designed to help create and review supported DND5e item patterns, including:
+
+- weapons with magical bonuses and extra damage
+- on-hit saving throws, conditions, and passive effects
+- staffs, wands, and other charged items
+- healing items and consumables
+- armor, shields, and enchantments
+- supported summons using exact DND5e SRD creatures
+- items with several supported activities or powers
+
+It creates structured Foundry data and shows review notes before creation. It does not mean that every possible DND5e rule or every creative request is fully automated.
+
+## Current Free Forge Limits
+
+We can currently provide **100 prompts per tester per calendar month**. We are all low-income average Joes, and we are paying for the service out of pocket, so we cannot provide a larger free allowance right now.
+
+The service also has temporary safety limits:
+
+- 10 prompts per minute per client
+- 50 prompts per day across the public service
+- failed or rejected requests may still count because they can use upstream service capacity
+- complex, unsupported, or ambiguous mechanics may be preserved as a warning, Free Forge limitation, or manual-review note
+- exact SRD summons require an installed DND5e SRD actor with the expected name
+- the service does not create macros, scripts, automatic migrations, campaign content, or unsafe executable data
+
+If you have your own compatible API setup, **Bring Your Own API** bypasses the DMF monthly allowance. Your provider's own billing, usage limits, and terms still apply. A ChatGPT or Claude subscription does not automatically become API credit.
+
+## What We Need From Testers
+
+Please try both straightforward prompts and prompts with unusual wording, typos, slang, or different levels of detail. We especially need:
+
+- simple weapons with extra damage
+- weapons with on-hit saving throws and conditions
+- charged spells and long-rest recovery
+- healing formulas and one-creature targeting
+- armor, shields, consumables, and enchantments
+- summons and supported hybrid items
+- prompts that leave one detail open so you can review our assumptions
+
+For each test, please look at the preview before creation. When possible, open the created item and try the relevant activity safely. We are especially interested in whether the item looks right in Foundry and whether the activity behaves as expected.
+
+## Report a Problem
+
+### Report Failed Item
+
+Use **Report Failed Item** from the Forge window when a prompt produces a warning, failure, or clearly incorrect item. Include the expected result and what actually happened.
+
+This feature can be buggy. If it does not open, submit, or stay visible, do not get stuck on it. Try another prompt and send us the details manually instead.
+
+### Anonymous Error Reports
+
+If you are comfortable helping with technical diagnostics:
+
+1. Open **Forge Settings**.
+2. Turn on **Anonymous Error Reports**.
+3. Save the settings.
+4. Reproduce the problem once.
+5. Send us the request ID or a short description of what happened.
+
+Reports are intended to contain redacted technical summaries. Never send passwords, API keys, private campaign content, or personal information.
+
+## Bring Your Own API
+
+Use this section only if you want to use your own provider account instead of the shared Free Forge allowance.
+
+### Important Compatibility Note
+
+DMF does **not** send its request directly to a normal OpenAI or Claude chat endpoint. The endpoint in Forge Settings must be a **Forge-compatible compile endpoint** that accepts the DMF request format and returns the structured Forge response format.
+
+That usually means one of these:
+
+- a DMF-compatible service you run locally or on your own server
+- a trusted Forge-compatible service provided by a team or host
+- a compatible adapter that translates the DMF request into your provider's API format
+
+Do not paste `https://api.openai.com/v1` or a normal Claude API URL into the DMF endpoint field unless the service in front of it explicitly supports the Forge contract.
+
+### Get Provider Access
+
+API billing is separate from ChatGPT or Claude subscriptions. You may need to add billing details or prepaid credit with the provider. These third-party guides explain the general setup process:
+
+- [TechRadar: How to use the ChatGPT API to make your own apps](https://www.techradar.com/how-to/how-to-use-chatgpt-api-to-make-your-own-apps)
+- [Zapier: How to get started with ChatGPT/OpenAI](https://help.zapier.com/hc/en-us/articles/14860148802829-How-to-get-started-with-ChatGPT-OpenAI-on-Zapier)
+- [Puter: How to get an Anthropic Claude API key](https://developer.puter.com/tutorials/how-to-get-anthropic-api-key/)
+
+Provider dashboards and prices change, so check the provider's current billing screen before adding funds. The linked tutorials are third-party guides, not endorsements by Dungeon Master's Forge.
+
+### Configure DMF
+
+1. Open **Forge Settings**.
+2. Set **Generation provider** to **Bring Your Own API**.
+3. Enter the full URL of your Forge-compatible compile endpoint.
+4. Enter the model name allowed by that service.
+5. Paste the service token or personal provider key required by that service into **API token**.
+6. Leave **Remember token on this device** off unless this is a trusted computer.
+7. Click **Check Connection**.
+8. Save the settings and run a small test prompt first.
+
+For the local reference service, the compile endpoint is:
+
+`http://localhost:8788/v1/forge/compile`
+
+The current reference model is:
+
+`gpt-5.4-mini`
+
+The local service must be running and configured as a Forge-compatible service before Foundry can use that endpoint.
+
+## Keep API Keys Safe
+
+- Never post an API key in a Discord message, email, screenshot, issue, or public document.
+- Use a separate key for testing and set a small provider spending limit.
+- Do not use someone else's key.
+- Delete or rotate a key immediately if it may have been exposed.
+- Only enable **Remember token on this device** on a computer you control.
+- Do not use personal campaign documents as test payloads.
+
+## Feedback Template
+
+Copy and fill this out when something needs attention:
+
+```text
+DMF tester feedback
+
+Prompt:
+
+Item name:
+
+Provider:
+
+Expected result:
+
+Actual result:
+
+Foundry/DND5e versions:
+
+Console error or screenshot:
+
+Exported item JSON attached: yes/no
+```
+
+For a successful test, a short note about what you tried and what worked is enough.
