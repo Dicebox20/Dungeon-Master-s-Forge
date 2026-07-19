@@ -33,6 +33,19 @@ const oil = review("Oil of Ember Edge\nUncommon consumable oil. As an action, ap
 assert.ok(oil.mechanics.some(value => value.includes("Enchant Weapon for 1 hour")));
 assert.ok(oil.mechanics.some(value => value.includes("Adds 1d4 fire damage")));
 
+const plainLanguageOil = buildReviewSummaries([{
+  kind: "nativeEnchant",
+  name: "Stormglass Oil",
+  rarity: "uncommon",
+  duration: { value: 1, units: "hour", seconds: 3600 },
+  restrictions: { type: "weapon" },
+  enchantChanges: [
+    { key: "system.properties", mode: "ADD", value: "mgc" },
+    { key: "system.damage.parts", mode: "CUSTOM", value: "+1d4 lightning damage on hit" }
+  ]
+}], null)[0];
+assert.ok(plainLanguageOil.mechanics.some(value => value.includes("Adds 1d4 lightning damage")));
+
 const magicArmor = buildReviewSummaries([{
   kind: "shieldArmorBonus",
   name: "Moonshadow Leather",
@@ -70,6 +83,50 @@ assert.deepEqual(unresolved.notes.filter(note => note.state === "unresolved").ma
   "Unmapped spell casting"
 ]);
 assert.ok(unresolved.notes.every(note => note.message.length > 0));
+
+const freeForgeUnresolved = buildReviewSummaries([{
+  kind: "passiveEffectEquipment",
+  name: "Free Forge Boundary Test",
+  rarity: "rare",
+  unresolvedMechanics: [{
+    label: "Ally-affecting aura",
+    requestedText: "Allies within 10 feet gain +1 AC.",
+    handling: "Review and add an aura manually if desired."
+  }]
+}], {
+  providerLabel: "Free Forge",
+  assumptions: [],
+  warnings: [],
+  deferred: []
+})[0];
+assert.equal(freeForgeUnresolved.notes.filter(note => note.state === "free-forge").length, 1);
+assert.match(freeForgeUnresolved.notes.find(note => note.state === "free-forge")?.message ?? "", /simplified this result/i);
+
+const byoUnresolved = buildReviewSummaries([{
+  kind: "passiveEffectEquipment",
+  name: "BYO Boundary Test",
+  rarity: "rare",
+  unresolvedMechanics: [{ label: "Ally-affecting aura", requestedText: "Allies gain +1 AC." }]
+}], {
+  providerLabel: "Bring Your Own API",
+  assumptions: [],
+  warnings: [],
+  deferred: []
+})[0];
+assert.equal(byoUnresolved.notes.some(note => note.state === "free-forge"), false);
+
+const notices = buildReviewSummaries([{
+  kind: "weaponConditionOnHit",
+  name: "Notice Test Blade",
+  rarity: "rare",
+  conditionOnHit: { condition: "poisoned", save: { ability: "con", dc: 13 }, durationSeconds: 60 }
+}], {
+  assumptions: [],
+  warnings: ["The request uses standard on-hit rider wording."],
+  deferred: []
+})[0];
+assert.deepEqual(notices.notes.filter(note => note.state === "notice").map(note => note.label), ["Notice"]);
+assert.equal(notices.notes.some(note => note.state === "warning"), false);
 
 assert.equal(weapon.reviewState, "forge-ready");
 assert.equal(weapon.reviewStateLabel, "Forge-ready");
@@ -141,4 +198,4 @@ const consumableProjectile = buildReviewSummaries([{
 }], null)[0];
 assert.equal(consumableProjectile.kindLabel, "Consumable projectile");
 
-export const testedReviewSummaryCount = 24;
+export const testedReviewSummaryCount = 31;

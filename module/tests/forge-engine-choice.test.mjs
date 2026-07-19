@@ -23,8 +23,24 @@ globalThis.foundry ??= {
     mergeObject
   }
 };
+globalThis.CONST ??= {
+  DOCUMENT_OWNERSHIP_LEVELS: { OWNER: 3 },
+  TOKEN_DISPOSITIONS: { FRIENDLY: 1 }
+};
 
-const { forceExplicitChoiceOnAttack, forceSummonUseConfirmation, itemHasExplicitActivityChoices, multiActivityStaffActivityLists } = await import("../scripts/forge-engine.js");
+const { activityNeedsTargetConfirmation, applyMidiQolActivityDefaults, clonedSrdSummonActorData, forceExplicitChoiceOnAttack, forceSummonUseConfirmation, isFriendlySummon, itemHasExplicitActivityChoices, multiActivityStaffActivityLists, normalizeSrdActorLookupName, suppressMidiTargetConfirmationForUtility } = await import("../scripts/forge-engine.js");
+
+const forgeEngineSource = await (await import("node:fs/promises")).readFile(new URL("../scripts/forge-engine.js", import.meta.url), "utf8");
+assert.doesNotMatch(
+  forgeEngineSource,
+  /img: activitySpec\.activityImg \?\? actorsByProfileId/,
+  "Healing activities must not depend on summon-only actor state."
+);
+assert.match(
+  forgeEngineSource,
+  /const template = target\?\.template \?\? \{\};[\s\S]*const affects = target\?\.affects \?\? \{\};/,
+  "Activity targets must tolerate an explicitly null target card."
+);
 
 assert.equal(itemHasExplicitActivityChoices({}), false);
 assert.equal(itemHasExplicitActivityChoices({
@@ -47,7 +63,7 @@ const originalAttack = {
   }
 };
 
-const guardedAttack = forceExplicitChoiceOnAttack(originalAttack);
+const guardedAttack = forceExplicitChoiceOnAttack(originalAttack, { midiQol: true });
 assert.equal(originalAttack.otherActivityId, "");
 assert.equal(guardedAttack.otherActivityId, "none");
 assert.equal(guardedAttack.otherActivityUuid, "");
@@ -56,18 +72,76 @@ assert.equal(guardedAttack.midiProperties.otherActivityCompatible, true);
 
 const summonWithConfirmation = forceSummonUseConfirmation({
   midiProperties: { forceConsumeDialog: "default", autoConsume: false }
-}, { profileCount: 3, useCost: 1 });
+}, { midiQol: true, profileCount: 3, useCost: 1 });
 assert.equal(summonWithConfirmation.midiProperties.forceConsumeDialog, "always");
 assert.equal(summonWithConfirmation.midiProperties.autoConsume, false);
 
 assert.equal(
-  forceSummonUseConfirmation({ midiProperties: { forceConsumeDialog: "default" } }, { profileCount: 1, useCost: 1 }).midiProperties.forceConsumeDialog,
+  forceSummonUseConfirmation({ midiProperties: { forceConsumeDialog: "default" } }, { midiQol: true, profileCount: 1, useCost: 1 }).midiProperties.forceConsumeDialog,
   "always"
 );
 assert.deepEqual(
-  forceSummonUseConfirmation({ midiProperties: { forceConsumeDialog: "default" } }, { profileCount: 3, useCost: 0 }),
+  forceSummonUseConfirmation({ midiProperties: { forceConsumeDialog: "default" } }, { midiQol: true, profileCount: 3, useCost: 0 }),
   { midiProperties: { forceConsumeDialog: "default" } }
 );
+
+assert.equal(activityNeedsTargetConfirmation({ affects: { type: "self" } }), false);
+assert.equal(activityNeedsTargetConfirmation({ affects: { type: "creature" } }), true);
+assert.equal(activityNeedsTargetConfirmation({ prompt: true }), true);
+assert.deepEqual(
+  applyMidiQolActivityDefaults({ name: "Unchanged" }, { enabled: false, target: { affects: { type: "creature" } }, useCost: 1 }),
+  { name: "Unchanged" }
+);
+assert.deepEqual(
+  applyMidiQolActivityDefaults({ name: "Focused Burst" }, { enabled: true, target: { affects: { type: "creature" } }, useCost: 1 }),
+  {
+    name: "Focused Burst",
+    midiProperties: { confirmTargets: "always", forceConsumeDialog: "always" }
+  }
+);
+assert.equal(suppressMidiTargetConfirmationForUtility({
+  activityName: "Misty Step",
+  target: { affects: { type: "space" } }
+}), true);
+assert.equal(suppressMidiTargetConfirmationForUtility({
+  activityName: "Clairvoyance",
+  target: { affects: { type: "space" }, prompt: true }
+}), false);
+assert.deepEqual(
+  applyMidiQolActivityDefaults({ name: "Misty Step" }, {
+    enabled: true,
+    target: { affects: { type: "space" }, prompt: true },
+    suppressTargetConfirmation: true
+  }),
+  { name: "Misty Step", midiProperties: { confirmTargets: "default" } }
+);
+assert.equal(isFriendlySummon({ description: "Summon a friendly black bear pal." }), true);
+assert.equal(isFriendlySummon({ description: "Summon a hostile imp." }), false);
+assert.equal(normalizeSrdActorLookupName("One Friendly Elephant"), "Elephant");
+assert.equal(normalizeSrdActorLookupName("Friendly Worg"), "Worg");
+assert.equal(normalizeSrdActorLookupName("Elephant"), "Elephant");
+
+const clonedSrdActor = clonedSrdSummonActorData({
+  name: "Pseudodragon",
+  uuid: "Compendium.dnd5e.actors24.ActorPseudodragon",
+  toObject: () => ({
+    _id: "SourceActor000001",
+    name: "Pseudodragon",
+    img: "pseudodragon.webp",
+    prototypeToken: { disposition: 0, texture: { src: "pseudodragon.webp" } },
+    items: [{ _id: "SourceItem0000001", name: "Sting" }],
+    effects: [{ _id: "SourceEffect00001", name: "Magic Resistance" }],
+    flags: { dnd5e: { sourceId: "Compendium.dnd5e.actors24.ActorPseudodragon" } }
+  })
+}, { name: "Friendly Pseudodragon" }, { id: "ForgeSummons" }, { template: "srd-summon-actor", engine: "test" });
+assert.equal(clonedSrdActor._id, undefined);
+assert.equal(clonedSrdActor.items[0]._id, undefined);
+assert.equal(clonedSrdActor.effects[0]._id, undefined);
+assert.equal(clonedSrdActor.name, "Friendly Pseudodragon");
+assert.equal(clonedSrdActor.folder, "ForgeSummons");
+assert.equal(clonedSrdActor.prototypeToken.disposition, 1);
+assert.equal(clonedSrdActor.flags.dnd5e.sourceId, "Compendium.dnd5e.actors24.ActorPseudodragon");
+assert.equal(clonedSrdActor.flags["dungeon-masters-forge"].sourceActorName, "Pseudodragon");
 
 const staffActivities = multiActivityStaffActivityLists({
   activities: [{ activityId: "LegacySave000001", activityName: "Legacy Save", save: { ability: "dex", dc: 15 } }],

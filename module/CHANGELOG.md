@@ -6,7 +6,7 @@
 - Added first-launch migration for legacy world and client settings without overwriting settings already stored under the new package ID.
 - Kept legacy generated-item flags readable while writing all new document flags under `dungeon-masters-forge`.
 - Displayed safe structured remote error messages, error codes, and request IDs instead of reducing service failures to a bare HTTP status.
-- Removed obsolete user-facing planning warnings; no launch-day feature gates are active.
+- Removed obsolete user-facing planning-tier warnings; no launch-day feature gates are active.
 - Added a disabled-by-default Free Forge release configuration for a baked HTTPS endpoint.
 - Enabled private release builds to select Free Forge automatically on first launch without endpoint or token entry.
 - Unified remote connection checks and compilation across Bring Your Own API and Free Forge providers.
@@ -60,7 +60,7 @@
 
 ## 2.21.4 - 2026-06-30
 
-- Fixed Forge Settings event binding when the application template root is the form itself, restoring provider switching, connection checks, utility buttons, and planning saves in the live window.
+- Fixed Forge Settings event binding when the application template root is the form itself, restoring provider switching, connection checks, utility buttons, and planning-tier saves in the live window.
 - Added a regression assertion covering the root-form listener binding used by the settings application.
 
 ## 2.21.3 - 2026-06-30

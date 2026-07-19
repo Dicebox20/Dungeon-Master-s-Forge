@@ -1,21 +1,27 @@
 {
   "id": "dungeon-masters-forge",
-  "title": "Dungeon Master's Forge V2",
-  "description": "Dungeon Master's Forge V2: a reusable DND5e item creation engine for Foundry VTT v14.",
+  "title": "Dungeon Master's Forge",
+  "description": "An unofficial Foundry VTT tool that lets GMs describe DND5e items, review the generated mechanics, and create them only after approval.",
   "authors": [
     {
-      "name": "Dungeon Master's Forge V2 Project"
+      "name": "Dice Box Group"
     }
   ],
-  "version": "2.23.1-test.39",
+  "license": "LICENSE",
+  "version": "2.23.1-test.44",
   "url": "https://github.com/Dicebox20/Dungeon-Master-s-Forge",
   "manifest": "https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/dm_forge/tester/testing/module.json",
-  "download": "https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/dm_forge/tester/testing/releases/dungeon-masters-forge-v2-2.23.1-test.39.zip",
+  "download": "https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/dm_forge/tester/testing/releases/dungeon-masters-forge-v2-2.23.1-test.44.zip",
   "readme": "https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/dm_forge/tester/testing/README.md",
   "changelog": "https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/dm_forge/tester/testing/CHANGELOG.md",
   "compatibility": {
     "minimum": "14",
     "verified": "14"
+  },
+  "flags": {
+    "dungeon-masters-forge": {
+      "verificationHarness": true
+    }
   },
   "relationships": {
     "systems": [

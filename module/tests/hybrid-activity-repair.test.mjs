@@ -1,6 +1,85 @@
 import assert from "node:assert/strict";
 import { repairHybridSpecFromRequest } from "../scripts/hybrid-activity-repair.js";
 
+const giantToothpickRequest = `Create a Longsword named "Giant's Toothpick" that gives a +2 magical bonus and does an additional 2d4 in poison damage. On a successful hit the target must make a DC 13 constitution saving throw or be poisoned for one minute. It has 12 charges that can be used to cast the spells poison spray, ray of sickness, and cloudkill with charges used based on spell level.`;
+const giantToothpickRepair = repairHybridSpecFromRequest({
+  kind: "artifactWeaponHybrid",
+  name: "Giant's Toothpick",
+  description: giantToothpickRequest,
+  weaponType: "martialM",
+  baseItem: "longsword",
+  damage: { base: { number: 1, denomination: 8, bonus: "@mod", types: ["slashing"] } },
+  extraDamageParts: [{ number: 2, denomination: 4, bonus: "", types: ["poison"] }],
+  uses: { max: "12", recovery: [] },
+  unresolvedMechanics: [{
+    category: "unmappedSpell",
+    label: "Spellcasting activities",
+    requestedText: "It has 12 charges that can be used to cast the spells poison spray, ray of sickness, and cloudkill with charges used based on spell level.",
+    reason: "The spell activities were not fully specified.",
+    handling: "Review and add separate activities if needed.",
+    resolved: false
+  }],
+  saveActivities: [],
+  attackActivities: [],
+  utilityActivities: []
+}, giantToothpickRequest);
+
+assert.equal(giantToothpickRepair.applied, true);
+assert.deepEqual(
+  giantToothpickRepair.spec.saveActivities.map(activity => [activity.activityName, activity.chargeCost]),
+  [["Cast Poison Spray", 1], ["Cast Cloudkill", 5]]
+);
+assert.deepEqual(
+  giantToothpickRepair.spec.attackActivities.map(activity => [activity.activityName, activity.chargeCost]),
+  [["Cast Ray of Sickness", 1]]
+);
+assert.equal(giantToothpickRepair.spec.saveActivities[0].save.ability, "con");
+assert.equal(giantToothpickRepair.spec.saveActivities[0].damageParts[0].types[0], "poison");
+assert.equal(giantToothpickRepair.spec.saveActivities[1].target.template.type, "sphere");
+assert.equal(giantToothpickRepair.spec.attackActivities[0].attackType, "ranged");
+assert.equal(giantToothpickRepair.spec.unresolvedMechanics, undefined);
+
+const malformedWeaponHybridRepair = repairHybridSpecFromRequest({
+  kind: "weaponConditionOnHit",
+  name: "Giant's Toothpick",
+  description: giantToothpickRequest,
+  weaponType: "martialM",
+  baseItem: "longsword",
+  damage: { base: { number: 1, denomination: 8, bonus: "@mod", types: ["slashing"] } },
+  extraDamageParts: [{ number: 2, denomination: 4, bonus: "", types: ["poison"] }],
+  uses: { max: "12", recovery: [] },
+  unresolvedMechanics: [{
+    category: "unmappedSpell",
+    label: "Cloudkill",
+    requestedText: "12 charges can be used to cast poison spray, ray of sickness, and cloudkill"
+  }],
+  saveActivities: [
+    { activityName: "Poison Spray", save: { ability: "con", dc: 13 }, damageParts: [] },
+    { activityName: "Ray of Sickness", save: { ability: "dex", dc: 13 }, damageParts: [] }
+  ],
+  attackActivities: [],
+  utilityActivities: []
+}, giantToothpickRequest);
+
+assert.equal(malformedWeaponHybridRepair.spec.kind, "artifactWeaponHybrid");
+assert.deepEqual(
+  malformedWeaponHybridRepair.spec.saveActivities.map(activity => activity.activityName),
+  ["Poison Spray", "Cast Cloudkill"]
+);
+assert.deepEqual(
+  malformedWeaponHybridRepair.spec.attackActivities.map(activity => activity.activityName),
+  ["Ray of Sickness"]
+);
+assert.equal(malformedWeaponHybridRepair.spec.attackActivities[0].attackType, "ranged");
+assert.equal(malformedWeaponHybridRepair.spec.attackActivities[0].damageParts[0].types[0], "poison");
+assert.equal(malformedWeaponHybridRepair.spec.unresolvedMechanics, undefined);
+
+const explicitlyUnbound = repairHybridSpecFromRequest({
+  ...malformedWeaponHybridRepair.spec,
+  attunement: "required"
+}, `${giantToothpickRequest} It does not require attunement.`);
+assert.equal(explicitlyUnbound.spec.attunement, "");
+
 const beaconrend = repairHybridSpecFromRequest({
   kind: "artifactWeaponHybrid",
   name: "Beaconrend",
@@ -72,6 +151,46 @@ assert.equal(fiendStaff.spec.saveActivities[0].chargeCost, 3);
 assert.equal(fiendStaff.spec.summonProfiles.length, 3);
 assert.equal(fiendStaff.spec.summonActivity.activityName, "Summon Fiend");
 assert.equal(fiendStaff.spec.summonActivity.chargeCost, 4);
+
+const dawnmenderExistingHealing = repairHybridSpecFromRequest({
+  kind: "casterUtilityEquipment",
+  name: "Dawnmender's Spark [VIDEO-FF-02]",
+  uses: { max: "6", recovery: [{ period: "longRest", type: "formula", formula: "1" }] },
+  utilityActivities: [{
+    activityId: "DawnmenderHeal01",
+    activityName: "Restore Vitality",
+    chargeCost: 6,
+    range: { units: "self" },
+    target: { affects: { count: "1", type: "self" }, prompt: false },
+    healing: { number: 1, denomination: 6, bonus: "", types: ["healing"] }
+  }]
+}, "Create a Wand named \"Dawnmender's Spark [VIDEO-FF-02]\" with 6 charges. As an action, it can expend 1 charge to restore 2d8+3 hit points to one creature within 60 feet. All expended charges recover at long rest.");
+
+assert.equal(dawnmenderExistingHealing.applied, true);
+assert.deepEqual(dawnmenderExistingHealing.spec.utilityActivities[0].healing, {
+  number: 2,
+  denomination: 8,
+  bonus: "3",
+  types: ["healing"]
+});
+assert.equal(dawnmenderExistingHealing.spec.utilityActivities[0].chargeCost, 1);
+assert.deepEqual(dawnmenderExistingHealing.spec.utilityActivities[0].range, { value: 60, units: "ft" });
+assert.deepEqual(dawnmenderExistingHealing.spec.utilityActivities[0].target, {
+  affects: { count: "1", type: "creature" },
+  prompt: true
+});
+
+const elementalChoiceGrammar = repairHybridSpecFromRequest({
+  kind: "nativeMultiProfileSummon",
+  name: "Choirbone Flute",
+  summonProfiles: [
+    { profileId: "ElementalChoice01", profileName: "Air Elemental", actor: { name: "Friendly Elemental", srdActorName: "Elemental" } },
+    { profileId: "ElementalChoice02", profileName: "Water Elemental", actor: { name: "Friendly Elemental", srdActorName: "Elemental" } }
+  ],
+  summonActivity: { activityId: "ElementalSummon01", activityName: "Summon Elemental" }
+}, "The attuned bearer can activate the flute to summon a friendly elemental for 1 hour. The activator chooses Air Elemental or Water Elemental.");
+
+assert.deepEqual(elementalChoiceGrammar.spec.summonProfiles.map(profile => profile.actor.srdActorName), ["Air Elemental", "Water Elemental"]);
 
 const infernalCalling = repairHybridSpecFromRequest({
   kind: "casterUtilityEquipment",
@@ -219,6 +338,67 @@ const celestialGlaive = repairHybridSpecFromRequest({
 assert.equal(celestialGlaive.applied, true);
 assert.equal(celestialGlaive.spec.saveActivities[0].activityName, "Cast Moonbeam");
 assert.equal(celestialGlaive.spec.summonProfiles[0].profileName, "Celestial Hound");
+
+const surveyorSpectacles = repairHybridSpecFromRequest({
+  kind: "passiveEffectEquipment",
+  name: "Surveyor Spectacles",
+  effects: [{ name: "Surveyor Sight", changes: [
+    { key: "system.skills.ith.prc", mode: "CUSTOM", value: "advantage" }
+  ] }]
+}, "Create spectacles that grant advantage on Intelligence (Investigation) checks and darkvision out to 60 feet.");
+assert.ok(surveyorSpectacles.spec.effects.some(effect => effect.changes.some(change => change.key === "system.skills.inv.roll.mode")));
+assert.ok(surveyorSpectacles.spec.effects.some(effect => effect.changes.some(change => change.key === "system.attributes.senses.ranges.darkvision")));
+assert.equal(surveyorSpectacles.spec.effects.some(effect => effect.changes.some(change => change.key === "system.skills.ith.prc")), false);
+
+const menagerieHorn = repairHybridSpecFromRequest({
+  kind: "nativeMultiProfileSummon",
+  name: "Menagerie Horn",
+  summonProfiles: ["Giant Toad", "Giant Scorpion", "Rhinoceros"].map(profileName => ({
+    profileName,
+    actor: { name: "Friendly One Friendly Beast", srdActorName: "One Friendly Beast", type: "beast" }
+  }))
+}, "Pick one friendly beast: Giant Toad, Giant Scorpion, or Rhinoceros when it shows up.");
+assert.deepEqual(menagerieHorn.spec.summonProfiles.map(profile => profile.actor.srdActorName), ["Giant Toad", "Giant Scorpion", "Rhinoceros"]);
+
+const skeletalMenagerie = repairHybridSpecFromRequest({
+  kind: "nativeMultiProfileSummon",
+  name: "Skeletal Menagerie",
+  summonProfiles: ["Skeleton", "Zombie"].map(profileName => ({
+    profileName,
+    actor: {
+      name: "Friendly One Friendly Skeleton Or Zombie",
+      srdActorName: "One Friendly Skeleton Or Zombie",
+      type: "undead"
+    }
+  }))
+}, "As an action, summon one friendly Skeleton or Zombie for 1 hour.");
+assert.deepEqual(skeletalMenagerie.spec.summonProfiles.map(profile => profile.actor.srdActorName), ["Skeleton", "Zombie"]);
+assert.deepEqual(skeletalMenagerie.spec.summonProfiles.map(profile => profile.actor.name), ["Friendly Skeleton", "Friendly Zombie"]);
+
+const placeholderProfileMenagerie = repairHybridSpecFromRequest({
+  kind: "nativeMultiProfileSummon",
+  name: "Placeholder Profile Menagerie",
+  summonProfiles: ["Dire Wolf", "Giant Spider"].map(profileName => ({
+    profileName,
+    actor: {
+      name: "Friendly Profile When You Use The Item",
+      srdActorName: "Profile When You Use The Item",
+      type: "beast"
+    }
+  }))
+}, "As an action, summon one friendly Dire Wolf or Giant Spider for 1 hour.");
+assert.deepEqual(placeholderProfileMenagerie.spec.summonProfiles.map(profile => profile.actor.srdActorName), ["Dire Wolf", "Giant Spider"]);
+assert.deepEqual(placeholderProfileMenagerie.spec.summonProfiles.map(profile => profile.actor.name), ["Friendly Dire Wolf", "Friendly Giant Spider"]);
+
+const collapsedMenagerieHorn = repairHybridSpecFromRequest({
+  kind: "nativeSummon",
+  name: "Menagerie Horn",
+  summonActor: { name: "Chosen Beast", srdActorName: "Chosen Beast", type: "beast" },
+  unresolvedMechanics: [{ category: "beastChoice", reason: "Choose the beast at the table." }]
+}, "Pick one friendly beast: Giant Toad, Giant Scorpion, or Rhinoceros.");
+assert.equal(collapsedMenagerieHorn.spec.kind, "nativeMultiProfileSummon");
+assert.deepEqual(collapsedMenagerieHorn.spec.summonProfiles.map(profile => profile.profileName), ["Giant Toad", "Giant Scorpion", "Rhinoceros"]);
+assert.equal(collapsedMenagerieHorn.spec.unresolvedMechanics, undefined);
 
 const frostwaveGuardian = repairHybridSpecFromRequest({
   kind: "artifactWeaponHybrid",
@@ -405,9 +585,10 @@ assert.equal(eclipseSovereign.spec.attackActivities[0].attackType, "ranged");
 assert.equal(eclipseSovereign.spec.attackActivities[0].chargeCost, 1);
 assert.equal(eclipseSovereign.spec.attackActivities[0].range.value, 120);
 assert.equal(eclipseSovereign.spec.saveActivities.some(activity => activity.activityName === "Eclipse Bolt"), false);
-assert.equal(eclipseSovereign.spec.summonProfiles[0].actor.items[0].name, "Eclipse Bite");
-assert.equal(eclipseSovereign.spec.summonActivity.activityName, "Summon Eclipse Hound");
-assert.equal(eclipseSovereign.spec.summonProfiles[0].profileName, "Eclipse Hound");
+assert.equal(eclipseSovereign.spec.summonActivity.activityName, "Summon Shadow Mastiff");
+assert.equal(eclipseSovereign.spec.summonProfiles[0].profileName, "Shadow Mastiff");
+assert.equal(eclipseSovereign.spec.summonProfiles[0].actor.srdActorName, "Shadow Mastiff");
+assert.equal(eclipseSovereign.spec.summonProfiles[0].actor.requireSrdActor, true);
 assert.equal(eclipseSovereign.spec.utilityActivities.some(activity => activity.activityName === "Apply Enchantment"), true);
 assert.deepEqual(
   eclipseSovereign.spec.utilityActivities.find(activity => activity.activityName === "Apply Enchantment").enchantChanges.map(change => change.key),
@@ -474,7 +655,11 @@ assert.equal(frostwaveDualSummon.applied, true);
 assert.equal(frostwaveDualSummon.spec.saveActivities[0].activityName, "Tidal Burst");
 assert.equal(frostwaveDualSummon.spec.utilityActivities.filter(activity => activity.activityName === "Summon Reef Shark").length, 1);
 assert.equal(frostwaveDualSummon.spec.utilityActivities.filter(activity => activity.activityName === "Summon Wolf").length, 1);
-assert.equal(frostwaveDualSummon.spec.utilityActivities.find(activity => activity.activityName === "Summon Wolf").summonProfiles[0].actor.items[0].name, "Bite");
+assert.deepEqual(frostwaveDualSummon.spec.utilityActivities.find(activity => activity.activityName === "Summon Wolf").summonProfiles[0].actor, {
+  name: "Friendly Wolf",
+  srdActorName: "Wolf",
+  requireSrdActor: true
+});
 
 const fallbackDefaults = repairHybridSpecFromRequest({
   kind: "equipmentPowerSuite",
@@ -668,6 +853,151 @@ assert.equal(mooncallSummon.applied, true);
 assert.equal(mooncallSummon.spec.summonActivity.activityName, "Summon Wolf");
 assert.equal(mooncallSummon.spec.summonActivity.duration.units, "minute");
 
+const dragonomiconSummon = repairHybridSpecFromRequest({
+  kind: "legendaryEquipmentSuite",
+  name: "the Dragonomicon",
+  uses: { max: "1", spent: 0, recovery: [{ period: "lr", type: "recoverAll" }] },
+  unresolvedMechanics: [{
+    category: "unmappedSpell",
+    label: "draconic spell usage",
+    requestedText: "Spell usage: uses charges",
+    reason: "No specific spell, activity, or resolved spell effect was provided beyond a charge-based resource model."
+  }]
+}, "Create a Book named the Dragonomicon that can be used to summon a Pseudodragon as a companion. The book has 1 charge that recharges after a long rest.");
+
+assert.equal(dragonomiconSummon.applied, true);
+assert.equal(dragonomiconSummon.spec.summonActivity.activityName, "Summon Pseudodragon");
+assert.equal(dragonomiconSummon.spec.summonActivity.chargeCost, 1);
+assert.equal(dragonomiconSummon.spec.summonProfiles[0].actor.srdActorName, "Pseudodragon");
+assert.equal(dragonomiconSummon.spec.summonProfiles[0].actor.requireSrdActor, true);
+assert.equal(dragonomiconSummon.spec.unresolvedMechanics, undefined);
+
+const owlbearSummon = repairHybridSpecFromRequest({
+  kind: "equipmentPowerSuite",
+  name: "Bestiary Beacon",
+  uses: { max: "1", spent: 0, recovery: [{ period: "lr", type: "recoverAll" }] }
+}, "Create a beacon that can summon an Owlbear in an unoccupied space within 30 feet for 1 hour.");
+
+assert.equal(owlbearSummon.applied, true);
+assert.equal(owlbearSummon.spec.summonActivity.activityName, "Summon Owlbear");
+assert.equal(owlbearSummon.spec.summonProfiles[0].actor.srdActorName, "Owlbear");
+assert.equal(owlbearSummon.spec.summonProfiles[0].actor.requireSrdActor, true);
+
+const callInLionSummon = repairHybridSpecFromRequest({
+  kind: "equipmentPowerSuite",
+  name: "Gatecrash Harness",
+  uses: { max: "12", recovery: [{ period: "dawn", type: "formula", formula: "1d6 + 4" }] },
+  saveActivities: [
+    { activityId: "HoldMonster00001", activityName: "Hold Monster", chargeCost: 4, save: { ability: "wis", dc: 17 } },
+    { activityId: "Fly000000000001", activityName: "Fly", chargeCost: 3 }
+  ],
+  unresolvedMechanics: [{
+    category: "summon",
+    label: "Call Lion",
+    requestedText: "Call in a friendly Lion for 1 hour",
+    reason: "No summon actor was provided."
+  }]
+}, "Burn 4 charges to cast Hold Monster at DC 17, 3 charges to cast Fly, or 5 charges to call in a friendly Lion for 1 hour.");
+
+assert.equal(callInLionSummon.applied, true);
+assert.equal(callInLionSummon.spec.summonActivity.activityName, "Summon Lion");
+assert.equal(callInLionSummon.spec.summonActivity.chargeCost, 5);
+assert.equal(callInLionSummon.spec.summonProfiles[0].actor.srdActorName, "Lion");
+assert.equal(callInLionSummon.spec.unresolvedMechanics, undefined);
+
+const utilityPlaceholderCallInLion = repairHybridSpecFromRequest({
+  kind: "equipmentPowerSuite",
+  name: "Gatecrash Harness",
+  uses: { max: "12", recovery: [{ period: "dawn", type: "formula", formula: "1d6 + 4" }] },
+  utilityActivities: [{
+    activityId: "CallFriendlyLion1",
+    activityName: "Call Friendly Lion",
+    chargeCost: 5,
+    duration: { value: 1, units: "hour" },
+    target: { type: "self", value: 1, units: "ft" }
+  }],
+  unresolvedMechanics: [{
+    category: "tableAdjudication",
+    label: "Friendly Lion summon",
+    requestedText: "Burn 5 charges to call in a friendly Lion for 1 hour.",
+    reason: "No summon actor or summon profile statistics were provided."
+  }]
+}, "Burn 4 charges to cast Hold Monster at DC 17, 3 charges to cast Fly, or 5 charges to call in a friendly Lion for 1 hour.");
+
+assert.equal(utilityPlaceholderCallInLion.applied, true);
+assert.equal(utilityPlaceholderCallInLion.spec.utilityActivities.length, 0);
+assert.equal(utilityPlaceholderCallInLion.spec.summonActivity.chargeCost, 5);
+assert.equal(utilityPlaceholderCallInLion.spec.summonActivity.duration.value, 1);
+assert.equal(utilityPlaceholderCallInLion.spec.summonProfiles[0].profileName, "Lion");
+assert.equal(utilityPlaceholderCallInLion.spec.summonProfiles[0].actor.srdActorName, "Lion");
+assert.equal(utilityPlaceholderCallInLion.spec.unresolvedMechanics, undefined);
+
+const embeddedCallInLionSummon = repairHybridSpecFromRequest({
+  kind: "equipmentPowerSuite",
+  name: "Gatecrash Harness",
+  uses: { max: "12", recovery: [{ period: "dawn", type: "formula", formula: "1d6 + 4" }] },
+  utilityActivities: [{
+    activityId: "CallLion00000001",
+    activityName: "Call Lion",
+    chargeCost: 4,
+    save: { ability: "dex", dc: 17 },
+    damageParts: [],
+    summonProfiles: [{
+      profileId: "Companion0000001",
+      profileName: "Companion",
+      actor: { name: "Friendly Companion", type: "beast" }
+    }]
+  }],
+  unresolvedMechanics: [{
+    category: "summon",
+    label: "Friendly Lion",
+    requestedText: "Call in a friendly Lion for 1 hour",
+    reason: "The exact actor stats are deferred."
+  }]
+}, "Burn 4 charges to cast Hold Monster at DC 17, 3 charges to cast Fly, or 5 charges to call in a friendly Lion for 1 hour.");
+
+assert.equal(embeddedCallInLionSummon.applied, true);
+assert.equal(embeddedCallInLionSummon.spec.utilityActivities[0].chargeCost, 5);
+assert.equal(embeddedCallInLionSummon.spec.utilityActivities[0].duration.value, 1);
+assert.equal(embeddedCallInLionSummon.spec.utilityActivities[0].duration.units, "hour");
+assert.equal(embeddedCallInLionSummon.spec.utilityActivities[0].save, undefined);
+assert.equal(embeddedCallInLionSummon.spec.utilityActivities[0].summonProfiles[0].profileName, "Lion");
+assert.equal(embeddedCallInLionSummon.spec.utilityActivities[0].summonProfiles[0].actor.srdActorName, "Lion");
+assert.equal(embeddedCallInLionSummon.spec.unresolvedMechanics, undefined);
+
+const singlePlaceholderScorpion = repairHybridSpecFromRequest({
+  kind: "nativeSummon",
+  name: "Scorpioncall Seal",
+  description: "As an action, summon one friendly Giant Scorpion for 1 hour using the exact D&D5e SRD actor profile.",
+  summonProfiles: [{
+    profileName: "Profile Separate",
+    actor: { name: "Friendly Profile Separate", srdActorName: "Profile Separate", requireSrdActor: true }
+  }],
+  summonActivity: { activityName: "Summon Profile Separate", chargeCost: 2 }
+}, "As an action, summon one friendly Giant Scorpion for 1 hour using the exact D&D5e SRD actor profile.");
+
+assert.equal(singlePlaceholderScorpion.spec.summonProfiles[0].actor.srdActorName, "Giant Scorpion");
+assert.equal(singlePlaceholderScorpion.spec.summonProfiles[0].actor.name, "Friendly Giant Scorpion");
+
+const resolvedForceResistance = repairHybridSpecFromRequest({
+  kind: "equipmentPowerSuite",
+  name: "Gatecrash Harness",
+  effects: [{
+    effectId: "ForceResist00001",
+    name: "Force Resistance",
+    changes: [{ key: "system.traits.dr.value", mode: "ADD", value: "force" }]
+  }],
+  unresolvedMechanics: [{
+    category: "tableAdjudication",
+    label: "Force damage shrug off",
+    requestedText: "The wearer can shrug off force damage.",
+    reason: "This resistance clause was left for passive defensive review."
+  }]
+}, "The wearer can shrug off force damage.");
+
+assert.equal(resolvedForceResistance.applied, true);
+assert.equal(resolvedForceResistance.spec.unresolvedMechanics, undefined);
+
 const whisperglassAttack = repairHybridSpecFromRequest({
   kind: "casterUtilityEquipment",
   name: "Whisperglass Circlet",
@@ -694,4 +1024,127 @@ const defaultSaveDc = repairHybridSpecFromRequest({
 
 assert.equal(defaultSaveDc.spec.saveActivities[0].save.dc, 13);
 
-export const testedHybridRepairCases = 25;
+const owlglassLanguageRepair = repairHybridSpecFromRequest({
+  kind: "passiveEffectEquipment",
+  name: "Owlglass Lenses",
+  attunement: "required",
+  effects: [{
+    effectId: "OwlglassEffect01",
+    name: "Owlglass Sight",
+    changes: [{
+      key: "system.skills.prc.bonuses.check",
+      mode: "CUSTOM",
+      value: "advantage on Wisdom (Perception) checks"
+    }]
+  }]
+}, "Create uncommon goggles called Owlglass Lenses. They grant advantage on Wisdom (Perception) checks. They do not require attunement.");
+assert.equal(owlglassLanguageRepair.spec.attunement, "");
+assert.equal(owlglassLanguageRepair.spec.effects[0].changes.some(change => change.key === "system.skills.prc.bonuses.check"), false);
+assert.deepEqual(
+  owlglassLanguageRepair.spec.effects[0].changes.find(change => change.key === "system.skills.prc.roll.mode"),
+  { key: "system.skills.prc.roll.mode", mode: "ADD", value: "1" }
+);
+
+const spellcastingBonusRepair = repairHybridSpecFromRequest({
+  kind: "casterUtilityEquipment",
+  name: "Surveyor's Third Eye",
+  effects: [{
+    effectId: "SpellBonusRepair",
+    name: "Spellcasting Bonus",
+    changes: [
+      { key: "system.bonuses.msak.attack", mode: "ADD", value: "1" },
+      { key: "system.bonuses.spelldc", mode: "ADD", value: "1" }
+    ]
+  }]
+}, "While worn, it grants +1 to spell attacks and spell save DC.");
+assert.deepEqual(
+  spellcastingBonusRepair.spec.effects[0].changes,
+  [
+    { key: "system.bonuses.msak.attack", mode: "ADD", value: "1" },
+    { key: "system.bonuses.rsak.attack", mode: "ADD", value: "1" },
+    { key: "system.bonuses.spell.dc", mode: "ADD", value: "1" }
+  ]
+);
+
+const explicitArmorSuiteRepair = repairHybridSpecFromRequest({
+  kind: "nativeSummon",
+  name: "Bastion of the Quiet World",
+  itemType: "equipment",
+  armorType: "heavy",
+  magicalBonus: 2,
+  uses: { max: "18", recovery: [{ period: "dawn", type: "formula", formula: "1d10 + 8" }] },
+  saveActivities: [{ activityId: "AntimagicField01", activityName: "Antimagic Field", chargeCost: 8 }],
+  summonActor: { name: "Friendly Elephant", requireSrdActor: true, srdActorName: "Elephant" }
+}, "Create legendary +2 plate armor. It has 18 charges, casts Antimagic Field and Power Word Stun, and can summon a friendly Elephant.");
+assert.equal(explicitArmorSuiteRepair.spec.kind, "legendaryEquipmentSuite");
+assert.ok(explicitArmorSuiteRepair.spec.summonProfiles?.some(profile => profile.profileName === "Elephant"));
+
+const stormglassEnchantRepair = repairHybridSpecFromRequest({
+  kind: "nativeEnchant",
+  name: "Stormglass Oil",
+  enchantChanges: [{ key: "system.properties", mode: "ADD", value: "mgc" }],
+  unresolvedMechanics: [{
+    category: "enchantment",
+    label: "Weapon damage rider implementation",
+    reason: "The weapon damage rider was not preserved."
+  }]
+}, "Apply this oil to a weapon. It becomes magical and deals an extra 1d4 lightning damage for 1 hour.");
+assert.deepEqual(
+  stormglassEnchantRepair.spec.enchantChanges.find(change => change.key === "system.damage.parts")?.value,
+  { number: 1, denomination: 4, bonus: "", types: ["lightning"] }
+);
+
+const stormglassMalformedDamageRepair = repairHybridSpecFromRequest({
+  kind: "nativeEnchant",
+  name: "Stormglass Oil",
+  enchantChanges: [
+    { key: "system.properties", mode: "ADD", value: "mgc" },
+    { key: "system.damage.parts", mode: "ADD", value: { damage: {} } }
+  ],
+  unresolvedMechanics: [{
+    category: "tableAdjudication",
+    label: "weapon enchantment timing",
+    reason: "The underlying application workflow is table-facing."
+  }]
+}, "Apply this oil to a weapon. It becomes magical and deals an extra 1d4 lightning damage for 1 hour.");
+assert.deepEqual(
+  stormglassMalformedDamageRepair.spec.enchantChanges.filter(change => change.key === "system.damage.parts"),
+  [{ key: "system.damage.parts", mode: "ADD", value: { number: 1, denomination: 4, bonus: "", types: ["lightning"] } }]
+);
+assert.deepEqual(stormglassMalformedDamageRepair.spec.unresolvedMechanics, []);
+assert.equal(stormglassEnchantRepair.spec.unresolvedMechanics.length, 0);
+
+const enchantSummonRepair = repairHybridSpecFromRequest({
+  kind: "nativeEnchant",
+  name: "Webspark Unguent",
+  summonProfiles: [{
+    profileId: "WebsparkSpider01",
+    profileName: "Giant Spider",
+    actor: { name: "Friendly Giant Spider", srdActorName: "Giant Spider", type: "beast" }
+  }],
+  summonActivity: { activityId: "WebsparkSummon01", activityName: "Summon Giant Spider" },
+  unresolvedMechanics: [{
+    category: "nativeSummon",
+    label: "Giant Spider Summon",
+    requestedText: "Using the oil also calls in a friendly Giant Spider for 1 hour."
+  }]
+}, "Create a one-use oil that enchants a weapon for 1 hour and calls in a friendly Giant Spider for 1 hour.");
+assert.deepEqual(enchantSummonRepair.spec.unresolvedMechanics, undefined);
+
+const defaultWeaponWorkflowRepair = repairHybridSpecFromRequest({
+  kind: "weaponConditionOnHit",
+  name: "Embercoil Sickle",
+  conditionOnHit: {
+    condition: "burned",
+    save: { ability: "dex", dc: 13 },
+    durationSeconds: 60
+  },
+  unresolvedMechanics: [{
+    category: "tableAdjudication",
+    label: "single-target attack behavior",
+    requestedText: "The basic sickle strike must be a single-target attack against the focused target with no extra target-selection dialog; verify the attack, save, and effect behavior."
+  }]
+}, "Create an Embercoil Sickle with a DC 13 Dexterity save on hit.");
+assert.equal(defaultWeaponWorkflowRepair.spec.unresolvedMechanics, undefined);
+
+export const testedHybridRepairCases = 33;

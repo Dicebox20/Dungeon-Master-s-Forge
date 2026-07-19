@@ -2,10 +2,41 @@
 
 ## Unreleased
 
+## 2.23.1-test.44
+
+- Rebuilt the tester package from the current reviewed source with the MIT license and curated runtime contents.
+- Removed tests, examples, and build helpers from the tester archive while retaining the isolated verification harness.
+- Kept the public Free Forge endpoint and existing tester limits unchanged.
+
+## 2.23.1-test.43
+
+- Made the bottom validation status use the same deduplicated Warnings, Free Forge, and Notes totals shown in the review panel, fixing a discrepancy found during the live `test.42` browser smoke test.
+
+## 2.23.1-test.42
+
+- Restyled the review-notes panel with a calmer teal-and-ink color scheme and consolidated its summary into clear Warnings, Free Forge, and Notes categories.
+- Kept assumptions and system references informational instead of turning the overall compile state into a warning; conflicts, unresolved mechanics, and manual intervention still require attention.
+- Added a teal Free Forge notice when the hosted free path intentionally simplifies a mechanic or preserves it for manual review instead of inventing unsafe automation.
+- Retained the complete `test.41` native Scene Region compatibility baseline and its 15-case Region regression sweep.
+- Added planned Master Patreon support for reviewed World- and Region-Affecting items to the roadmap.
+
+## 2.23.1-test.41
+
+- Added an experimental, GM-only Scene Region Forge behind a disabled-by-default world setting.
+- Added reviewed native Region behavior support for DND5e difficult terrain plus Foundry movement cost, darkness, weather suppression, pause, scrolling text, and Active Effects sourced from generated world items.
+- Preserved non-Forge Region behaviors during reconciliation and kept scripts, macro source, teleportation, and automatic world migration outside this first release.
+- Added a 15-case simple, medium, and complex Scene Region release sweep and fixed plural effect-language recognition found by that sweep.
+- Rebuilt the tester from the current item-engine source so the earlier `test.40` spell-enrichment package drift is removed without overwriting an existing release artifact.
+
+## 2.23.1-test.40
+
+- Reissued the current tester package under a new version to avoid a version collision with an already-distributed `test.39` build.
+
 ## 2.23.1-test.39
 
-- Reissued the tester package from the reconciled beta mechanics after the public-history cleanup.
-- Includes the verified multi-spell, enchantment, summon, attunement, and hybrid-item repairs from the current tester source.
+- Recognized plain-language attunement requests such as "needs attunement" and "does not need attunement" in both the hosted service and Foundry renderer.
+- Marked clearly friendly or companion summons as friendly for Midi-QOL and kept Misty Step location selection from opening an unnecessary target-confirmation dialog.
+- Normalized combined spell labels so each generated activity names the specific spell it executes.
 
 ## 2.23.1-test.38
 
@@ -137,7 +168,7 @@
 - Changed the install identity to `dungeon-masters-forge`, migrated legacy settings, and retained read compatibility for legacy generated-item flags.
 - Added the `2.22.0-test.5` tester build for service `1.6.0`.
 - Displayed safe structured remote error messages, error codes, and request IDs instead of reducing service failures to a bare HTTP status.
-- Removed obsolete user-facing planning warnings; no launch-day feature gates are active.
+- Removed obsolete user-facing planning-tier warnings; no launch-day feature gates are active.
 - Added a disabled-by-default Free Forge release configuration for a baked HTTPS endpoint.
 - Enabled private release builds to select Free Forge automatically on first launch without endpoint or token entry.
 - Unified remote connection checks and compilation across Bring Your Own API and Free Forge providers.
@@ -188,7 +219,7 @@
 
 ## 2.21.4 - 2026-06-30
 
-- Fixed Forge Settings event binding when the application template root is the form itself, restoring provider switching, connection checks, utility buttons, and planning saves in the live window.
+- Fixed Forge Settings event binding when the application template root is the form itself, restoring provider switching, connection checks, utility buttons, and planning-tier saves in the live window.
 - Added a regression assertion covering the root-form listener binding used by the settings application.
 
 ## 2.21.3 - 2026-06-30

@@ -99,8 +99,8 @@ async function planItemFeatures(request, options = {}) {
     }
   }
 
-  if (/\b(?:summon|conjure|call forth|calls forth)\b/i.test(text)) {
-    const summonClause = clauseFor(/\b(?:summon|conjure|call forth|calls forth)\b/i);
+  if (/\b(?:summon|conjure|call forth|calls forth|call in|calls in)\b/i.test(text)) {
+    const summonClause = clauseFor(/\b(?:summon|conjure|call forth|calls forth|call in|calls in)\b/i);
     const conditional = /\b(?:while|when|if)\b[^.]*\bwater\b/i.test(text) && /\b(?:while|when|if)\b[^.]*\b(?:land|ground)\b/i.test(text);
     features.push(feature(
       conditional ? "conditionalSummon" : "summon",

@@ -1,6 +1,8 @@
 # Dungeon Master's Forge Tester Guide
 
-Welcome, and thank you for helping us test Dungeon Master's Forge. This is a temporary pre-launch tester channel for Foundry VTT and DND5e.
+Welcome, and thank you for helping us test Dungeon Master's Forge. This is a temporary pre-launch channel for Foundry VTT and DND5e.
+
+See the [public tester list](testers.md) for the people currently helping with testing.
 
 ## Contents
 
@@ -26,7 +28,7 @@ The easiest way to help is:
 4. Review the preview and notes before creating anything.
 5. Tell us what worked and what did not.
 
-We are trying to make Foundry item creation easier for people who are not comfortable writing JavaScript or building item data by hand.
+Our goal is to make Foundry item creation easier for people who are not comfortable writing JavaScript or building item data by hand.
 
 ## Install the Tester Build
 
@@ -42,7 +44,7 @@ We are trying to make Foundry item creation easier for people who are not comfor
 7. Confirm that the provider is **Free Forge**.
 8. Click **Check Connection** before your first live test.
 
-The current tester build is `2.23.1-test.43`. Free Forge does not require a personal endpoint, API token, or OpenAI key.
+The current tester build is `2.23.1-test.44`. Free Forge does not require a personal endpoint, API token, or OpenAI key.
 
 ## Run Your First Test
 
@@ -69,7 +71,7 @@ Choose the kind of test you want before writing the prompt.
 
 ### If You Want the Best Chance of Success
 
-Use precise language and leave as few choices as possible for the AI:
+Use precise language and leave as few choices as possible for the model:
 
 1. Name the exact item type, such as longsword, wand, potion, or shield.
 2. Give the item a unique name.
@@ -150,6 +152,8 @@ Use **Report Failed Item** from the Forge window when a prompt produces a warnin
 
 This feature can be buggy. If it does not open, submit, or stay visible, do not get stuck on it. Try another prompt and send us the details manually instead.
 
+When the hosted tester service is used, submitted failed-item reports have a 30-day retention window and expired entries are pruned when a new report is received. Do not include secrets or private campaign details.
+
 ### Anonymous Error Reports
 
 If you are comfortable helping with technical diagnostics:
@@ -164,7 +168,7 @@ Reports are intended to contain redacted technical summaries. Never send passwor
 
 ## Bring Your Own API
 
-Use this section only if you want to use your own provider account instead of the shared Free Forge allowance.
+Use this section if you want to use your own provider account instead of the shared Free Forge allowance.
 
 ### Important Compatibility Note
 
@@ -178,7 +182,7 @@ That usually means one of these:
 
 Do not paste `https://api.openai.com/v1` or a normal Claude API URL into the DMF endpoint field unless the service in front of it explicitly supports the Forge contract.
 
-### Get Provider Access
+### Get an API Key
 
 API billing is separate from ChatGPT or Claude subscriptions. You may need to add billing details or prepaid credit with the provider. These third-party guides explain the general setup process:
 

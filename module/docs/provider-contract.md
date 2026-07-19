@@ -53,7 +53,7 @@ Clients must verify `forge.schemaVersion` and intersect `forge.supportedKinds` w
     "foundryVersion": "14",
     "systemId": "dnd5e",
     "systemVersion": "5.3.3",
-    "moduleVersion": "2.8.0",
+    "moduleVersion": "2.23.1",
     "supportedKinds": ["weaponExtraDamage"]
   },
   "options": {

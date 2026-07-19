@@ -1,22 +1,20 @@
-# Dungeon Master's Forge V2 Pattern Index
+# Dungeon Master's Forge Pattern Index
 
-These are the confirmed engine patterns available in V2.
+This is the list of engine patterns that have been confirmed in testing.
 
 ## Request Batches
 
-V2.2 can compile multiple natural-language requests in one pass. Separate free-form items with a line containing `---`, or use repeated detailed blocks beginning with `Item name:`. Every compiled item retains its own pattern decision, and assumptions or warnings identify the affected item.
+You can compile multiple prompts in one pass. Separate free-form items with a line containing `---`, or use repeated detailed blocks beginning with `Item name:`. Each compiled item keeps its own pattern decision, and assumptions or warnings identify the item they affect.
 
-## Advanced Request Mappings
+## Advanced Prompt Mappings
 
-V2.3 maps the proven Staff of Winter's Judgment family to `multiActivityStaff`: Ice Storm and Cone of Cold receive separate save activities and charge costs while sharing the item's charge pool. It also maps Demon, Devil, and Yugoloth choice requests to `nativeMultiProfileSummon`, producing one friendly summon actor per selectable profile.
+The confirmed advanced mappings include:
 
-V2.4 maps one-use oils that grant extra elemental weapon damage to `nativeEnchant`. It also maps explicit ranged or melee attacks from worn equipment to `equipmentPowerSuite` attack activities. Both mappings remain conservative: unsupported enchantment changes and underspecified attack damage are surfaced for review.
-
-V2.5 maps the proven Stormfire Reaver family to `artifactWeaponHybrid`. Normal weapon damage, passive AC, the Item Macro light toggle, and the charged Flame Strike save activity remain separate so using one power cannot accidentally trigger the others.
-
-V2.6 adds structured `unresolvedMechanics` records for ally auras, class resources, and spells outside the deterministic map. Each record preserves the requested text, reason, recommended handling, and editable resolution state. Aura clauses are excluded from personal passive-effect parsing, preventing an ally-only AC bonus from being applied to the wearer.
-
-V2.7 routes request compilation through a provider registry. `local-rules` remains the offline compiler. `bring-your-own` now supports the live reference service over the stable Forge `1.0` contract, including personal client-key mode and server-key mode. `hosted-forge` remains intentionally unavailable. Provider configuration controls whether reviewed unresolved mechanics may be created or must block creation.
+- `multiActivityStaff` keeps Ice Storm and Cone of Cold as separate save activities with their own charge costs while sharing one item charge pool. Demon, Devil, and Yugoloth choices use `nativeMultiProfileSummon` and create one friendly summon actor per selectable profile.
+- `nativeEnchant` handles one-use oils that add elemental weapon damage. `equipmentPowerSuite` handles explicit ranged or melee attacks made by worn equipment. Unsupported enchantment changes and incomplete attack damage stay visible for review.
+- `artifactWeaponHybrid` keeps normal weapon damage, passive AC, the Item Macro light toggle, and the charged Flame Strike save activity separate so using one power does not trigger another.
+- Unsupported ally auras, class-resource restoration, and unmapped spells become structured `unresolvedMechanics` records. Each record keeps the requested text, the reason it needs review, the suggested next step, and an editable resolution state. Ally-only bonuses are not applied as personal effects.
+- Request compilation runs through a provider registry. `local-rules` is the offline compiler, `bring-your-own` supports the Forge `1.0` network contract, and `hosted-forge` is available when the release has a valid hosted configuration. The unresolved-mechanics setting controls whether reviewed items may be created or must be blocked.
 
 ## Provider API
 
@@ -27,9 +25,9 @@ V2.7 routes request compilation through a provider registry. `local-rules` remai
 
 ## Diagnostics
 
-V2.9 adds a non-destructive Diagnostics command and `diagnosticsWithValidation()` API. It checks condition weapons, multi-spell charges, multi-profile summons, native enchantments, hybrid artifacts, and unresolved-mechanic provenance through both request compilation and the Foundry engine validator. Diagnostics never invoke a factory or write world documents.
+The non-destructive Diagnostics command and `diagnosticsWithValidation()` API check condition weapons, multi-spell charges, multi-profile summons, native enchantments, hybrid artifacts, and unresolved-mechanic provenance through both request compilation and the Foundry engine validator. Diagnostics never invoke a factory or write world documents.
 
-V2.19 adds read-only system-content diagnostics for native DND5e Spell and Equipment lookups. These checks prefer system-owned modern packs, report source UUID provenance, and never import, clone, or modify compendium documents.
+System-content diagnostics also cover native DND5e Spell and Equipment lookups. They prefer system-owned modern packs, report source UUID provenance, and never import, clone, or modify compendium documents.
 
 ## Core Item Patterns
 

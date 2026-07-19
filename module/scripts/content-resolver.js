@@ -30,7 +30,7 @@ const CONTENT_KIND_CONFIG = Object.freeze({
     matchesEntry: entry => Object.freeze(["weapon", "equipment", "consumable", "tool", "loot", "backpack", "container"]).includes(itemTypeForEntry(entry))
   }),
   actor: Object.freeze({
-    preferredCollections: Object.freeze(["dnd5e.actors24", "dnd5e.actors"]),
+    preferredCollections: Object.freeze(["dnd5e.actors24", "dnd5e.actors", "dnd5e.monsters"]),
     preferredLabels: Object.freeze(["Actors"]),
     documentNames: Object.freeze(["Actor"]),
     matchesEntry: entry => Boolean(String(entry?.name ?? "").trim())
@@ -106,11 +106,29 @@ function documentSource(document = {}) {
   return typeof document?.toObject === "function" ? document.toObject() : document;
 }
 
+function entryIdentifier(entry = {}) {
+  return String(entry?._id ?? entry?.id ?? "").trim();
+}
+
 function collectionValues(value) {
   if (Array.isArray(value)) return value;
+  if (Array.isArray(value?.contents)) return value.contents;
   if (value instanceof Set) return [...value];
   if (typeof value?.values === "function") return [...value.values()];
   if (typeof value?.[Symbol.iterator] === "function") return [...value];
+  return [];
+}
+
+function packValues(options = {}) {
+  return collectionValues(options.packs ?? globalThis.game?.packs);
+}
+
+function indexValues(value) {
+  const entries = collectionValues(value);
+  if (entries.length) return entries;
+  if (value && typeof value === "object") {
+    return Object.values(value).filter(entry => entry && typeof entry === "object");
+  }
   return [];
 }
 
@@ -234,21 +252,30 @@ function modernityScore(pack, kind) {
 }
 
 async function readPackIndex(pack) {
-  if (Array.isArray(pack?.index)) return pack.index;
+  const directIndex = indexValues(pack?.index);
+  if (directIndex.length) return directIndex;
   if (typeof pack?.getIndex === "function") {
     const index = await pack.getIndex({ fields: [...SYSTEM_CONTENT_FIELDS] });
-    if (Array.isArray(index)) return index;
-    if (Array.isArray(index?.contents)) return index.contents;
-    if (typeof index?.toObject === "function") return index.toObject();
-    if (typeof index?.[Symbol.iterator] === "function") return [...index];
+    const entries = indexValues(index);
+    if (entries.length) return entries;
+    if (typeof index?.toObject === "function") {
+      const object = index.toObject();
+      if (Array.isArray(object)) return object;
+      if (object && typeof object === "object") return Object.values(object);
+    }
+  }
+  if (typeof pack?.getDocuments === "function") {
+    const documents = await pack.getDocuments();
+    const entries = documents.map(document => documentSource(document));
+    if (entries.length) return entries;
   }
   return [];
 }
 
 function candidateSummary(pack, entry, kind) {
   return {
-    entryId: String(entry._id ?? "").trim(),
-    uuid: `Compendium.${packCollection(pack)}.${entry._id}`,
+    entryId: entryIdentifier(entry),
+    uuid: `Compendium.${packCollection(pack)}.${entryIdentifier(entry)}`,
     name: String(entry.name ?? "").trim(),
     img: String(entry.img ?? "").trim(),
     kind,
@@ -276,7 +303,7 @@ function candidateSummary(pack, entry, kind) {
 function findPackByCollection(collection, options = {}) {
   const target = String(collection ?? "").trim().toLowerCase();
   if (!target) return null;
-  const packs = Array.from(options.packs ?? globalThis.game?.packs ?? []);
+  const packs = packValues(options);
   return packs.find(pack => packCollection(pack).toLowerCase() === target) ?? null;
 }
 
@@ -286,7 +313,15 @@ async function resolveDocumentFromMatch(match, options = {}) {
   if (!collection || !entryId) return null;
   const pack = findPackByCollection(collection, options);
   if (!pack || typeof pack.getDocument !== "function") return null;
-  return pack.getDocument(entryId);
+  const direct = await pack.getDocument(entryId);
+  if (direct) return direct;
+  if (typeof pack.getDocuments !== "function") return null;
+  const documents = await pack.getDocuments();
+  return documents.find(document => {
+    const source = documentSource(document);
+    return String(document?.id ?? source?._id ?? source?.id ?? "").trim() === entryId
+      || isExactNameMatch(source?.name, match?.name);
+  }) ?? null;
 }
 
 async function resolveSystemDocument(resolution, options = {}) {
@@ -343,7 +378,7 @@ async function resolveSystemContentByName(name, kind, options = {}) {
   const requestedName = String(name ?? "").trim();
   if (!requestedName) throw new Error("System content lookup requires a name.");
 
-  const packs = Array.from(options.packs ?? globalThis.game?.packs ?? []);
+  const packs = packValues(options);
   const candidates = [];
   for (const pack of packs) {
     if (!isSystemOwnedDnd5ePack(pack)) continue;
@@ -414,9 +449,9 @@ async function buildBestRankedSystemCatalogue(packs, { kind, profileFromDocument
 }
 
 async function listSystemNonMagicalWeapons(options = {}) {
-  if (options.packs) return buildSystemNonMagicalWeaponCatalogue(Array.from(options.packs));
+  if (options.packs) return buildSystemNonMagicalWeaponCatalogue(packValues(options));
   if (!liveNonMagicalWeaponCatalogue) {
-    liveNonMagicalWeaponCatalogue = buildSystemNonMagicalWeaponCatalogue(Array.from(globalThis.game?.packs ?? []))
+    liveNonMagicalWeaponCatalogue = buildSystemNonMagicalWeaponCatalogue(packValues())
       .catch(error => {
         liveNonMagicalWeaponCatalogue = null;
         throw error;
@@ -426,9 +461,9 @@ async function listSystemNonMagicalWeapons(options = {}) {
 }
 
 async function listSystemNonMagicalEquipment(options = {}) {
-  if (options.packs) return buildSystemNonMagicalEquipmentCatalogue(Array.from(options.packs));
+  if (options.packs) return buildSystemNonMagicalEquipmentCatalogue(packValues(options));
   if (!liveNonMagicalEquipmentCatalogue) {
-    liveNonMagicalEquipmentCatalogue = buildSystemNonMagicalEquipmentCatalogue(Array.from(globalThis.game?.packs ?? []))
+    liveNonMagicalEquipmentCatalogue = buildSystemNonMagicalEquipmentCatalogue(packValues())
       .catch(error => {
         liveNonMagicalEquipmentCatalogue = null;
         throw error;
@@ -511,6 +546,7 @@ export {
   SYSTEM_CONTENT_DIAGNOSTIC_CASES,
   SYSTEM_CONTENT_FIELDS,
   candidateSummary,
+  entryIdentifier,
   entryMatchesKind,
   finalizeResolution,
   findSystemNonMagicalEquipmentForText,
@@ -528,6 +564,7 @@ export {
   normalizeLookupName,
   packCollection,
   packDocumentName,
+  packValues,
   packLabel,
   packLikelySupportsKind,
   readPackIndex,

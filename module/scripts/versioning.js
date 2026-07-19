@@ -1,4 +1,4 @@
-const PRODUCT_TITLE = "Dungeon Master's Forge V2";
+const PRODUCT_TITLE = "Dungeon Master's Forge";
 const BUILD_VERSION = "2.23.1";
 
 function sourceLabelForVersion(version) {

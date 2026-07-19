@@ -220,6 +220,26 @@ async function spellDocumentMetadata(spellName, options = {}) {
 
 const SPELL_LIBRARY = Object.freeze([
   Object.freeze({
+    name: "Poison Spray",
+    type: "save",
+    level: 0,
+    tags: Object.freeze(["poison"]),
+    save: { ability: "con" },
+    damageOnSave: "none",
+    damageParts: Object.freeze([{
+      number: 1,
+      denomination: 12,
+      bonus: "",
+      types: Object.freeze(["poison"]),
+      scaling: Object.freeze({ mode: "whole", number: 1, formula: "" })
+    }]),
+    range: { value: 30, units: "ft" },
+    target: {
+      affects: { count: "1", type: "creature", special: "One creature within range" },
+      prompt: true
+    }
+  }),
+  Object.freeze({
     name: "Ray of Sickness",
     type: "attack",
     level: 1,
@@ -427,6 +447,28 @@ const SPELL_LIBRARY = Object.freeze([
     target: {
       template: { count: "1", type: "cone", size: 60, units: "ft" },
       affects: { type: "creature", special: "Creatures in the 60-foot cone" },
+      prompt: true
+    }
+  }),
+  Object.freeze({
+    name: "Cloudkill",
+    type: "save",
+    level: 5,
+    tags: Object.freeze(["poison"]),
+    save: { ability: "con" },
+    damageOnSave: "half",
+    damageParts: Object.freeze([{
+      number: 5,
+      denomination: 8,
+      bonus: "",
+      types: Object.freeze(["poison"]),
+      scaling: Object.freeze({ mode: "whole", number: 1, formula: "" })
+    }]),
+    range: { value: 120, units: "ft" },
+    duration: { value: 10, units: "minute", concentration: true },
+    target: {
+      template: { count: "1", type: "sphere", size: 20, units: "ft" },
+      affects: { type: "creature", special: "Creatures in the 20-foot-radius sphere" },
       prompt: true
     }
   }),
@@ -699,9 +741,11 @@ function spellProfileForActivity(activityName) {
 
 function explicitSpellChargeCost(request, spellName) {
   const escaped = compactText(spellName).replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+");
-  const direct = compactText(request).match(new RegExp(`(?:costs?|spend|expend(?:s)?|uses?)\\s*(\\d+)\\s*charges?[^.]{0,120}${escaped}\\b`, "i"))?.[1];
+  const text = compactText(request);
+  const direct = text.match(new RegExp(`(?:\\b(?:spend|expend(?:s)?|costs?|uses?)\\s*)?(\\d+)\\s*charges?\\s+(?:to\\s+)?cast\\s+${escaped}\\b`, "i"))?.[1]
+    ?? text.match(new RegExp(`\\b(\\d+)\\s*charges?\\s*:\\s*(?:cast\\s+)?${escaped}\\b`, "i"))?.[1];
   if (direct) return Number(direct);
-  const trailing = compactText(request).match(new RegExp(`${escaped}[^.]{0,80}(?:costs?|for|using|use)\\s*(\\d+)\\s*charges?`, "i"))?.[1];
+  const trailing = text.match(new RegExp(`${escaped}\\b\\s*(?:costs?|for|using|uses?)\\s*(\\d+)\\s*charges?`, "i"))?.[1];
   if (trailing) return Number(trailing);
   return null;
 }
@@ -903,11 +947,19 @@ function spellProfileForActivityOrAlias(activityName, request = "") {
   return alias ? spellProfileForActivity(alias) : null;
 }
 
+function activityContainsMultipleKnownSpells(activityName) {
+  const candidate = compactText(activityName);
+  return SPELL_LIBRARY.filter(profile => new RegExp(`\\b${profile.name.replace(/\s+/g, "\\s+")}\\b`, "i").test(candidate)).length > 1;
+}
+
 function spellActivityDisplayName(activity, spellName, request = "") {
   const alias = spellAliasFromRequest(request, spellName);
   if (alias) return alias;
   const current = compactText(activity?.activityName);
-  if (current && current.toLowerCase() !== `cast ${spellName}`.toLowerCase() && activitySpellName(current).toLowerCase() === spellName.toLowerCase()) {
+  if (current
+    && current.toLowerCase() !== `cast ${spellName}`.toLowerCase()
+    && activitySpellName(current).toLowerCase() === spellName.toLowerCase()
+    && !activityContainsMultipleKnownSpells(current)) {
     return current;
   }
   return `Cast ${spellName}`;
