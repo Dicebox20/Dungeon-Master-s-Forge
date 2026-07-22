@@ -5,9 +5,9 @@ import { BUILD_VERSION, PRODUCT_TITLE, isManagedSourceLabel, sourceLabelForVersi
 const moduleManifest = JSON.parse(await readFile(new URL("../module.json", import.meta.url), "utf8"));
 assert.equal(BUILD_VERSION, moduleManifest.version);
 
-assert.equal(PRODUCT_TITLE, "Dungeon Master's Forge V2");
-assert.equal(sourceLabelForVersion("2.10.0"), "Dungeon Master's Forge V2 v2.10.0");
-assert.equal(sourceLabelForVersion(""), "Dungeon Master's Forge V2");
+assert.equal(PRODUCT_TITLE, "Dungeon Master's Forge");
+assert.equal(sourceLabelForVersion("2.10.0"), "Dungeon Master's Forge v2.10.0");
+assert.equal(sourceLabelForVersion(""), "Dungeon Master's Forge");
 
 const previousProductName = ["Co", "dex Item Forge"].join("");
 for (const label of [

@@ -1,15 +1,19 @@
-# Dungeon Master's Forge V2
+# Dungeon Master's Forge
 
-Dungeon Master's Forge V2 packages the tested Foundry VTT v14 / DND5e v5.3.3 item factory engine as a reusable local module.
+Dungeon Master's Forge is a reusable Foundry VTT module for creating and reviewing DND5e items.
+
+It is tested with Foundry VTT v14 and DND5e v5.3.3. Describe an item, review the generated details, and create it in your world only after you approve the result.
+
+Dungeon Master's Forge is an unofficial community module for Foundry VTT and is not affiliated with or endorsed by Foundry Virtual Tabletop, Wizards of the Coast, or the DND5e system team. If submitted to the Foundry package directory, it belongs in the **AI Tools** category because it can generate content from live user prompts; it must not be represented as **Zero AI**.
 
 ## Install
 
 1. Close Foundry VTT.
 2. Copy the `dungeon-masters-forge` folder into `{Foundry user data}/Data/modules/`.
-3. Start Foundry, open the world, and enable **Dungeon Master's Forge V2** in Manage Modules.
+3. Start Foundry, open the world, and enable **Dungeon Master's Forge** in Manage Modules.
 4. Open the Items directory as a GM.
 5. Click the hammer button in the Items directory search bar.
-6. Use the gear shortcut or **Game Settings > Configure Settings > Module Settings > Dungeon Master's Forge V2** to open Forge Settings.
+6. Use the gear shortcut or **Game Settings > Configure Settings > Module Settings > Dungeon Master's Forge** to open Forge Settings.
 
 The module can also be opened from a Script Macro:
 
@@ -19,9 +23,11 @@ game.modules.get("dungeon-masters-forge").api.open();
 
 The public module ID is `dungeon-masters-forge`. On first launch, it copies saved settings from the previous package namespace when the new setting has not already been configured. Existing generated items from the previous package remain readable; newly created documents use `flags.dungeon-masters-forge`.
 
-Bring Your Own API connection details now live in **Forge Settings**. Endpoints and model names are client settings. API tokens remain session-only unless **Remember token on this device** is explicitly checked; remembered tokens are stored in that browser's local Foundry settings and should be used only on a trusted computer. Depending on the service deployment, that token can be either a shared service token or a personal OpenAI API key for client-key mode. For the current local reference service, the canonical endpoint is `http://localhost:8788/v1/forge/compile`.
+Bring Your Own API settings are in **Forge Settings**. You can enter the endpoint and model used by your service there. API tokens stay in memory for the current Foundry session unless you explicitly check **Remember token on this device**. If you do, Foundry stores the token in that browser's local settings, so only use that option on a computer you trust. Depending on the service, the token may be a shared service token or a personal OpenAI API key. For the local reference service, use `http://localhost:8788/v1/forge/compile`.
 
-Use **Check Connection** in Forge Settings before live generation when you want to verify whether the remote service is still in deterministic `mock` mode or has been switched to server-side `openai` mode.
+When a supported item needs Item Macro automation, the Forge displays the exact generated code before creation and requires a separate automation acknowledgement. Review that code before approving it. External providers receive the request text and generated specifications; do not include secrets or private campaign details. Optional anonymous diagnostics exclude prompts, raw specifications, tokens, and world documents. The separate **Report Failed Item** flow explains and confirms its additional request/specification payload before sending. Retention is controlled by the configured service; the current hosted tester service prunes expired reports when a new report is received.
+
+Use **Check Connection** in Forge Settings before live generation. It tells you whether the remote service is reachable and whether it is running in deterministic `mock` mode or server-side `openai` mode.
 
 Generated item sheets do not add a visible Forge credit line or source label, so GMs can present their own creations cleanly. The module still keeps private Forge flags for troubleshooting and migration.
 
@@ -41,11 +47,11 @@ Description and Result now share the window as split panes, so the request, prev
 
 Provider setup, connection checks, diagnostics, and the example loader now live in a separate Forge Settings panel so the main creation surface stays focused on writing, reviewing, and creating items.
 
-Review presents each generated item as a readable summary of its damage, healing, uses, saves, activities, effects, summons, and unresolved mechanics. Compiler assumptions and warnings appear with the affected item. The exact JSON remains available in the collapsed **Advanced specification editor**.
+Each generated item is shown as a readable summary of its damage, healing, uses, saves, activities, effects, summons, and unresolved mechanics. Assumptions and warnings appear beside the item they affect. The exact JSON is still available in the collapsed **Advanced specification editor**.
 
-Creation remains disabled until the current specifications validate and the review approval is checked. Editing the generated specifications immediately clears validation and approval so changed JSON must be checked again.
+Creation stays disabled until the current specifications validate and you approve the review. If you edit the generated specifications, validation and approval are cleared so the changed JSON must be checked again.
 
-## Request-To-Spec
+## What It Can Interpret
 
 The Local Rules provider recognizes a conservative set of confirmed patterns:
 
@@ -63,13 +69,13 @@ The Local Rules provider recognizes a conservative set of confirmed patterns:
 
 Multiple requests can be compiled together. Separate free-form requests with a line containing `---`, or paste multiple detailed blocks that each begin with `Item name:`. The Forge validates and previews the resulting batch before its single approval step.
 
-Generated JSON always remains editable. Missing details become visible assumptions. Class resources, ally auras, and unknown spells become structured `unresolvedMechanics` records with the original requested text, the automation limit, and a recommended manual handling step. The Forge displays these records during review and preserves them on the created item's `flags.dungeon-masters-forge.unresolvedMechanics` data.
+The generated JSON stays editable. Missing details become visible assumptions. Class resources, ally auras, and unknown spells become structured `unresolvedMechanics` records with the original request, the automation limit, and a suggested manual next step. The Forge shows these records during review and preserves them on the created item's `flags.dungeon-masters-forge.unresolvedMechanics` data.
 
-Forge Settings includes the generation provider selector. Local Rules compiles requests entirely offline. Bring Your Own API sends the versioned Forge request envelope to a user-configured HTTPS endpoint, with HTTP permitted for loopback, RFC 1918 LAN, and Tailscale private-network testing. Its endpoint and model are client-persisted; its API token is held only in memory for the current Foundry session unless the user explicitly remembers it, and diagnostics redact it either way. The remote service must implement the Forge `1.0` contract and permit requests from the Foundry origin. The reference service supports server-key deployments, personal client-key deployments, and a bounded public Free Forge mode. For local Windows testing, the recommended launch path is `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\start-openai-service.ps1 -Port 8788`, with that terminal left open during connection checks and compiles. V2.16 adds optional capabilities preflight for compatible endpoints while preserving providers that omit discovery. Free Forge remains release-configured: stable public builds should stay conservative until the hosted lane is re-verified, while tester or hosted-preview builds may auto-select Free Forge with the current monthly allowance. Portable provider profiles include only persistable fields and reject secrets during import. The unresolved-mechanics policy can allow creation after explicit review or block creation until every record is resolved.
+Forge Settings includes the generation provider selector. Local Rules compiles requests entirely offline. Bring Your Own API sends the versioned Forge request envelope to a user-configured HTTPS endpoint, with HTTP permitted for loopback, RFC 1918 LAN, and Tailscale private-network testing. The endpoint and model are saved as client settings; the API token stays in memory for the current Foundry session unless you explicitly choose to remember it, and diagnostics redact it either way. The remote service must implement the Forge `1.0` contract and allow requests from the Foundry browser origin.
 
-V2.18 adds an explicit connection check for Bring Your Own API. When the remote service exposes the reference `/health` route, the Forge reports whether that service is in `mock` or `openai` mode before any compile request is sent.
+The reference service supports server-key deployments, personal client-key deployments, and a bounded public Free Forge mode. For local Windows testing, use `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\start-openai-service.ps1 -Port 8788`, and leave that terminal open while you check the connection or compile an item. Compatible endpoints can expose a read-only capabilities check, but providers that do not offer discovery still work with the Forge `1.0` contract. Free Forge is configured by the release: stable builds can keep it conservative until the hosted service is re-verified, while tester builds may select it automatically with the current allowance.
 
-V2.19 adds a read-only system-native DND5e content resolver. It can exact-match modern system Spells and Equipment by name, return source UUID provenance, and report compatibility without importing or editing the underlying compendium documents.
+Provider profiles save only settings that are safe to persist and reject secrets during import. The unresolved-mechanics setting lets you either create an item after reviewing the remaining notes or block creation until every note is resolved. When the connected service exposes `/health`, **Check Connection** also reports whether it is running in `mock` or `openai` mode. The read-only system content resolver can match modern DND5e Spells and Equipment by name, show the source UUID, and report compatibility without importing or editing the underlying compendium documents.
 
 ## Accepted Input
 
@@ -103,7 +109,7 @@ Or an object containing an `items` array:
 const forge = game.modules.get("dungeon-masters-forge").api;
 
 await forge.validate(specs);
-await forge.create(specs);
+await forge.create(specs, { authorizeGeneratedAutomation: true });
 forge.open();
 const draft = forge.compile("Make a rifle that does fire damage");
 const providerDraft = await forge.compileWithProvider("Make a rifle that does fire damage", {
@@ -130,6 +136,8 @@ const plate = await forge.contentResolver.resolveEquipmentByName("Plate Armor");
 
 `forge.example()` returns a cloned known-good example spec.
 
+`forge.create` refuses to create a specification that contains generated automation code unless the caller passes `authorizeGeneratedAutomation: true` after presenting and reviewing the code. The Forge window supplies that acknowledgement through its **Approve automation** checkbox. The isolated verification harness uses the same boundary only for tagged document creation and never executes an activity.
+
 The Forge window's **Diagnostics** command runs six high-risk compiler families through Foundry validation without creating or deleting any world documents.
 
 `forge.contentResolver.diagnostics()` runs read-only native-content checks against system-owned DND5e packs without creating or changing world documents.
@@ -140,6 +148,6 @@ Current milestones and deferred automation are tracked in `ROADMAP.md`.
 
 ## Scope
 
-This release includes the spec runner, Foundry integration, deterministic natural-language compiler, and a provider-neutral Bring Your Own API adapter. A compatible remote AI service is still required to turn requests into Forge response envelopes. The managed Hosted Forge service remains planned for a later release.
+This release includes the spec runner, Foundry integration, deterministic prompt compiler, and a provider-neutral Bring Your Own API adapter. A compatible remote service is still needed to turn prompts into Forge response envelopes. Hosted access is release-dependent: the stable package stays conservative, while an invited tester build may connect to a bounded Free Forge service.
 
 Automated ally auras remain deferred until there is a compatible aura automation path. Existing spell powers should use their closest functional DND5e activity type rather than a utility-only reminder.

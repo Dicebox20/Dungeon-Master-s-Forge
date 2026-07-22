@@ -274,8 +274,8 @@ async function compileWithProvider(request, options = {}) {
 
 function mechanicsRequestForCompilation(compilation, fallback = "") {
   const candidates = [
-    compilation?.originalRequest,
     fallback,
+    compilation?.originalRequest,
     compilation?.request,
     compilation?.normalizedRequest
   ];

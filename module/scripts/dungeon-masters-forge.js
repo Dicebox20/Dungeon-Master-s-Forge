@@ -48,11 +48,12 @@ import {
 import { buildReviewSummaries } from "./review-summary.js";
 import { normalizeWeight, safeItemIcon } from "./equipment-normalization.js";
 import { applyFeaturePlanToSpec, planItemFeatures } from "./feature-planner.js";
-import { sanitizeForgeSpec } from "./forge-spec-integrity.js";
+import { fingerprintForgeSpecs, sanitizeForgeSpec } from "./forge-spec-integrity.js";
 import { repairHybridSpecFromRequest } from "./hybrid-activity-repair.js";
 import { buildLayeredItemBlueprint } from "./item-blueprint.js";
 import { applyDefaultLeveledSpellCharges, applyForgeSpecDefaults, autoSelectSrdChoiceSpells, dedupeRecognizedSpellActivities, reconcilePlannedSrdSpellActivities, repairNamedSrdSpellActivities } from "./srd-spell-enrichment.js";
-import { applyBaseChassisFallbackArt, applyConsumableProjectileFallbackArt, applyFallbackActivityArt, applySpellActivityArt, applySystemEquipmentArt, needsFallbackItemArt } from "./system-art-enrichment.js";
+import { applyBaseChassisFallbackArt, applyCategoryItemFallbackArt, applyConsumableProjectileFallbackArt, applyFallbackActivityArt, applySpellActivityArt, applySystemEquipmentArt, needsFallbackItemArt } from "./system-art-enrichment.js";
+import { openSceneRegionForge } from "./scene-region-forge.js";
 import {
   PREVIOUS_PACKAGE_ID,
   MODULE_ID,
@@ -62,11 +63,45 @@ import {
 const MODULE_TITLE = PRODUCT_TITLE;
 const MIN_DND5E_VERSION = "5.3.3";
 const SETTINGS_TEMPLATE_PATH = `modules/${MODULE_ID}/templates/forge-settings.hbs`;
+const DEFAULT_VERIFICATION_WORLD_ID = "dmf-test-world";
+let verificationHarnessModulePromise;
+
+function verificationHarnessIncluded() {
+  return game.modules.get(MODULE_ID)?.flags?.[MODULE_ID]?.verificationHarness === true;
+}
+
+function verificationHarnessStatusSnapshot({ enabled, expectedWorldId } = {}) {
+  const worldId = game?.world?.id ?? "";
+  const expected = expectedWorldId || DEFAULT_VERIFICATION_WORLD_ID;
+  return {
+    enabled: enabled === true && verificationHarnessIncluded(),
+    currentWorldId: worldId,
+    expectedWorldId: expected,
+    isolated: verificationHarnessIncluded() && worldId === expected,
+    ready: verificationHarnessIncluded() && enabled === true && game?.user?.isGM === true && worldId === expected
+  };
+}
+
+async function loadVerificationHarness() {
+  if (!verificationHarnessIncluded()) {
+    throw new Error("The isolated verification harness is available only in the Dungeon Master's Forge tester build.");
+  }
+  verificationHarnessModulePromise ??= import("./verification-harness.js");
+  return verificationHarnessModulePromise;
+}
+
+function normalizeVerificationRunTag(runTag) {
+  const normalized = String(runTag ?? "").trim();
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{2,80}$/.test(normalized)) {
+    throw new Error("Verification run tags must be 3-81 characters using letters, numbers, dots, underscores, or hyphens.");
+  }
+  return normalized;
+}
 
 const EXAMPLE_SPECS = [
   {
     kind: "weaponExtraDamage",
-    name: "Forge V2 - Emberglass Dagger",
+    name: "Emberglass Dagger",
     img: "icons/weapons/daggers/dagger-curved-red.webp",
     description: "A translucent red-black dagger that looks like cooled volcanic glass. Its edge glows faintly when it strikes.",
     rarity: "uncommon",
@@ -127,7 +162,7 @@ function registerSettings() {
     scope: "world",
     config: true,
     type: String,
-    default: "Dungeon Master's Forge V2"
+    default: "Dungeon Master's Forge"
   });
 
   registerSetting("actorFolderName", {
@@ -136,7 +171,7 @@ function registerSettings() {
     scope: "world",
     config: true,
     type: String,
-    default: "Dungeon Master's Forge V2 Summons"
+    default: "Dungeon Master's Forge Summons"
   });
 
   registerSetting("sourceLabel", {
@@ -155,6 +190,42 @@ function registerSettings() {
     config: true,
     type: Boolean,
     default: true
+  });
+
+  registerSetting("enableMidiQolAutomation", {
+    name: "Apply basic conditions and effects automatically",
+    hint: "When Midi-QOL and Item Macro are active, apply supported condition riders after failed saves and remove them automatically by combat duration. Generated attacks and charged powers also confirm targets and resource use. Core DND5e item data is always preserved.",
+    scope: "world",
+    config: true,
+    type: Boolean,
+    default: false
+  });
+
+  registerSetting("enableSceneRegionForge", {
+    name: "Enable experimental Scene Region Forge",
+    hint: "Allows a GM to add reviewed native Foundry and DND5e behaviors to one selected Scene Region. Existing non-Forge behaviors are preserved.",
+    scope: "world",
+    config: true,
+    type: Boolean,
+    default: false
+  });
+
+  registerSetting("enableVerificationHarness", {
+    name: "Enable isolated Beta verification harness",
+    hint: "Allows a GM to create tagged disposable test copies only in the configured test world. It never runs item activities, macros, Scenes, or Regions automatically.",
+    scope: "world",
+    config: true,
+    type: Boolean,
+    default: false
+  });
+
+  registerSetting("verificationWorldId", {
+    name: "Verification test world ID",
+    hint: "The harness refuses to run unless the active world ID exactly matches this value.",
+    scope: "world",
+    config: true,
+    type: String,
+    default: DEFAULT_VERIFICATION_WORLD_ID
   });
 
   registerSetting("lastSpecs", {
@@ -293,15 +364,18 @@ function normalizeSpecs(input) {
 function requestedAttunementState(requestText = "") {
   const text = String(requestText ?? "").trim();
   if (!text) return null;
-  if (/\b(?:does not require attunement|no attunement|attunement\s*:\s*(?:not required|no|none))\b/i.test(text)) return "";
-  if (/\b(?:requires? attunement|required by|attunement\s*:\s*required)\b/i.test(text)) return "required";
+  if (/\b(?:does(?:\s+not|n't)\s+(?:need|require)\s+attunement|no\s+attunement(?:\s+needed)?|attunement\s*:\s*(?:not required|no|none))\b/i.test(text)) return "";
+  if (/\b(?:(?:needs?|requires?|requiring)\s+attunement|required\s+by|when attuned|while attuned|attunement\s*:\s*required)\b/i.test(text)) return "required";
   return null;
 }
 
-function alignSpecAttunementToRequest(spec, requestText = "") {
+function alignSpecAttunementToRequest(spec, requestText = "", { preserveExistingWhenUnspecified = false } = {}) {
   if (!spec || typeof spec !== "object" || Array.isArray(spec)) return { applied: false, spec };
   const requested = requestedAttunementState(requestText);
   if (requested == null) {
+    // Review-time validation must not discard a GM's explicit JSON edit just because
+    // the original request did not state an attunement preference.
+    if (preserveExistingWhenUnspecified) return { applied: false, spec };
     if (!String(spec.attunement ?? "").trim()) return { applied: false, spec };
     return {
       applied: true,
@@ -332,7 +406,9 @@ function repairSpecsForValidation(specs, requestText = "") {
     const defaulted = applyForgeSpecDefaults(repaired.spec);
     const deduped = dedupeRecognizedSpellActivities(defaulted.spec, repairContext);
     const blueprinted = buildLayeredItemBlueprint(deduped.spec, repairContext);
-    const attunementAligned = alignSpecAttunementToRequest(blueprinted.spec, requestText);
+    const attunementAligned = alignSpecAttunementToRequest(blueprinted.spec, requestText, {
+      preserveExistingWhenUnspecified: true
+    });
     return attunementAligned.spec;
   });
 }
@@ -348,13 +424,83 @@ function currentConfig(overrides = {}) {
     actorFolderName: overrides.actorFolderName ?? game.settings.get(MODULE_ID, "actorFolderName"),
     sourceLabel: overrides.sourceLabel ?? game.settings.get(MODULE_ID, "sourceLabel"),
     engineVersion: BUILD_VERSION,
+    midiQolAutomation: overrides.midiQolAutomation
+      ?? (game.settings.get(MODULE_ID, "enableMidiQolAutomation") === true && moduleIsActive("midi-qol")),
+    itemMacroAutomation: overrides.itemMacroAutomation ?? moduleIsActive("itemacro"),
+    daeAutomation: overrides.daeAutomation ?? moduleIsActive("dae"),
+    authorizeGeneratedAutomation: overrides.authorizeGeneratedAutomation === true,
     replaceExistingWorldDocuments: overrides.replaceExistingWorldDocuments
       ?? game.settings.get(MODULE_ID, "replaceExisting")
   };
 }
 
+function currentVerificationHarnessOptions(overrides = {}) {
+  return {
+    enabled: overrides.enabled ?? (game.settings.get(MODULE_ID, "enableVerificationHarness") === true),
+    expectedWorldId: overrides.expectedWorldId
+      ?? game.settings.get(MODULE_ID, "verificationWorldId")
+      ?? DEFAULT_VERIFICATION_WORLD_ID
+  };
+}
+
+function verificationHarnessEnvironment(overrides = {}) {
+  return {
+    game,
+    Actor,
+    Folder,
+    ...currentVerificationHarnessOptions(overrides)
+  };
+}
+
+async function setupIsolatedVerificationHarness(overrides = {}) {
+  assertEnvironment({ requireGM: true });
+  const harness = await loadVerificationHarness();
+  return harness.setupVerificationHarness(verificationHarnessEnvironment(overrides));
+}
+
+async function runIsolatedVerificationHarness(specs, { runTag, ...overrides } = {}) {
+  assertEnvironment({ requireGM: true });
+  const harness = await loadVerificationHarness();
+  // Hosted verification inputs may be structurally valid before the normal
+  // request-context hybrid repair has promoted passive/armor hybrids into a
+  // suite. Apply that deterministic repair here so the harness exercises the
+  // same supported chassis as the approved Forge path.
+  const preparedSpecs = specs.map(spec => {
+    const requestText = [
+      spec.description,
+      ...(spec.unresolvedMechanics ?? []).map(mechanic => mechanic?.requestedText)
+    ].filter(Boolean).join("\n");
+    return repairSpecsForValidation([spec], requestText)[0];
+  });
+  const sanitizedSpecs = preparedSpecs.map(spec => sanitizeForgeSpec(spec).spec);
+  return harness.runVerificationHarness({
+    ...verificationHarnessEnvironment(overrides),
+    runTag,
+    specs: sanitizedSpecs,
+    createItems: (verificationSpecs, config = {}) => createPreparedSpecs(verificationSpecs, {
+      ...config,
+      // The isolated harness only creates tagged documents and never executes activities.
+      authorizeGeneratedAutomation: true
+    })
+  });
+}
+
+async function cleanupIsolatedVerificationHarness(runTag) {
+  assertEnvironment({ requireGM: true });
+  const harness = await loadVerificationHarness();
+  const options = currentVerificationHarnessOptions();
+  if (verificationHarnessStatusSnapshot(options).isolated !== true) {
+    throw new Error("Verification cleanup is restricted to the configured test world.");
+  }
+  return harness.cleanupVerificationRun({ game, runTag });
+}
+
 function moduleIsActive(id) {
   return Boolean(game.modules.get(id)?.active);
+}
+
+function midiQolAutomationEnabled() {
+  return game.settings.get(MODULE_ID, "enableMidiQolAutomation") === true && moduleIsActive("midi-qol");
 }
 
 function dependencyWarnings(specs) {
@@ -362,9 +508,10 @@ function dependencyWarnings(specs) {
   const usesConditionMacro = specs.some(spec => spec.kind === "weaponConditionOnHit");
   const usesUtilityMacro = specs.some(spec => spec.utilityActivities?.some(activity => activity.macroCommand));
   const usesItemMacro = usesConditionMacro || usesUtilityMacro || specs.some(spec => spec.toggleLight);
+  const midiEnabled = midiQolAutomationEnabled();
 
-  if ((usesConditionMacro || usesUtilityMacro) && !moduleIsActive("midi-qol")) {
-    warnings.push("This automation expects Midi-QOL.");
+  if ((usesConditionMacro || usesUtilityMacro) && !midiEnabled) {
+    warnings.push("Enable the Forge Midi-QOL automation setting to automate condition riders and supported utility powers.");
   }
   if (usesItemMacro && !moduleIsActive("itemacro")) {
     warnings.push("This spec expects Item Macro.");
@@ -387,8 +534,16 @@ async function validateSpecs(input, requestText = "") {
 async function createFromSpecs(input, configOverrides = {}, requestText = "") {
   assertEnvironment({ requireGM: true });
   const specs = await prepareSpecsForForge(input, requestText);
-  await runDungeonMastersForge(currentConfig(configOverrides), specs, { validateOnly: true });
-  return runDungeonMastersForge(currentConfig(configOverrides), specs);
+  return createPreparedSpecs(specs, configOverrides);
+}
+
+async function createPreparedSpecs(specs, configOverrides = {}) {
+  assertEnvironment({ requireGM: true });
+  // The engine validates immediately before creation, so an approved UI draft does
+  // not need a second template/reference preparation pass.
+  return runDungeonMastersForge(currentConfig(configOverrides), specs, {
+    authorizeGeneratedAutomation: configOverrides.authorizeGeneratedAutomation === true
+  });
 }
 
 function statusPill(label, active, title) {
@@ -400,7 +555,7 @@ function statusPill(label, active, title) {
 function moduleStatusHTML() {
   return [
     statusPill(`DND5e ${game.system.version}`, game.system.id === "dnd5e", "Required system"),
-    statusPill("Midi-QOL", moduleIsActive("midi-qol"), "Used by condition automation"),
+    statusPill("Midi-QOL", midiQolAutomationEnabled(), "Enabled for Forge activity and condition automation"),
     statusPill("DAE", moduleIsActive("dae"), "Used by advanced effects"),
     statusPill("Item Macro", moduleIsActive("itemacro"), "Used by scripted item powers")
   ].join("");
@@ -445,28 +600,18 @@ function providerStatusSnapshot(providerId, configuration, connection = null) {
   };
 }
 
-function forgeProviderSummaryHTML(unresolvedPolicy) {
-  const configuredProvider = configuredProviderState({ unresolvedPolicy });
-  const snapshot = providerStatusSnapshot(configuredProvider.id, configuredProvider.configuration);
+function forgeFooterProviderStatusHTML(snapshot) {
   return `
-    <section class="dm_forge-provider-summary">
-      <div class="dm_forge-provider-summary-copy">
-        <strong>${escapeHTML(snapshot.provider?.label ?? "Provider")}</strong>
-        <span class="dm_forge-provider-summary-meta">
-          <i class="fa-solid ${escapeHTML(snapshot.icon)}"></i>
-        <span data-forge-provider-summary-text>${escapeHTML(snapshot.message)}</span>
-      </span>
-    </div>
-    </section>
+    <output class="dm_forge-footer-provider-status" data-forge-footer-provider-status data-state="${escapeHTML(snapshot.state)}" aria-live="polite">
+      <i class="fa-solid ${escapeHTML(snapshot.icon)}"></i>
+      <span>${escapeHTML(snapshot.message)}</span>
+    </output>
   `;
 }
 
 function forgeContent() {
   const specs = game.settings.get(MODULE_ID, "lastSpecs") || JSON.stringify(EXAMPLE_SPECS, null, 2);
   const request = game.settings.get(MODULE_ID, "lastRequest") || "";
-  const itemFolder = game.settings.get(MODULE_ID, "itemFolderName");
-  const actorFolder = game.settings.get(MODULE_ID, "actorFolderName");
-  const replaceExisting = game.settings.get(MODULE_ID, "replaceExisting");
   const unresolvedPolicy = currentUnresolvedPolicy();
 
   return `
@@ -480,7 +625,6 @@ function forgeContent() {
           <header class="dm_forge-pane-header">
             <h2><span class="dm_forge-step" aria-hidden="true">1</span><i class="fa-solid fa-feather-pointed"></i><span>Description</span></h2>
           </header>
-          ${forgeProviderSummaryHTML(unresolvedPolicy)}
           <div class="dm_forge-provider-controls dm_forge-request-controls">
             <label>
               <span>Unresolved mechanics</span>
@@ -503,21 +647,13 @@ function forgeContent() {
           <header class="dm_forge-pane-header">
             <h2><span class="dm_forge-step" aria-hidden="true">2</span><i class="fa-solid fa-scroll"></i><span>Result</span></h2>
           </header>
+          <nav class="dm_forge-review-tabs" data-forge-review-tabs hidden aria-label="Review view">
+            <button type="button" class="dm_forge-review-tab is-active" data-forge-review-tab="visual" aria-selected="true">Visual preview</button>
+            <button type="button" class="dm_forge-review-tab" data-forge-review-tab="automation" aria-selected="false">Automation code</button>
+          </nav>
           <div class="dm_forge-review-summary" data-forge-preview hidden></div>
-          <div class="dm_forge-options">
-            <label>
-              <span>Item folder</span>
-              <input type="text" name="itemFolderName" value="${escapeHTML(itemFolder)}">
-            </label>
-            <label>
-              <span>Summon actor folder</span>
-              <input type="text" name="actorFolderName" value="${escapeHTML(actorFolder)}">
-            </label>
-            <label class="dm_forge-toggle">
-              <input type="checkbox" name="replaceExisting" ${replaceExisting ? "checked" : ""}>
-              <span>Replace matching items and summon actors</span>
-            </label>
-          </div>
+
+          <div class="dm_forge-automation-review" data-forge-automation-review hidden></div>
 
           <details class="dm_forge-advanced">
             <summary><i class="fa-solid fa-code"></i><span>Advanced specification editor</span></summary>
@@ -536,6 +672,11 @@ function forgeContent() {
           <input type="checkbox" name="reviewApproval" aria-label="Approve creation after reviewing the specifications.">
           <span class="dm_forge-approval-box" aria-hidden="true"><i class="fa-solid fa-check"></i></span>
           <span class="dm_forge-approval-label">Approve</span>
+        </label>
+        <label class="dm_forge-approval dm_forge-approval-compact dm_forge-code-approval" data-forge-code-approval-wrap hidden title="Required when the item contains generated automation code: read the code preview and authorize it before creation.">
+          <input type="checkbox" name="automationCodeApproval" aria-label="I have read and authorize the generated automation code.">
+          <span class="dm_forge-approval-box" aria-hidden="true"><i class="fa-solid fa-check"></i></span>
+          <span class="dm_forge-approval-label">Approve automation</span>
         </label>
         <button type="button" class="dm_forge-report-button" data-action="report-failed-item" disabled hidden>
           <i class="fa-solid fa-bug"></i>
@@ -563,20 +704,26 @@ function readDialogForm(form) {
     rawSpecs,
     specs: normalizeSpecs(rawSpecs),
     approved: formControl(form, "reviewApproval").checked,
+    automationApproved: formControl(form, "automationCodeApproval").checked,
     provider,
-    config: {
-      itemFolderName: formControl(form, "itemFolderName").value.trim() || "Dungeon Master's Forge V2",
-      actorFolderName: formControl(form, "actorFolderName").value.trim() || "Dungeon Master's Forge V2 Summons",
-      replaceExistingWorldDocuments: formControl(form, "replaceExisting").checked
-    }
+    config: currentConfig()
   };
 }
 
 async function persistProviderState(provider) {
   const partitioned = partitionProviderConfiguration(provider.id, provider.configuration);
   if (provider.id === "bring-your-own") {
-    if (partitioned.session.apiToken) providerSessionConfiguration.set(provider.id, partitioned.session);
+    const rememberApiToken = provider.rememberApiToken === true;
+    const storedApiToken = rememberApiToken
+      ? String(game.settings.get(MODULE_ID, "providerApiToken") || "")
+      : "";
+    const apiToken = rememberApiToken
+      ? partitioned.session.apiToken || storedApiToken
+      : partitioned.session.apiToken;
+    if (apiToken) providerSessionConfiguration.set(provider.id, { ...partitioned.session, apiToken });
     else providerSessionConfiguration.delete(provider.id);
+
+    partitioned.session.apiToken = apiToken;
   }
 
   const writes = [
@@ -715,6 +862,12 @@ function refreshForgeProviderSummary(dialog, form) {
   if (label) label.textContent = snapshot.provider?.label ?? "Provider";
   if (text) text.textContent = snapshot.message;
   if (icon) icon.className = `fa-solid ${snapshot.icon}`;
+  const footerStatus = dialog.element?.querySelector("[data-forge-footer-provider-status]");
+  const footerIcon = footerStatus?.querySelector("i");
+  const footerText = footerStatus?.querySelector("span");
+  if (footerStatus) footerStatus.dataset.state = snapshot.state;
+  if (footerIcon) footerIcon.className = `fa-solid ${snapshot.icon}`;
+  if (footerText) footerText.textContent = snapshot.message;
   if (compileButton instanceof HTMLButtonElement) compileButton.disabled = !snapshot.readiness.ready;
 }
 
@@ -729,10 +882,13 @@ function showDialogView(form, view) {
 function syncCreateAction(dialog) {
   const form = dialog.element?.querySelector("form");
   const approval = form?.elements?.namedItem("reviewApproval");
+  const automationApproval = form?.elements?.namedItem("automationCodeApproval");
   const createButton = dialog.element?.querySelector('button[data-action="create"]');
   if (!(approval instanceof HTMLInputElement) || !(createButton instanceof HTMLButtonElement)) return;
 
-  createButton.disabled = !dialog._dm_forgeReviewValidated;
+  const codeApproved = dialog._dm_forgeAutomationCodeRequired !== true
+    || (automationApproval instanceof HTMLInputElement && automationApproval.checked);
+  createButton.disabled = !dialog._dm_forgeReviewValidated || !codeApproved;
   createButton.setAttribute("aria-disabled", String(createButton.disabled));
 }
 
@@ -747,6 +903,13 @@ function relocateBottomActions(dialog) {
   if (!(footer instanceof HTMLElement) || !(approvalLabel instanceof HTMLElement) || !(reportButton instanceof HTMLButtonElement)) return;
 
   if (compileButton instanceof HTMLButtonElement) compileButton.after(approvalLabel);
+  if (!footer.querySelector("[data-forge-footer-provider-status]")) {
+    const provider = activeProviderState({
+      unresolvedPolicy: formControl(form, "unresolvedPolicy").value
+    });
+    const snapshot = providerStatusSnapshot(provider.id, provider.configuration, dialog._dm_forgeProviderConnection);
+    approvalLabel.insertAdjacentHTML("afterend", forgeFooterProviderStatusHTML(snapshot));
+  }
   if (validateButton instanceof HTMLButtonElement) validateButton.before(reportButton);
   reportButton.hidden = false;
   footer.classList.add("dm_forge-actions-footer");
@@ -790,7 +953,7 @@ function failedItemReportAvailability(dialog) {
 
   return {
     enabled: true,
-    message: "Opens a separate report window. We will attach the current request, generated JSON, preview notes, provider details, and your note."
+      message: "Opens a separate report window. We will attach the current request, generated JSON, preview notes, provider details, and your note. The configured service controls how long it keeps the report."
   };
 }
 
@@ -808,13 +971,36 @@ function syncFailedItemReportAction(dialog) {
 function setReviewValidated(dialog, validated) {
   const form = dialog.element?.querySelector("form");
   const approval = form?.elements?.namedItem("reviewApproval");
+  const automationApproval = form?.elements?.namedItem("automationCodeApproval");
   dialog._dm_forgeReviewValidated = validated;
   if (approval instanceof HTMLInputElement) {
     approval.disabled = !validated;
     if (!validated) approval.checked = false;
   }
+  if (automationApproval instanceof HTMLInputElement && !validated) automationApproval.checked = false;
   syncCreateAction(dialog);
   syncFailedItemReportAction(dialog);
+}
+
+function clearForgeResultState(dialog) {
+  dialog._dm_forgeCompilation = null;
+  dialog._dm_forgeAutomationCodeRequired = false;
+  setReviewValidated(dialog, false);
+  for (const selector of ["[data-forge-compile-report]", "[data-forge-preview]", "[data-forge-automation-review]", "[data-forge-notices]", "[data-forge-diagnostics]"]) {
+    const output = dialog.element?.querySelector(selector);
+    if (!output) continue;
+    output.hidden = true;
+    if ("innerHTML" in output) output.innerHTML = "";
+  }
+  const codeApprovalWrap = dialog.element?.querySelector("[data-forge-code-approval-wrap]");
+  const reviewTabs = dialog.element?.querySelector("[data-forge-review-tabs]");
+  const codeApproval = dialog.element?.querySelector('input[name="automationCodeApproval"]');
+  if (codeApprovalWrap instanceof HTMLElement) codeApprovalWrap.hidden = true;
+  if (reviewTabs instanceof HTMLElement) reviewTabs.hidden = true;
+  if (codeApproval instanceof HTMLInputElement) {
+    codeApproval.checked = false;
+    codeApproval.disabled = true;
+  }
 }
 
 function bindForgeUsability(dialog, element) {
@@ -824,11 +1010,20 @@ function bindForgeUsability(dialog, element) {
   relocateBottomActions(dialog);
 
   const approval = formControl(form, "reviewApproval");
+  const automationApproval = formControl(form, "automationCodeApproval");
+  const request = formControl(form, "request");
   const specs = formControl(form, "specs");
   const unresolvedPolicy = formControl(form, "unresolvedPolicy");
   const reportButton = form.querySelector('[data-action="report-failed-item"]');
+  for (const tab of form.querySelectorAll("[data-forge-review-tab]")) {
+    tab.addEventListener("click", () => setReviewTab(dialog, tab.dataset.forgeReviewTab));
+  }
   approval.addEventListener("change", () => {
     approval.closest(".dm_forge-approval")?.classList.remove("dm_forge-approval-needs-attention");
+    syncCreateAction(dialog);
+  });
+  automationApproval.addEventListener("change", () => {
+    automationApproval.closest(".dm_forge-approval")?.classList.remove("dm_forge-approval-needs-attention");
     syncCreateAction(dialog);
   });
   unresolvedPolicy.addEventListener("change", () => {
@@ -839,15 +1034,12 @@ function bindForgeUsability(dialog, element) {
     event.preventDefault();
     void openFailedItemReportDialog(dialog);
   });
+  request.addEventListener("input", () => {
+    clearForgeResultState(dialog);
+    setStatus(dialog, "warning", "Request changed. Preview again to refresh the item review.");
+  });
   specs.addEventListener("input", () => {
-    dialog._dm_forgeCompilation = null;
-    setReviewValidated(dialog, false);
-    const report = dialog.element?.querySelector("[data-forge-compile-report]");
-    const preview = dialog.element?.querySelector("[data-forge-preview]");
-    const notices = dialog.element?.querySelector("[data-forge-notices]");
-    if (report) report.hidden = true;
-    if (preview) preview.hidden = true;
-    if (notices) notices.hidden = true;
+    clearForgeResultState(dialog);
     setStatus(dialog, "warning", "Specifications changed. Validate to refresh the item review.");
   });
   setReviewValidated(dialog, false);
@@ -867,6 +1059,9 @@ function reviewNoteHTML(note) {
   const icons = {
     assumption: "fa-lightbulb",
     deferred: "fa-hand",
+    "free-forge": "fa-cloud",
+    notice: "fa-circle-info",
+    note: "fa-circle-info",
     reference: "fa-book-open",
     unresolved: "fa-triangle-exclamation",
     warning: "fa-triangle-exclamation"
@@ -895,6 +1090,9 @@ function footerReviewBadgeHTML(note) {
   const icons = {
     assumption: "fa-lightbulb",
     deferred: "fa-hand",
+    "free-forge": "fa-cloud",
+    notice: "fa-circle-info",
+    note: "fa-circle-info",
     reference: "fa-book-open",
     unresolved: "fa-triangle-exclamation",
     warning: "fa-triangle-exclamation"
@@ -910,16 +1108,15 @@ function footerReviewBadgeHTML(note) {
 
 function summarizeFooterNotes(notes) {
   const groups = [
-    { state: "warning", label: "Warnings" },
-    { state: "unresolved", label: "Unresolved" },
-    { state: "deferred", label: "Manual" },
-    { state: "assumption", label: "Assumptions" },
-    { state: "reference", label: "References" }
+    { state: "warning", label: "Warnings", states: ["warning", "unresolved", "deferred"] },
+    { state: "notice", label: "Notices", states: ["notice"] },
+    { state: "free-forge", label: "Free Forge", states: ["free-forge"] },
+    { state: "note", label: "Notes", states: ["assumption", "reference", "note"] }
   ];
   return groups
     .map(group => ({
       ...group,
-      notes: notes.filter(note => note.state === group.state)
+      notes: notes.filter(note => group.states.includes(note.state))
     }))
     .filter(group => group.notes.length);
 }
@@ -931,7 +1128,7 @@ function itemNoteBadgesHTML(notes) {
     <section class="dm_forge-item-sheet-card dm_forge-item-sheet-notes">
       <div class="dm_forge-item-sheet-card-head">
         <strong>Review notes</strong>
-        <span>${notes.length} notice${notes.length === 1 ? "" : "s"}</span>
+        <span>${notes.length} note${notes.length === 1 ? "" : "s"}</span>
       </div>
       <div class="dm_forge-item-note-badges">
         ${groups.map(group => footerReviewBadgeHTML({
@@ -1088,7 +1285,7 @@ function collectFooterNotes(summaries, validation) {
     seen.add(key);
     notes.push(note);
   }
-  const order = { warning: 0, unresolved: 1, deferred: 2, assumption: 3, reference: 4 };
+  const order = { warning: 0, unresolved: 1, deferred: 2, notice: 3, "free-forge": 4, assumption: 5, reference: 6, note: 7 };
   return notes.sort((left, right) => (order[left.state] ?? 99) - (order[right.state] ?? 99));
 }
 
@@ -1104,7 +1301,7 @@ function renderFooterNotices(dialog, summaries, validation) {
         <summary class="dm_forge-footer-head">
           <div class="dm_forge-footer-summary">
             <strong>Review notes</strong>
-            <span>${notes.length} notice${notes.length === 1 ? "" : "s"}</span>
+            <span>${notes.length} note${notes.length === 1 ? "" : "s"}</span>
           </div>
           <div class="dm_forge-footer-badges">
             ${groups.map(group => footerReviewBadgeHTML({
@@ -1152,7 +1349,7 @@ function specReferenceLookups(spec) {
     references.push({ kind, name: normalized, label });
   };
   const summonActorReferenceName = actor => {
-    const explicit = actor?.systemReferenceName ?? actor?.referenceName ?? actor?.sourceName;
+    const explicit = actor?.srdActorName ?? actor?.systemReferenceName ?? actor?.referenceName ?? actor?.sourceName;
     if (String(explicit ?? "").trim()) return explicit;
     const actorName = String(actor?.name ?? "").trim();
     if (actorName && !/^Forge Summon\s*-/i.test(actorName)) return actorName;
@@ -1340,22 +1537,34 @@ async function enrichSpecsWithSystemReferences(specs, requestText = "") {
         label: "Foundry core image",
         message: "Used bundled Foundry consumable-projectile art because no exact system item image was available."
       });
-    } else if (needsFallbackItemArt(nextSpec.img)) {
-      systemReferences.push({
-        kind: "art",
-        name: `${nextSpec.name} missing art`,
-        label: "Item image",
-        message: "No matching system or bundled Foundry image was found; the generic item image is being used."
-      });
+    } else {
+      const categoryArt = applyCategoryItemFallbackArt(nextSpec, requestText);
+      nextSpec = categoryArt.spec;
+      if (categoryArt.applied) {
+        systemReferences.push({
+          kind: "art",
+          name: `${nextSpec.name} Foundry core art`,
+          label: "Foundry core image",
+          message: "Used a bundled Foundry image based on the item category because no exact system item image was available."
+        });
+      } else if (needsFallbackItemArt(nextSpec.img)) {
+        systemReferences.push({
+          kind: "art",
+          name: `${nextSpec.name} missing art`,
+          label: "Item image",
+          message: "No matching system or bundled Foundry image was found; the generic item image is being used."
+        });
+      }
     }
     return systemReferences.length ? { ...nextSpec, systemReferences: uniqueReferences(systemReferences) } : nextSpec;
   }));
 }
 
-async function enrichCompilationWithSrdSpellChoices(compilation) {
+async function enrichCompilationWithSrdSpellChoices(compilation, requestText = "") {
   const items = Array.isArray(compilation?.specs) ? compilation.specs : [];
   if (!items.length) return compilation;
-  const mechanicsRequest = mechanicsRequestForCompilation(compilation);
+  const providerSpecFingerprint = fingerprintForgeSpecs(items);
+  const mechanicsRequest = mechanicsRequestForCompilation(compilation, requestText);
 
   const featurePlan = await planItemFeatures(mechanicsRequest, {
     resolveSpell: resolveSpellByName
@@ -1453,7 +1662,17 @@ async function enrichCompilationWithSrdSpellChoices(compilation) {
     }
   }
 
-  if (!applied) return compilation;
+  if (!applied) {
+    return {
+      ...compilation,
+      forgeProvenance: {
+        servicePreparedSpecFingerprint: String(compilation.preparedSpecFingerprint ?? ""),
+        providerSpecFingerprint,
+        finalSpecFingerprint: providerSpecFingerprint,
+        changedAfterProvider: false
+      }
+    };
+  }
 
   const filteredWarnings = warnings.filter(note => !isSpellChoiceCompilationNote(note) || /Selected compatible SRD spells automatically/i.test(note));
   const filteredDeferred = deferred.filter(note => !isSpellChoiceCompilationNote(note));
@@ -1474,13 +1693,24 @@ async function enrichCompilationWithSrdSpellChoices(compilation) {
     warnings: filteredWarnings,
     deferred: filteredDeferred,
     unresolvedMechanics,
-    featurePlan
+    featurePlan,
+    forgeProvenance: {
+      servicePreparedSpecFingerprint: String(compilation.preparedSpecFingerprint ?? ""),
+      providerSpecFingerprint,
+      finalSpecFingerprint: fingerprintForgeSpecs(specs),
+      changedAfterProvider: providerSpecFingerprint !== fingerprintForgeSpecs(specs)
+    }
   };
 }
 
 function compilationWithPreparedSpecs(compilation, specs) {
   if (!compilation) return null;
   const preparedSpecs = Array.isArray(specs) ? specs : [];
+  const providerSpecFingerprint = String(
+    compilation.forgeProvenance?.providerSpecFingerprint
+      ?? fingerprintForgeSpecs(compilation.specs)
+  );
+  const finalSpecFingerprint = fingerprintForgeSpecs(preparedSpecs);
   return {
     ...compilation,
     specs: preparedSpecs,
@@ -1491,7 +1721,17 @@ function compilationWithPreparedSpecs(compilation, specs) {
     unresolvedMechanics: preparedSpecs.flatMap(spec => (spec.unresolvedMechanics ?? []).map(mechanic => ({
       itemName: spec.name,
       ...mechanic
-    })))
+    }))),
+    forgeProvenance: {
+      servicePreparedSpecFingerprint: String(
+        compilation.forgeProvenance?.servicePreparedSpecFingerprint
+          ?? compilation.preparedSpecFingerprint
+          ?? ""
+      ),
+      providerSpecFingerprint,
+      finalSpecFingerprint,
+      changedAfterProvider: providerSpecFingerprint !== finalSpecFingerprint
+    }
   };
 }
 
@@ -1504,11 +1744,11 @@ function syncPreparedSpecs(dialog, form, specs) {
   return rawSpecs;
 }
 
-async function renderPreview(dialog, validation) {
+async function renderPreview(dialog, validation, compilation = dialog._dm_forgeCompilation) {
   const preview = dialog.element?.querySelector("[data-forge-preview]");
   if (!preview) return;
 
-  const summaries = buildReviewSummaries(validation.specs, dialog._dm_forgeCompilation);
+  const summaries = buildReviewSummaries(validation.specs, compilation);
   setReviewValidated(dialog, true);
   preview.hidden = false;
   preview.innerHTML = `
@@ -1519,10 +1759,68 @@ async function renderPreview(dialog, validation) {
     ${reviewOverviewHTML(summaries)}
     <div class="dm_forge-review-items">${summaries.map(reviewItemHTML).join("")}</div>
   `;
+  const compiledKinds = dialog.element?.querySelector("[data-forge-compiled-kinds]");
+  if (compiledKinds) {
+    compiledKinds.textContent = validation.specs.map(spec => String(spec?.kind ?? "").trim()).filter(Boolean).join(", ");
+  }
   renderFooterNotices(dialog, summaries, validation);
+  renderAutomationCodeReview(dialog, validation.automationCodePreview ?? []);
+  return collectFooterNotes(summaries, validation);
 }
 
-function renderCompilationReport(dialog, compilation) {
+function setReviewTab(dialog, tab = "visual") {
+  const normalizedTab = tab === "automation" ? "automation" : "visual";
+  const preview = dialog.element?.querySelector("[data-forge-preview]");
+  const automation = dialog.element?.querySelector("[data-forge-automation-review]");
+  const tabs = dialog.element?.querySelectorAll("[data-forge-review-tab]") ?? [];
+  if (preview instanceof HTMLElement) preview.hidden = normalizedTab !== "visual";
+  if (automation instanceof HTMLElement && dialog._dm_forgeAutomationCodeRequired === true) {
+    automation.hidden = normalizedTab !== "automation";
+  }
+  for (const button of tabs) {
+    const active = button.dataset.forgeReviewTab === normalizedTab;
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-selected", String(active));
+  }
+}
+
+function renderAutomationCodeReview(dialog, entries = []) {
+  const output = dialog.element?.querySelector("[data-forge-automation-review]");
+  const wrapper = dialog.element?.querySelector("[data-forge-code-approval-wrap]");
+  const tabs = dialog.element?.querySelector("[data-forge-review-tabs]");
+  const approval = dialog.element?.querySelector('input[name="automationCodeApproval"]');
+  if (!(output instanceof HTMLElement)) return;
+
+  const codeEntries = Array.isArray(entries) ? entries.filter(entry => entry?.command) : [];
+  dialog._dm_forgeAutomationCodeRequired = codeEntries.length > 0;
+  output.hidden = codeEntries.length === 0;
+  if (wrapper instanceof HTMLElement) wrapper.hidden = codeEntries.length === 0;
+  if (tabs instanceof HTMLElement) tabs.hidden = codeEntries.length === 0;
+  if (approval instanceof HTMLInputElement) {
+    approval.disabled = codeEntries.length === 0;
+    if (codeEntries.length === 0) approval.checked = false;
+  }
+  output.innerHTML = codeEntries.length
+    ? `
+      <details class="dm_forge-generated-code-disclosure" open>
+        <summary><i class="fa-solid fa-code"></i><strong>Generated automation code (${codeEntries.length})</strong></summary>
+        <p class="notes">This item contains executable Item Macro code generated by the trusted Forge engine. Read the exact code below before creation. It runs only when the corresponding item activity is used.</p>
+        <div class="dm_forge-generated-code-list">
+          ${codeEntries.map(entry => `
+            <article class="dm_forge-generated-code-entry">
+              <header><strong>${escapeHTML(entry.itemName)}</strong><span>${escapeHTML(entry.activityName)} - ${escapeHTML(entry.source)}</span></header>
+              <pre><code>${escapeHTML(entry.command)}</code></pre>
+            </article>
+          `).join("")}
+        </div>
+      </details>
+    `
+    : "";
+  if (codeEntries.length) setReviewTab(dialog, "visual");
+  syncCreateAction(dialog);
+}
+
+function renderCompilationReport(dialog, compilation, reviewNotes = null) {
   const report = dialog.element?.querySelector("[data-forge-compile-report]");
   if (!report) return;
   dialog._dm_forgeCompilation = compilation;
@@ -1530,7 +1828,12 @@ function renderCompilationReport(dialog, compilation) {
     ? providerConnectionDetailText(dialog._dm_forgeProviderConnection)
     : "";
   const unresolvedCount = compilation.unresolvedMechanics?.length ?? 0;
-  const warningCount = compilation.warnings?.length ?? 0;
+  const reviewGroups = reviewNotes ? summarizeFooterNotes(reviewNotes) : [];
+  const reviewGroup = state => reviewGroups.find(group => group.state === state);
+  const warningCount = reviewGroup("warning")?.notes.length ?? (compilation.warnings?.length ?? 0);
+  const noticeCount = reviewGroup("notice")?.notes.length ?? 0;
+  const freeForgeCount = reviewGroup("free-forge")?.notes.length ?? 0;
+  const noteCount = reviewGroup("note")?.notes.length ?? 0;
   const normalizationNote = compilation.normalization?.changed
     ? "Request normalized into a layered Forge brief before compilation."
     : "";
@@ -1538,7 +1841,7 @@ function renderCompilationReport(dialog, compilation) {
   report.innerHTML = `
     <div class="dm_forge-compile-head">
       <strong>${escapeHTML(compilation.providerLabel ?? "Local Rules")}</strong>
-      <span>${compilation.decisions.map(decision => escapeHTML(decision.pattern)).join(", ")}</span>
+      <span data-forge-compiled-kinds>${compilation.decisions.map(decision => escapeHTML(decision.pattern)).join(", ")}</span>
     </div>
     <div class="dm_forge-compile-pills">
       <span class="dm_forge-review-pill" data-state="ready">
@@ -1559,6 +1862,33 @@ function renderCompilationReport(dialog, compilation) {
           <span class="dm_forge-review-pill" data-state="warning">
             <i class="fa-solid fa-circle-exclamation"></i>
             <span>${warningCount} warning${warningCount === 1 ? "" : "s"}</span>
+          </span>
+        `
+        : ""
+      }
+      ${noticeCount
+        ? `
+          <span class="dm_forge-review-pill" data-state="notice">
+            <i class="fa-solid fa-circle-info"></i>
+            <span>${noticeCount} notice${noticeCount === 1 ? "" : "s"}</span>
+          </span>
+        `
+        : ""
+      }
+      ${freeForgeCount
+        ? `
+          <span class="dm_forge-review-pill" data-state="free-forge">
+            <i class="fa-solid fa-cloud"></i>
+            <span>Free Forge ${freeForgeCount}</span>
+          </span>
+        `
+        : ""
+      }
+      ${noteCount
+        ? `
+          <span class="dm_forge-review-pill" data-state="note">
+            <i class="fa-solid fa-circle-info"></i>
+            <span>Notes ${noteCount}</span>
           </span>
         `
         : ""
@@ -1745,7 +2075,15 @@ function compilationSnapshotForDialog(dialog) {
     assumptions: Array.isArray(compilation.assumptions) ? compilation.assumptions.map(String) : [],
     warnings: Array.isArray(compilation.warnings) ? compilation.warnings.map(String) : [],
     deferred: Array.isArray(compilation.deferred) ? compilation.deferred.map(String) : [],
-    unresolvedCount: Array.isArray(compilation.unresolvedMechanics) ? compilation.unresolvedMechanics.length : 0
+    unresolvedCount: Array.isArray(compilation.unresolvedMechanics) ? compilation.unresolvedMechanics.length : 0,
+    forgeProvenance: compilation.forgeProvenance && typeof compilation.forgeProvenance === "object"
+      ? {
+          servicePreparedSpecFingerprint: String(compilation.forgeProvenance.servicePreparedSpecFingerprint ?? "").slice(0, 100),
+          providerSpecFingerprint: String(compilation.forgeProvenance.providerSpecFingerprint ?? "").slice(0, 100),
+          finalSpecFingerprint: String(compilation.forgeProvenance.finalSpecFingerprint ?? "").slice(0, 100),
+          changedAfterProvider: compilation.forgeProvenance.changedAfterProvider === true
+        }
+      : null
   };
 }
 
@@ -1797,7 +2135,7 @@ function buildAnonymousErrorReportPayload(dialog, error, context = {}) {
   });
 }
 
-function buildFailedItemReportPayload(dialog, userNote) {
+function buildFailedItemReportPayload(dialog, userNote, desiredOutcome = "") {
   return {
     ...buildReportPayloadBase(dialog, new Error("User reported a failed item from the Forge preview window."), {
       stage: "user-feedback",
@@ -1806,6 +2144,7 @@ function buildFailedItemReportPayload(dialog, userNote) {
     feedback: {
       kind: "failed-item",
       userNote: String(userNote ?? "").trim(),
+      desiredOutcome: String(desiredOutcome ?? "").trim(),
       requestText: reportRequestForDialog(dialog),
       generatedSpecsJson: reportRawSpecsForDialog(dialog),
       statusMessage: reportStatusForDialog(dialog),
@@ -1862,10 +2201,19 @@ function failedItemReportDialogContent() {
         <li>Avoid including secrets such as API keys or access tokens.</li>
       </ul>
       <p><strong>Included automatically:</strong> the current request, generated specifications JSON, preview notes, provider details, and Foundry/system version data.</p>
+      <label class="dm_forge-report-consent">
+        <input type="checkbox" name="reportConsent" aria-label="I understand what this report sends.">
+        <span>I understand that this report sends the prompt, generated specifications, preview notes, provider host/path, and my notes to the configured Forge service. It does not send the API token, world documents, actors, Scenes, or Regions. The configured service controls retention; the current hosted tester service prunes expired reports when a new report is received. I will remove secrets or private campaign details from my notes.</span>
+      </label>
       <label class="dm_forge-report-dialog-field">
         <span>What went wrong?</span>
         <textarea name="reportNote" aria-label="Failed item report note" placeholder="Example: Burning Hands showed up in preview, but the created item defaulted to the melee attack and never offered the spell activity."></textarea>
       </label>
+      <label class="dm_forge-report-dialog-field">
+        <span>Desired outcome in plain language <em>(optional)</em></span>
+        <textarea name="desiredOutcome" aria-label="Desired outcome in plain language" placeholder="Example: I wanted an action that casts Burning Hands from the item, using its charges and spell save DC."></textarea>
+      </label>
+      <p class="notes">This optional outcome helps us refine how Free Forge interprets natural D&D wording. It is stored with this report for review; it does not change an existing item automatically.</p>
       <output class="dm_forge-report-dialog-status" data-forge-report-status data-state="idle" aria-live="polite">Your note will be sent with the current preview context.</output>
     </section>
   `;
@@ -1878,7 +2226,7 @@ function setFailedItemReportStatus(dialog, state, message) {
   output.textContent = message;
 }
 
-async function submitFailedItemReport(parentDialog, userNote) {
+async function submitFailedItemReport(parentDialog, userNote, desiredOutcome = "") {
   const provider = reportContextProvider(parentDialog);
   const providerRecord = getProvider(provider.id);
   if (!providerRecord || providerRecord.mode !== "network") {
@@ -1888,7 +2236,7 @@ async function submitFailedItemReport(parentDialog, userNote) {
   if (!String(connection.endpoint ?? "").trim()) {
     throw new Error("Configure a Forge-compatible compile endpoint before sending failed-item reports.");
   }
-  const payload = buildFailedItemReportPayload(parentDialog, userNote);
+  const payload = buildFailedItemReportPayload(parentDialog, userNote, desiredOutcome);
   return requestRemoteErrorReport({
     endpoint: connection.endpoint,
     token: connection.apiToken,
@@ -1934,14 +2282,20 @@ async function openFailedItemReportDialog(parentDialog) {
         callback: async (_event, button, dialog) => {
           try {
             const note = formControl(button.form, "reportNote").value.trim();
+            const desiredOutcome = formControl(button.form, "desiredOutcome").value.trim();
+            const reportConsent = formControl(button.form, "reportConsent").checked;
+            if (!reportConsent) {
+              setFailedItemReportStatus(dialog, "warning", "Confirm that you understand what this report sends before continuing.");
+              return;
+            }
             if (!note) {
               setFailedItemReportStatus(dialog, "warning", "Add a short note describing what failed before sending the report.");
               return;
             }
             setFailedItemReportStatus(dialog, "working", "Sending failed-item report...");
             setStatus(parentDialog, "working", "Sending failed-item report...");
-            await submitFailedItemReport(parentDialog, note);
-            setFailedItemReportStatus(dialog, "success", "Report sent. Thank you — the current preview notes and generated JSON were included.");
+            await submitFailedItemReport(parentDialog, note, desiredOutcome);
+            setFailedItemReportStatus(dialog, "success", "Report sent. Thank you - the current preview notes and generated JSON were included.");
             setStatus(parentDialog, "success", "Failed-item report sent with the current preview notes and generated JSON.");
             ui.notifications.info(`${MODULE_TITLE}: Failed-item report sent.`);
             dialog.close();
@@ -1976,12 +2330,18 @@ function settingsFormElement() {
 }
 
 function settingsFormProviderState(form, overrides = {}) {
+  const providerId = formControl(form, "providerId").value;
+  const rememberApiToken = formControl(form, "rememberProviderApiToken").checked;
+  const enteredApiToken = formControl(form, "providerApiToken").value;
+  const apiToken = enteredApiToken || (providerId === "bring-your-own" && rememberApiToken
+    ? currentProviderToken({ rememberProviderToken: true })
+    : "");
   return configuredProviderState({
-    providerId: formControl(form, "providerId").value,
+    providerId,
     endpoint: formControl(form, "providerEndpoint").value.trim(),
     model: formControl(form, "providerModel").value.trim(),
-    apiToken: formControl(form, "providerApiToken").value,
-    rememberApiToken: formControl(form, "rememberProviderApiToken").checked,
+    apiToken,
+    rememberApiToken,
     unresolvedPolicy: overrides.unresolvedPolicy ?? currentUnresolvedPolicy()
   });
 }
@@ -2029,6 +2389,43 @@ function renderSettingsDiagnostics(app, report) {
   if (!output) return;
   output.hidden = false;
   output.innerHTML = diagnosticsHTML(report);
+}
+
+function parseVerificationHarnessSpecs(raw, runTag) {
+  let parsed;
+  try {
+    parsed = JSON.parse(String(raw ?? "").replace(/^\uFEFF/, ""));
+  } catch (error) {
+    throw new Error(`Verification specs must be valid JSON: ${error.message}`);
+  }
+  const specs = Array.isArray(parsed) ? parsed : parsed?.specs;
+  if (!Array.isArray(specs) || specs.length === 0) {
+    throw new Error("Verification specs must be a non-empty JSON array or an object with a specs array.");
+  }
+  const normalizedRunTag = normalizeVerificationRunTag(runTag);
+  const untagged = specs
+    .map((spec, index) => ({ spec, index }))
+    .filter(({ spec }) => !String(spec?.name ?? "").includes(`[${normalizedRunTag}]`));
+  if (untagged.length > 0) {
+    throw new Error(`Every verification item name must include [${normalizedRunTag}]. Untagged entries: ${untagged.map(({ index }) => index + 1).join(", ")}.`);
+  }
+  return specs;
+}
+
+function renderVerificationHarnessReport(app, report) {
+  const root = app.element?.[0] ?? app.element;
+  const output = root?.querySelector?.("[data-verification-harness-report]");
+  if (!output) return;
+  output.hidden = false;
+  output.textContent = JSON.stringify({
+    runTag: report.runTag,
+    worldId: report.worldId,
+    total: report.total,
+    passed: report.passed,
+    warnings: report.warnings,
+    checks: report.checks,
+    summonActors: (report.summonActors ?? []).map(actor => ({ name: actor.name, uuid: actor.uuid }))
+  }, null, 2);
 }
 
 async function loadExampleIntoForge() {
@@ -2083,6 +2480,16 @@ class ForgeSettingsApplication extends FormApplication {
       providerToken: provider.configuration.apiToken,
       rememberProviderToken,
       anonymousErrorReports: currentAnonymousErrorReportsEnabled(),
+      itemFolderName: game.settings.get(MODULE_ID, "itemFolderName"),
+      actorFolderName: game.settings.get(MODULE_ID, "actorFolderName"),
+      replaceExisting: game.settings.get(MODULE_ID, "replaceExisting"),
+      enableSceneRegionForge: game.settings.get(MODULE_ID, "enableSceneRegionForge") === true,
+      verificationHarnessAvailable: verificationHarnessIncluded(),
+      enableVerificationHarness: verificationHarnessIncluded() && game.settings.get(MODULE_ID, "enableVerificationHarness") === true,
+      verificationWorldId: game.settings.get(MODULE_ID, "verificationWorldId") || DEFAULT_VERIFICATION_WORLD_ID,
+      verificationHarness: verificationHarnessStatusSnapshot(currentVerificationHarnessOptions()),
+      // Keep harness control on the API/console path without advertising utility buttons in the UI.
+      hideVerificationHarnessUtilities: true,
       providerStatusIcon: snapshot.icon,
       providerStatusState: snapshot.state,
       providerStatusMessage: snapshot.message
@@ -2191,8 +2598,42 @@ class ForgeSettingsApplication extends FormApplication {
       }
     });
 
+    root.querySelector('[data-action="setup-verification-harness"]')?.addEventListener("click", async () => {
+      try {
+        const enabled = formControl(form, "enableVerificationHarness").checked;
+        const expectedWorldId = formControl(form, "verificationWorldId").value.trim() || DEFAULT_VERIFICATION_WORLD_ID;
+        setSettingsStatus(this, "working", "Preparing the isolated verification boundary...");
+        const result = await setupIsolatedVerificationHarness({ enabled, expectedWorldId });
+        setSettingsStatus(this, "success", result.actorCreated
+          ? `Verification harness is ready in ${result.worldId}. Created ${result.actor.name}.`
+          : `Verification harness is ready in ${result.worldId}. Reusing ${result.actor.name}.`);
+      } catch (error) {
+        reportError(this, error);
+      }
+    });
+
+    root.querySelector('[data-action="run-verification-harness"]')?.addEventListener("click", async () => {
+      try {
+        const enabled = formControl(form, "enableVerificationHarness").checked;
+        const expectedWorldId = formControl(form, "verificationWorldId").value.trim() || DEFAULT_VERIFICATION_WORLD_ID;
+        const runTag = formControl(form, "verificationRunTag").value.trim();
+        const specs = parseVerificationHarnessSpecs(formControl(form, "verificationSpecs").value, runTag);
+        setSettingsStatus(this, "working", `Running isolated verification for ${specs.length} prepared item(s)...`);
+        const report = await runIsolatedVerificationHarness(specs, { runTag, enabled, expectedWorldId });
+        renderVerificationHarnessReport(this, report);
+        setSettingsStatus(this, report.warnings === 0 ? "success" : "warning",
+          `Verification completed in ${report.worldId}: ${report.passed}/${report.total} expectation cards passed; ${report.warnings} warning(s).`);
+      } catch (error) {
+        reportError(this, error);
+      }
+    });
+
     root.querySelector('[data-action="open-forge"]')?.addEventListener("click", async () => {
       await openForge();
+    });
+
+    root.querySelector('[data-action="open-region-forge"]')?.addEventListener("click", async () => {
+      await openSceneRegionForge();
     });
 
     syncSettingsProviderPanel(this);
@@ -2205,7 +2646,13 @@ class ForgeSettingsApplication extends FormApplication {
     const providerState = settingsFormProviderState(form);
     await Promise.all([
       persistProviderState(providerState),
-      game.settings.set(MODULE_ID, "anonymousErrorReports", formControl(form, "anonymousErrorReports").checked)
+      game.settings.set(MODULE_ID, "anonymousErrorReports", formControl(form, "anonymousErrorReports").checked),
+      game.settings.set(MODULE_ID, "itemFolderName", formControl(form, "itemFolderName").value.trim() || "Dungeon Master's Forge"),
+      game.settings.set(MODULE_ID, "actorFolderName", formControl(form, "actorFolderName").value.trim() || "Dungeon Master's Forge Summons"),
+      game.settings.set(MODULE_ID, "replaceExisting", formControl(form, "replaceExisting").checked),
+      game.settings.set(MODULE_ID, "enableSceneRegionForge", formControl(form, "enableSceneRegionForge").checked),
+      game.settings.set(MODULE_ID, "enableVerificationHarness", formControl(form, "enableVerificationHarness").checked),
+      game.settings.set(MODULE_ID, "verificationWorldId", formControl(form, "verificationWorldId").value.trim() || DEFAULT_VERIFICATION_WORLD_ID)
     ]);
     if (forgeDialog?.rendered) {
       refreshForgeProviderSummary(forgeDialog, forgeDialog.element?.querySelector("form"));
@@ -2312,9 +2759,7 @@ async function openForge() {
         callback: async (_event, button, dialog) => {
           try {
             setStatus(dialog, "working", "Preparing preview...");
-            setReviewValidated(dialog, false);
-            const priorPreview = dialog.element?.querySelector("[data-forge-preview]");
-            if (priorPreview) priorPreview.hidden = true;
+            clearForgeResultState(dialog);
             const request = formControl(button.form, "request").value.trim();
             const provider = activeProviderState({
               unresolvedPolicy: formControl(button.form, "unresolvedPolicy").value
@@ -2344,7 +2789,7 @@ async function openForge() {
                 supportedKinds: SUPPORTED_SPEC_KINDS
               }
             });
-            const compilation = await enrichCompilationWithSrdSpellChoices(remoteCompilation);
+            const compilation = await enrichCompilationWithSrdSpellChoices(remoteCompilation, request);
             const mechanicsRequest = mechanicsRequestForCompilation(compilation, request);
             const validation = await validateSpecs(compilation.specs, mechanicsRequest);
             const preparedCompilation = compilationWithPreparedSpecs(compilation, validation.specs);
@@ -2358,16 +2803,16 @@ async function openForge() {
             ]);
             const diagnostics = dialog.element?.querySelector("[data-forge-diagnostics]");
             if (diagnostics) diagnostics.hidden = true;
-            renderCompilationReport(dialog, preparedCompilation);
-            await renderPreview(dialog, validation);
+            const reviewNotes = await renderPreview(dialog, validation, preparedCompilation);
+            renderCompilationReport(dialog, preparedCompilation, reviewNotes);
             showDialogView(button.form, "review");
-            const noteCount = preparedCompilation.assumptions.length
-              + preparedCompilation.warnings.length
-              + preparedCompilation.deferred.length;
+            const reviewGroups = summarizeFooterNotes(reviewNotes);
+            const noteCount = reviewNotes.length;
+            const attentionCount = reviewGroups.find(group => group.state === "warning")?.notes.length ?? 0;
             const itemCount = validation.specs.length;
             const draftLabel = `${itemCount} item${itemCount === 1 ? "" : "s"}`;
-            setStatus(dialog, noteCount ? "warning" : "success", noteCount
-              ? `${draftLabel} validated with ${noteCount} review note${noteCount === 1 ? "" : "s"}. Review the item summary before approval.`
+            setStatus(dialog, attentionCount ? "warning" : "success", noteCount
+              ? `${draftLabel} validated with ${noteCount} review note${noteCount === 1 ? "" : "s"}${attentionCount ? `; ${attentionCount} need${attentionCount === 1 ? "s" : ""} attention` : ""}. Review the item summary before approval.`
               : `${draftLabel} compiled and validated. Review the item summary before approval.`);
           } catch (error) {
             reportError(dialog, error, { stage: "compile" });
@@ -2397,9 +2842,9 @@ async function openForge() {
               const report = dialog.element?.querySelector("[data-forge-compile-report]");
               if (report) report.hidden = true;
             }
-            if (dialog._dm_forgeCompilation) renderCompilationReport(dialog, dialog._dm_forgeCompilation);
             await game.settings.set(MODULE_ID, "lastSpecs", preparedRawSpecs);
-            await renderPreview(dialog, validation);
+            const reviewNotes = await renderPreview(dialog, validation);
+            if (dialog._dm_forgeCompilation) renderCompilationReport(dialog, dialog._dm_forgeCompilation, reviewNotes);
             const warning = validation.warnings.length ? ` ${validation.warnings.join(" ")}` : "";
             const unresolved = validation.unresolvedMechanicCount
               ? ` ${validation.unresolvedMechanicCount} unresolved mechanic${validation.unresolvedMechanicCount === 1 ? "" : "s"} require review.`
@@ -2424,13 +2869,20 @@ async function openForge() {
         type: "button",
         callback: async (_event, button, dialog) => {
           try {
-            const { request, rawSpecs, specs, approved, provider, config } = readDialogForm(button.form);
+            const { request, rawSpecs, specs, approved, automationApproved, provider, config } = readDialogForm(button.form);
             const mechanicsRequest = mechanicsRequestForCompilation(dialog._dm_forgeCompilation, request);
             if (!approved) {
               formControl(button.form, "reviewApproval").closest(".dm_forge-approval")?.classList.add("dm_forge-approval-needs-attention");
               showDialogView(button.form, "review");
               setStatus(dialog, "warning", "Review the generated specs and check the approval box before creation.");
               ui.notifications.warn(`${MODULE_TITLE}: Review approval is required before creation.`);
+              return;
+            }
+            if (dialog._dm_forgeAutomationCodeRequired === true && !automationApproved) {
+              formControl(button.form, "automationCodeApproval").closest(".dm_forge-approval")?.classList.add("dm_forge-approval-needs-attention");
+              showDialogView(button.form, "review");
+              setStatus(dialog, "warning", "Read the generated automation code and approve it before creation.");
+              ui.notifications.warn(`${MODULE_TITLE}: Generated automation code approval is required before creation.`);
               return;
             }
             setStatus(dialog, "working", "Creating approved world documents...");
@@ -2440,13 +2892,16 @@ async function openForge() {
               return;
             }
             const preparedRawSpecs = syncPreparedSpecs(dialog, button.form, validation.specs);
-            if (dialog._dm_forgeCompilation) renderCompilationReport(dialog, dialog._dm_forgeCompilation);
-            await renderPreview(dialog, validation);
+            const reviewNotes = await renderPreview(dialog, validation);
+            if (dialog._dm_forgeCompilation) renderCompilationReport(dialog, dialog._dm_forgeCompilation, reviewNotes);
             await Promise.all([
               saveDialogState(preparedRawSpecs, config, provider),
               game.settings.set(MODULE_ID, "lastRequest", request)
             ]);
-            const result = await createFromSpecs(validation.specs, config, mechanicsRequest);
+            const result = await createPreparedSpecs(validation.specs, {
+              ...config,
+              authorizeGeneratedAutomation: automationApproved
+            });
             const actorText = result.actors.length ? ` and ${result.actors.length} summon actor${result.actors.length === 1 ? "" : "s"}` : "";
             const unresolvedCount = validation.specs.reduce((total, spec) => total + (spec.unresolvedMechanics?.length ?? 0), 0);
             const unresolvedText = unresolvedCount
@@ -2497,12 +2952,12 @@ async function migrateV2Settings() {
     {
       key: "itemFolderName",
       oldValues: previousItemFolders,
-      value: "Dungeon Master's Forge V2"
+      value: "Dungeon Master's Forge"
     },
     {
       key: "actorFolderName",
       oldValues: previousActorFolders,
-      value: "Dungeon Master's Forge V2 Summons"
+      value: "Dungeon Master's Forge Summons"
     },
   ];
 
@@ -2523,12 +2978,12 @@ async function migrateV2Settings() {
     {
       type: "Item",
       oldNames: previousItemFolders,
-      name: "Dungeon Master's Forge V2"
+      name: "Dungeon Master's Forge"
     },
     {
       type: "Actor",
       oldNames: previousActorFolders,
-      name: "Dungeon Master's Forge V2 Summons"
+      name: "Dungeon Master's Forge Summons"
     }
   ];
 
@@ -2561,6 +3016,7 @@ Hooks.once("ready", async () => {
   module.api = {
     open: openForge,
     openSettings: openForgeSettings,
+    openSceneRegion: openSceneRegionForge,
     compile: compileItemRequest,
     compileWithProvider,
     providers: listProviders,
@@ -2595,6 +3051,12 @@ Hooks.once("ready", async () => {
       resolveEquipmentByName,
       diagnostics: runSystemContentDiagnostics
     }),
+    verification: Object.freeze({
+      status: () => verificationHarnessStatusSnapshot(currentVerificationHarnessOptions()),
+      setup: setupIsolatedVerificationHarness,
+      run: runIsolatedVerificationHarness,
+      cleanup: cleanupIsolatedVerificationHarness
+    }),
     version: BUILD_VERSION,
     validate: validateSpecs,
     create: createFromSpecs,
@@ -2618,4 +3080,4 @@ Hooks.on("changeSidebarTab", tabName => {
   if (tabName === "items") scheduleItemsSidebarLauncherRefresh();
 });
 
-export { compileItemRequest, createFromSpecs, openForge, validateSpecs };
+export { cleanupIsolatedVerificationHarness, compileItemRequest, createFromSpecs, openForge, openSceneRegionForge, runIsolatedVerificationHarness, setupIsolatedVerificationHarness, validateSpecs };

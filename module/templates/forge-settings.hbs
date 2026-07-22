@@ -34,9 +34,9 @@
     <div class="form-group">
       <label>API token</label>
       <div class="form-fields">
-        <input type="password" name="providerApiToken" value="{{providerToken}}" autocomplete="new-password">
+        <input type="password" class="dm_forge-secret-input" id="dm-forge-provider-api-token" name="providerApiToken" value="{{providerToken}}" autocomplete="new-password" autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="text" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other" aria-label="API token">
       </div>
-      <p class="notes">This can be a shared Forge service token or a personal API key, depending on how the service is configured.</p>
+    <p class="notes">This can be a shared Forge service token or a personal API key, depending on how the service is configured. The configured endpoint receives the request text and generated item specifications; use a provider you trust and do not include secrets or private campaign details.</p>
     </div>
 
     <div class="form-group dm_forge-token-storage">
@@ -46,7 +46,7 @@
           <input type="checkbox" name="rememberProviderApiToken" {{#if rememberProviderToken}}checked{{/if}}>
         </label>
       </div>
-      <p class="notes">Stored in this browser's Foundry settings. Use only on a trusted computer.</p>
+      <p class="notes">Unchecked: usable for this session only. Checked: stored in this browser's Foundry settings. If browser autofill clears the field, the remembered token is preserved until you uncheck this option. Use only on a trusted computer.</p>
     </div>
   </div>
 
@@ -75,8 +75,83 @@
         <input type="checkbox" name="anonymousErrorReports" {{#if anonymousErrorReports}}checked{{/if}}>
       </label>
     </div>
-    <p class="notes">When enabled, Dungeon Master's Forge can send anonymous error summaries to the connected Forge service. Reports include module and version data plus item review notes, but exclude API tokens, prompts, raw specs, and world documents.</p>
+    <p class="notes">When enabled, Dungeon Master's Forge can send anonymous error summaries to the connected Forge service. These summaries include module and version data plus item review notes, but exclude API tokens, prompts, raw specs, and world documents. Failed-item reports are separate and always require a report-specific confirmation because they include the current request and generated specifications. The configured service controls retention; the current hosted tester service prunes expired reports when a new report is received.</p>
   </div>
+
+  <h3 class="form-header">World Documents</h3>
+  <div class="dm_forge-settings-intro-block">
+    <p class="notes dm_forge-settings-intro">Choose where approved Forge items and summon actors are created.</p>
+  </div>
+
+  <div class="form-group">
+    <label>Item folder</label>
+    <div class="form-fields">
+      <input type="text" name="itemFolderName" value="{{itemFolderName}}">
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label>Summon actor folder</label>
+    <div class="form-fields">
+      <input type="text" name="actorFolderName" value="{{actorFolderName}}">
+    </div>
+  </div>
+
+  <div class="form-group dm_forge-token-storage">
+    <label>Replace matching items and summon actors</label>
+    <div class="form-fields">
+      <label class="checkbox">
+        <input type="checkbox" name="replaceExisting" {{#if replaceExisting}}checked{{/if}}>
+      </label>
+    </div>
+    <p class="notes">When enabled, creation deletes existing world documents with the same name before creating their replacements.</p>
+  </div>
+
+  <div class="form-group dm_forge-token-storage">
+    <label>Experimental Scene Region Forge</label>
+    <div class="form-fields">
+      <label class="checkbox">
+        <input type="checkbox" name="enableSceneRegionForge" {{#if enableSceneRegionForge}}checked{{/if}}>
+      </label>
+    </div>
+    <p class="notes">Enables a GM-only native Region workflow. It is disabled by default and never modifies behaviors not created by Dungeon Master's Forge.</p>
+  </div>
+
+  {{#if verificationHarnessAvailable}}
+  <div class="form-group dm_forge-token-storage">
+    <label>Enable isolated Beta verification harness</label>
+    <div class="form-fields">
+      <label class="checkbox">
+        <input type="checkbox" name="enableVerificationHarness" {{#if enableVerificationHarness}}checked{{/if}}>
+      </label>
+    </div>
+    <p class="notes">GM-only and disabled by default. The harness only runs when this world matches the configured test-world ID. It never uses campaign Actors, macros, Scenes, or Regions.</p>
+  </div>
+
+  <div class="form-group">
+    <label>Verification test world ID</label>
+    <div class="form-fields">
+      <input type="text" name="verificationWorldId" value="{{verificationWorldId}}">
+    </div>
+    <p class="notes">Current world: <code>{{verificationHarness.currentWorldId}}</code>. The harness requires an exact match before creating disposable tagged test documents.</p>
+  </div>
+
+  <div class="form-group dm_forge-verification-inputs">
+    <label>Verification run tag</label>
+    <div class="form-fields">
+      <input type="text" name="verificationRunTag" placeholder="B13-20260716A" autocomplete="off">
+    </div>
+    <p class="notes">Use a fresh tag for every run. Each prepared item name must include the tag in brackets.</p>
+  </div>
+
+  <div class="form-group dm_forge-verification-inputs">
+    <label>Prepared verification specs JSON</label>
+    <div class="form-fields">
+      <textarea name="verificationSpecs" rows="8" spellcheck="false" placeholder="Paste an approved prepared-spec array or an object with a specs array."></textarea>
+    </div>
+    <p class="notes">This controlled path creates only tagged documents in the three DMF Verification folders and does not execute activities, macros, Scenes, or Regions.</p>
+  </div>
+  {{/if}}
 
   <h3 class="form-header">Utilities</h3>
   <div class="dm_forge-settings-intro-block">
@@ -89,13 +164,22 @@
       <button type="button" data-action="example">Load Example</button>
       <button type="button" data-action="diagnostics">Run Diagnostics</button>
       <button type="button" data-action="open-forge">Open Forge</button>
+      <button type="button" data-action="open-region-forge">Open Scene Region Forge</button>
+      {{#unless hideVerificationHarnessUtilities}}
+        <button type="button" data-action="setup-verification-harness">Set Up Verification Harness</button>
+        <button type="button" data-action="run-verification-harness">Run Isolated Verification Harness</button>
+      {{/unless}}
     </div>
-    <p class="notes">These actions do not create or delete world documents.</p>
+    <p class="notes">Diagnostics and Forge controls do not create documents. Harness setup creates only its dedicated Actor and tagged test folders after the exact world-ID check passes.</p>
   </div>
 
   <div class="dm_forge-diagnostics" data-forge-settings-diagnostics hidden></div>
 
-  <output class="dm_forge-settings-status" data-forge-settings-status data-state="idle" aria-live="polite">Connection and utilities are ready.</output>
+  {{#if verificationHarnessAvailable}}
+    <pre class="dm_forge-verification-report" data-verification-harness-report hidden></pre>
+  {{/if}}
+
+  <output class="dm_forge-settings-status" data-forge-settings-status data-state="idle" aria-live="polite">Forge settings are ready.</output>
 
   <footer class="form-footer">
     <button type="submit" data-action="save-settings">

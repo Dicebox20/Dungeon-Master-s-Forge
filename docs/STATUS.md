@@ -1,14 +1,54 @@
 # Dungeon Master's Forge Release Status
 
-Updated: 2026-07-09
+Updated: 2026-07-22
+
+## Provider Default
+
+- The source release now defaults to the hosted Free Forge endpoint using `gpt-5.4-mini`.
+- Local Rules remains available as an explicit offline provider, and Bring Your Own API remains unchanged.
+- This change does not alter quotas, provider keys, deployed services, manifests, packages, or release artifacts.
+
+## Current Local Snapshot
+
+- Stable source candidate: `2.23.1`; the existing stable ZIP has not been rebuilt after the current compliance edits.
+- Tester source candidate: `2.23.1-test.45`, with its manifest and download on `dm_forge/tester`.
+- Hosted service: `1.6.1`; public Free Forge limits remain 10 requests per minute, 100 prompts per tester per calendar month, and 50 requests per day across the public service.
+- Verification suites currently pass `46/46` module tests and `198/198` AI-service tests.
+- The local compliance audit covers AI-content classification, runtime approval, executable-output boundaries, token handling, diagnostics consent, external-provider disclosure, branding, and package contents.
+- The Dice Box Group selected MIT licensing. The notice and manifest references are present, and isolated stable/tester candidate archives were inspected locally. The existing stable repository release ZIP was not replaced. Tester build `2.23.1-test.45` was published on `dm_forge/tester` after local verification, and both Droplet service units were restarted from the current service source.
+- The stable `main` lane still requires a separate approved release synchronization; do not treat the tester build as the stable public release.
+
+## Beta V1 Sweep 004
+
+- Added a fresh 15-prompt simple/medium/complex pack at `testing/beta-v1-tiered-sweep-004.json` and durable results at `testing/diagnostics/2026-07-16-beta4-readiness-sweep.md`.
+- Repaired explicit summon-choice parsing so natural phrasing such as `Rhinoceros when it shows up` preserves the third selectable profile instead of dropping it.
+- Verified 185/185 AI-service tests and all module tests.
+- Created and structurally inspected a tagged healing consumable in Foundry. The strict readiness gate remains blocked by insufficient repeated actual-use evidence per family.
+- Removed `V2` from the universal product title and changed fresh item/actor folder defaults without migrating existing world folders.
+- Deferred additional live Scene Region work for the later Master-tier cycle; no Region write occurred in this sweep.
+
+## Beta V1 Sweep 005
+
+- Added the fresh tiered prompt pack `testing/beta-v1-tiered-sweep-005.json` and the durable record `testing/diagnostics/2026-07-16-beta5-readiness-sweep.md`.
+- The corrected local structural sweep is 11 pass, 4 warnings, 0 failures; the hosted structural sweep is 8 pass, 7 warnings, 0 failures. These are not strict full-function Foundry success rates.
+- Repaired reusable summon/recovery normalization and stale repaired-summon review notes locally. Reworked compile-status badges to use the same deduplicated Warnings, Free Forge, and Notes counts as the review panels.
+- Historical Sweep 005 baseline: `187/187` service tests and `37/37` module tests passed. No tester manifest, release artifact, hosted service, limit, or Region behavior was changed in that sweep.
+- Browser control became unreliable after the pre-patch live review check, so no document was created and no actual-use evidence was added. Beta V1 remains ineligible for the final 42-case gate and is not ready for manual inspection.
+
+## Beta V1 Sweep 006
+
+- Added `testing/beta-v1-tiered-sweep-006.json` and `testing/diagnostics/2026-07-16-beta6-readiness-sweep.md` with fresh simple, medium, and complex SRD spell, summon, condition, consumable, armor, enchantment, and hybrid coverage.
+- Final local results are 11 pass, 4 warning, 0 failure; hosted results are 8 pass, 7 warning, 0 failure; the focused seven-case hosted warning rerun is 1 pass, 6 warning, 0 failure.
+- Repaired only a regression-runner duration scoring defect. The historical Sweep 006 baseline passed `187/187` service tests and `37/37` module tests, including native Region compiler behavior coverage.
+- Live Foundry control can inspect the UI and console but cannot execute safe actions, so no item/Region document, use, review-total confirmation, provider-dropdown check, or `Manual Weather Guard` preservation check was added. Beta V1 remains below every strict readiness gate.
 
 ## Publish Candidate
 
 - Stable release candidate: `2.23.1`
-- Current tester release: `2.23.1-test.3`
+- Current tester release: `2.23.1-test.45`
 - Module manifest target: `module/module.json`
 - Release ZIP: `releases/dungeon-masters-forge-v2-2.23.1.zip`
-- Release ZIP SHA-256: `07D6A3DA23E77E8FBE37F5F5D5E36CECB1B81C03E8FA00B2C3E87D675F916462`
+- Existing stable ZIP SHA-256: `C597701CD56224D925B3270D6AAC26417E6E2FD94F5774E826BDD68529EC25C4` (not rebuilt during the current compliance audit)
 - Manifest URL target: `https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/main/module/module.json`
 - Download URL target: `https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/main/releases/dungeon-masters-forge-v2-2.23.1.zip`
 
@@ -32,7 +72,7 @@ Historical validation notes below still mention earlier `2.23.0-test.*` smoke pa
 - Merged the Tailscale endpoint-support pull request into GitHub `main`.
 - Added AI service `1.3.0` public free-tier alpha controls and deployment documentation without enabling Hosted Forge prematurely.
 - Added AI service `1.4.0` durable SQLite daily quotas with HMAC-pseudonymized client identifiers and strict public-mode configuration checks.
-- Added AI service `1.5.0` calendar-month client quotas for the official 20-generation Free Forge allowance.
+- Added AI service `1.5.0` calendar-month client quotas for the former 20-generation Free Forge allowance.
 - Added AI service `1.6.0` bounded model-output retry and safe request-id error logging after an invited tester exposed an opaque `502` failure.
 - Added a review-UX hardening pass that makes dominant-family hybrid results explicit in the Forge Result pane, including:
   - per-item Forge-ready versus manual-review state badges
@@ -71,28 +111,28 @@ Historical validation notes below still mention earlier `2.23.0-test.*` smoke pa
 
 - The module includes the split-pane Description/Result workflow, Forge Settings, Local Rules, Bring Your Own API, and review-before-create validation.
 - Read-only native DND5e resolution now covers modern spell, equipment, actor, monster feature, and roll-table lookup without mutating compendium content.
-- The reference AI service supports private server-key, personal client-key, and bounded public free-tier deployments. Service `1.6.0` is live on the official Droplet with a 20-generation calendar-month client allowance and one bounded invalid-output retry; Hosted Forge remains disabled in the stable public module until a project-owned hostname and final module smoke pass exist.
+- The reference AI service supports private server-key, personal client-key, and bounded public free-tier deployments. Service `1.6.1` is live on the official Droplet with the current bounded public allowance and one bounded invalid-output retry; Hosted Forge remains disabled in the stable public module until the final release review is complete.
 - Cauldron of Plentiful Resources remains optional and deferred because its current release is incompatible with this Foundry version.
 - The roadmap now tracks charge-scaled multi-spell items where spell level is the default charge cost and extra charge spend can upcast supported SRD spells.
 - Exact-name SRD spell requests should prefer system-native spell activity provenance before falling back to synthesized activities when the Foundry DND5e schema allows it.
-- Opt-in remote error report uploads are now tracked as a hosted-support improvement. They should remain disabled until redaction, consent, retention, and rate limits are implemented.
+- Opt-in remote error report uploads are implemented with redaction, consent, rate limiting, and a configurable 30-day default retention window. They remain disabled unless the connected service explicitly enables the route.
 
 ## Validation
 
 - Workspace module tests pass.
-- The packaged/export AI service snapshot still passes at its currently exported `95`-test baseline.
+- The current workspace AI service suite passes `198` tests.
 - Public export module tests pass after the filename-surface sync to `dungeon-masters-forge.js`.
-- Public export AI service tests pass (95 tests).
-- The currently installed Foundry build on disk is `2.23.0-test.2`.
+- Public export AI service tests remain covered by the current workspace suite.
+- The current local tester candidate is `2.23.1-test.45`.
 - The installed module manifest on disk matches the tester manifest target for `dungeon-masters-forge`.
 - Foundry Check Connection succeeds against `http://localhost:8788/v1/forge/compile`, and the saved Bring Your Own API selection survives a cold page reload.
 - A true remote compile succeeds in Foundry against service `1.3.0`: Live Ember Dagger returned as a validated `weaponExtraDamage` spec with the requested base and fire damage. No world document was created during the smoke test.
-- The local service and Foundry model setting are aligned to the configured `gpt-4.1-mini` allowlist.
+- The current reference service and tester candidate are aligned to the configured `gpt-5.4-mini` allowlist.
 - A direct shell smoke proof now succeeds against the canonical `8788` service for both `/v1/forge/capabilities` and `/v1/forge/compile`.
 - The service-side contract normalizer now accepts `pattern` as a live-model alias for Forge `kind`; that patch is covered by tests and still needs one successful in-Foundry live compile confirmation.
 - Tailscale HTTP endpoint acceptance is covered by module tests and merged; a second-machine Tailscale compile remains the next external verification.
-- The public manifest and `2.23.0` stable ZIP target are aligned in the workspace release metadata.
-- AI service `1.6.0` is live on the Droplet with the existing quota ledger intact.
+- The local stable manifest and existing `2.23.1` ZIP target are aligned in the workspace release metadata; remote publication remains pending.
+- AI service `1.6.1` is live on the Droplet with the existing quota ledger intact.
 - AI service `1.6.0` previously passed the 95-test baseline after the tester-output recovery fixes.
 - The workspace AI service suite now passes 119 tests after the July 3 hybrid-shape recovery additions and kind-priority hardening.
 - The workspace AI service suite now passes 121 tests after the July 3 hosted hybrid-recovery pass for single-summon and missing-kind staff outputs.

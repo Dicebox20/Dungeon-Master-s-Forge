@@ -57,9 +57,18 @@ test("prompt explains dominant-family handling for hybrid requests", () => {
   assert.match(result, /Build each item from simple to complex in this order whenever possible/);
 });
 
-test("prompt explicitly steers enchant oils and summon actor shape", () => {
+test("prompt explicitly steers enchant oils and summon fallbacks", () => {
   const result = prompt();
   assert.match(result, /Oils, unguents, salves, and coatings that enchant a weapon, armor, or shield must use nativeEnchant/i);
-  assert.match(result, /nativeSummon stores the summoned creature stat block under summonActor, not actor/i);
+  assert.match(result, /treat the named creature or descriptive role as a suggestion/i);
+  assert.match(result, /prefer a matching DND5e SRD actor/i);
+  assert.match(result, /basic declarative fallback fields/i);
   assert.match(result, /Thrown grenades, bombs, splash flasks, and similar one-use area projectiles belong here/i);
+});
+
+test("prompt treats condition weapon workflow as a renderer default", () => {
+  const result = prompt();
+  assert.match(result, /conditionOnHit.*default focused single-creature target/i);
+  assert.match(result, /do not emit a workflow-verification or no-extra-target-dialog clause/i);
+  assert.match(result, /do not promise automatic targeting of every token in a template/i);
 });

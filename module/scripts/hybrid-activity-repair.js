@@ -1,3 +1,5 @@
+import { extractNamedSrdSummon, genericSrdSummonActor, namedSrdSummonActor } from "./srd-summon-profiles.js";
+
 function clone(value) {
   return value == null ? value : JSON.parse(JSON.stringify(value));
 }
@@ -5,6 +7,8 @@ function clone(value) {
 function compactText(value) {
   return String(value ?? "").replace(/\s+/g, " ").trim();
 }
+
+const DEFAULT_SAVE_DC = 13;
 
 function stableId(label) {
   const base = String(label).replace(/[^A-Za-z0-9]/g, "").slice(0, 11) || "Forge";
@@ -63,6 +67,28 @@ const KNOWN_WEAPON_BASES = Object.freeze([
 ]);
 
 const SPELL_PROFILES = Object.freeze([
+  Object.freeze({
+    name: "Poison Spray",
+    type: "save",
+    defaultChargeCost: 1,
+    save: Object.freeze({ ability: "con" }),
+    damageOnSave: "none",
+    damageParts: Object.freeze([{ number: 1, denomination: 12, bonus: "", types: Object.freeze(["poison"]) }]),
+    range: Object.freeze({ value: 30, units: "ft" }),
+    target: Object.freeze({ affects: { count: "1", type: "creature", special: "One creature within range" }, prompt: true }),
+    chatFlavor: "Cast Poison Spray using this item's charges."
+  }),
+  Object.freeze({
+    name: "Ray of Sickness",
+    type: "attack",
+    defaultChargeCost: 1,
+    attackType: "ranged",
+    attackClassification: "spell",
+    damageParts: Object.freeze([{ number: 2, denomination: 8, bonus: "", types: Object.freeze(["poison"]) }]),
+    range: Object.freeze({ value: 60, units: "ft" }),
+    target: Object.freeze({ affects: { count: "1", type: "creature", special: "One creature within range" }, prompt: true }),
+    chatFlavor: "Cast Ray of Sickness using this item's charges."
+  }),
   Object.freeze({
     name: "Command",
     type: "save",
@@ -168,6 +194,18 @@ const SPELL_PROFILES = Object.freeze([
     chatFlavor: "Create a bank of obscuring fog."
   }),
   Object.freeze({
+    name: "Detect Thoughts",
+    type: "utility",
+    defaultChargeCost: 2,
+    range: Object.freeze({ units: "self" }),
+    target: Object.freeze({
+      affects: { count: "1", type: "self", special: "Self" },
+      prompt: false
+    }),
+    duration: Object.freeze({ value: 1, units: "minute", concentration: true }),
+    chatFlavor: "Cast Detect Thoughts using this item's charges."
+  }),
+  Object.freeze({
     name: "Misty Step",
     type: "utility",
     defaultChargeCost: 2,
@@ -178,6 +216,22 @@ const SPELL_PROFILES = Object.freeze([
     }),
     duration: Object.freeze({ units: "inst", concentration: false }),
     chatFlavor: "Briefly surrounded by silvery mist, you teleport."
+  }),
+  Object.freeze({
+    name: "Cloudkill",
+    type: "save",
+    defaultChargeCost: 5,
+    save: Object.freeze({ ability: "con" }),
+    damageOnSave: "half",
+    damageParts: Object.freeze([{ number: 5, denomination: 8, bonus: "", types: Object.freeze(["poison"]) }]),
+    range: Object.freeze({ value: 120, units: "ft" }),
+    target: Object.freeze({
+      template: { count: "1", type: "sphere", size: 20, units: "ft" },
+      affects: { type: "creature", special: "Creatures in the 20-foot-radius sphere" },
+      prompt: true
+    }),
+    duration: Object.freeze({ value: 10, units: "minute", concentration: true }),
+    chatFlavor: "Cast Cloudkill using this item's charges."
   })
 ]);
 
@@ -185,6 +239,8 @@ const SPELL_PROFILE_BY_NAME = new Map(SPELL_PROFILES.map(profile => [profile.nam
 const SUITE_KINDS = new Set(["casterUtilityEquipment", "equipmentPowerSuite", "legendaryEquipmentSuite", "artifactWeaponHybrid", "multiActivityStaff"]);
 const PASSIVE_KINDS = new Set(["passiveEffectEquipment", "shieldArmorBonus"]);
 const DIRECT_WEAPON_KINDS = new Set(["weaponExtraDamage", "weaponConditionOnHit"]);
+const CONDITION_STATUSES = new Set(["blinded", "charmed", "deafened", "frightened", "paralyzed", "poisoned", "prone", "restrained", "stunned", "unconscious"]);
+const DAMAGE_RESISTANCE_TYPES = Object.freeze(["acid", "cold", "fire", "force", "lightning", "necrotic", "poison", "psychic", "radiant", "thunder"]);
 
 function spellProfileByName(name) {
   return SPELL_PROFILE_BY_NAME.get(compactText(name).toLowerCase()) ?? null;
@@ -208,6 +264,347 @@ function parseLightRange(text) {
   if (direct) return Number(direct);
   const radius = source.match(/\b(\d+)\s*[- ]?(?:foot|feet|ft\.?)(?:\s+|-)radius\b/i)?.[1];
   return radius ? Number(radius) : null;
+}
+
+function hasEffectChange(spec, key) {
+  return ["effects", "passiveEffects"].some(listName =>
+    Array.isArray(spec?.[listName])
+    && spec[listName].some(effect => Array.isArray(effect?.changes)
+      && effect.changes.some(change => change?.key === key))
+  );
+}
+
+function explicitAcBonus(text) {
+  const value = Number(compactText(text).match(/\+\s*(\d+)\s+(?:to\s+)?ac\b/i)?.[1]);
+  return Number.isFinite(value) && value > 0 ? value : null;
+}
+
+function explicitDarkvisionRange(text) {
+  const source = compactText(text);
+  const value = Number(
+    source.match(/\bdarkvision(?:\s+(?:out\s+to|of|within))?\s+(\d+)\s*(?:foot|feet|ft\.?)\b/i)?.[1]
+    ?? source.match(/\b(\d+)\s*[- ]?(?:foot|feet|ft\.?)\s+darkvision\b/i)?.[1]
+  );
+  return Number.isFinite(value) && value > 0 ? value : null;
+}
+
+function repairExplicitAttunement(spec, request) {
+  const text = compactText(request);
+  if (!/\b(?:does|do)(?:\s+not|n't)\s+(?:need|require)\s+attunement\b|\bno\s+attunement(?:\s+needed)?\b/i.test(text)) {
+    return { applied: false, spec, assumptions: [] };
+  }
+  if (!compactText(spec?.attunement)) return { applied: false, spec, assumptions: [] };
+  return {
+    applied: true,
+    spec: { ...clone(spec), attunement: "" },
+    assumptions: ["Applied the request's explicit no-attunement requirement."]
+  };
+}
+
+function defaultMultiPropertyAttunement(spec, request) {
+  const text = compactText(request);
+  if (compactText(spec?.attunement) || /\b(?:does|do)(?:\s+not|n't)\s+(?:need|require)\s+attunement\b|\bno\s+attunement(?:\s+needed)?\b/i.test(text)) {
+    return { applied: false, spec, assumptions: [] };
+  }
+  const hasActivePower = ["activities", "attackActivities", "saveActivities", "utilityActivities"]
+    .some(listName => (spec[listName] ?? []).some(activity => {
+      const name = compactText(activity?.activityName ?? activity?.name);
+      return name && !/^attack with\b/i.test(name) && !/^[a-z]+\s+attack$/i.test(name);
+    }));
+  const propertyGroups = [
+    Number(spec?.magicalBonus) > 0,
+    Array.isArray(spec?.extraDamageParts) && spec.extraDamageParts.length > 0,
+    Boolean(spec?.conditionOnHit),
+    Array.isArray(spec?.effects) && spec.effects.length > 0,
+    Array.isArray(spec?.passiveEffects) && spec.passiveEffects.length > 0,
+    Array.isArray(spec?.enchantChanges) && spec.enchantChanges.length > 0,
+    Boolean(spec?.toggleLight),
+    Boolean(spec?.healing),
+    Boolean(spec?.summonActor) || (Array.isArray(spec?.summonProfiles) && spec.summonProfiles.length > 0),
+    hasActivePower
+  ].filter(Boolean).length;
+  if (propertyGroups < 2) return { applied: false, spec, assumptions: [] };
+  return {
+    applied: true,
+    spec: { ...clone(spec), attunement: "required" },
+    assumptions: ["Defaulted attunement to required because the item has multiple magical property groups."]
+  };
+}
+
+const SKILL_IDS = new Map([
+  ["acrobatics", "acr"], ["animal handling", "ani"], ["arcana", "arc"],
+  ["athletics", "ath"], ["deception", "dec"], ["history", "his"],
+  ["insight", "ins"], ["intimidation", "itm"], ["investigation", "inv"],
+  ["medicine", "med"], ["nature", "nat"], ["perception", "prc"],
+  ["performance", "prf"], ["persuasion", "per"], ["religion", "rel"],
+  ["sleight of hand", "slt"], ["stealth", "ste"], ["survival", "sur"]
+]);
+
+function repairRequestedSkillAdvantage(spec, request) {
+  const match = compactText(request).match(/\badvantage\s+on\s+(?:(?:Strength|Dexterity|Constitution|Intelligence|Wisdom|Charisma)\s*)?\(?([A-Za-z ]+?)\)?\s+checks?\b/i);
+  const skillId = SKILL_IDS.get(compactText(match?.[1]).toLowerCase());
+  if (!skillId) {
+    return { applied: false, spec, assumptions: [] };
+  }
+  const next = clone(spec);
+  next.effects = Array.isArray(next.effects) ? next.effects.filter(Boolean) : [];
+  const effect = next.effects[0] ?? {
+    effectId: stableId(`${next.name} Skill`),
+    name: `${next.name} Skill`,
+    changes: []
+  };
+  const canonicalKey = `system.skills.${skillId}.roll.mode`;
+  const changes = Array.isArray(effect.changes)
+    ? effect.changes.filter(change => {
+      const key = compactText(change?.key);
+      if (key === canonicalKey) return true;
+      if (!key.startsWith("system.skills.")) return true;
+      return !/\.(?:adv|advantage|bonuses\.check)$/.test(key) && !/advantage/i.test(compactText(change?.value));
+    })
+    : [];
+  const hasCorrectChange = changes.some(change => compactText(change?.key) === canonicalKey);
+  if (!hasCorrectChange) changes.push({ key: canonicalKey, mode: "ADD", value: "1" });
+  effect.changes = changes;
+  next.effects[0] = effect;
+  return {
+    applied: !hasCorrectChange || next.attunement !== spec?.attunement,
+    spec: next,
+    assumptions: hasCorrectChange ? [] : ["Normalized skill advantage to the DND5e 5.x roll-mode field."]
+  };
+}
+
+function repairRequestedDarkvision(spec, request) {
+  const distance = explicitDarkvisionRange(request);
+  if (!distance || !["passiveEffectEquipment", "casterUtilityEquipment", "equipmentPowerSuite", "legendaryEquipmentSuite"].includes(spec?.kind)) {
+    return { applied: false, spec, assumptions: [] };
+  }
+  const next = clone(spec);
+  next.effects = Array.isArray(next.effects) ? next.effects.filter(Boolean) : [];
+  const effect = next.effects[0] ?? {
+    effectId: stableId(`${next.name} Darkvision`),
+    name: `${next.name} Darkvision`,
+    changes: []
+  };
+  const malformedKeys = new Set([
+    "system.attributes.darkvision.enabled",
+    "system.attributes.darkvision.distance",
+    "system.attributes.senses.darkvision"
+  ]);
+  const canonicalKey = "system.attributes.senses.ranges.darkvision";
+  const changes = Array.isArray(effect.changes)
+    ? effect.changes.filter(change => !malformedKeys.has(compactText(change?.key)))
+    : [];
+  const existing = changes.find(change => compactText(change?.key) === canonicalKey);
+  if (existing) {
+    existing.mode = "ADD";
+    existing.value = String(distance);
+  } else {
+    changes.push({ key: canonicalKey, mode: "ADD", value: String(distance) });
+  }
+  effect.changes = changes;
+  next.effects[0] = effect;
+  return {
+    applied: !existing || JSON.stringify(next.effects) !== JSON.stringify(spec.effects),
+    spec: next,
+    assumptions: existing ? [] : [`Recovered the explicit ${distance}-foot darkvision passive effect from the request text.`]
+  };
+}
+
+function repairGenericSummonProfileActors(spec, request) {
+  if (!Array.isArray(spec?.summonProfiles) || spec.summonProfiles.length < 2) return { applied: false, spec, assumptions: [] };
+  const requestText = compactText(request).toLowerCase();
+  const next = clone(spec);
+  let repaired = 0;
+  next.summonProfiles = next.summonProfiles.map(profile => {
+    const profileName = compactText(profile?.profileName);
+    const actorName = compactText(profile?.actor?.name).replace(/^friendly\s+/i, "");
+    const srdName = compactText(profile?.actor?.srdActorName);
+    const generic = value => !value
+      || /^(?:one )?(?:friendly )?(?:beast|creature|companion|summoned ally)$/.test(value.toLowerCase())
+      || /^profile when you use the item$/.test(value.toLowerCase())
+      || /^(?:one )?friendly .+\s+or\s+.+$/.test(value.toLowerCase());
+    if (!profileName || !requestText.includes(profileName.toLowerCase()) || (!generic(actorName) && !generic(srdName))) return profile;
+    repaired += 1;
+    return { ...profile, actor: genericSrdSummonActor(profileName) };
+  });
+  return {
+    applied: repaired > 0,
+    spec: next,
+    assumptions: repaired ? ["Replaced generic summon actors with the explicitly named selectable SRD profiles."] : []
+  };
+}
+
+function repairRequestedSpellcastingBonuses(spec, request) {
+  const match = compactText(request).match(/\+(\d+)\s+to\s+spell\s+attack(?:\s+roll)?s?\s+and\s+spell\s+save\s+DC\b/i);
+  if (!match) return { applied: false, spec, assumptions: [] };
+
+  const next = clone(spec);
+  next.effects = Array.isArray(next.effects) ? next.effects.filter(Boolean) : [];
+  const effect = next.effects[0] ?? {
+    effectId: stableId(`${next.name} Spellcasting`),
+    name: `${next.name} Spellcasting`,
+    changes: []
+  };
+  const requestedValue = String(Number(match[1]));
+  const supportedKeys = [
+    "system.bonuses.msak.attack",
+    "system.bonuses.rsak.attack",
+    "system.bonuses.spell.dc"
+  ];
+  const replacedKeys = new Set([
+    "system.attributes.spelldc",
+    "system.attributes.spell.dc",
+    "system.bonuses.spelldc"
+  ]);
+  const original = Array.isArray(effect.changes) ? effect.changes.filter(Boolean) : [];
+  const changes = original.filter(change => !replacedKeys.has(compactText(change?.key)));
+  let changed = changes.length !== original.length;
+  for (const key of supportedKeys) {
+    const existing = changes.find(change => compactText(change?.key) === key);
+    if (existing) {
+      if (compactText(existing.value) !== requestedValue || compactText(existing.mode).toUpperCase() !== "ADD") {
+        existing.mode = "ADD";
+        existing.value = requestedValue;
+        changed = true;
+      }
+    } else {
+      changes.push({ key, mode: "ADD", value: requestedValue });
+      changed = true;
+    }
+  }
+  effect.changes = changes;
+  next.effects[0] = effect;
+  return {
+    applied: changed,
+    spec: next,
+    assumptions: changed ? ["Normalized generic spellcasting bonuses to DND5e melee/ranged spell attacks and spell save DC fields."] : []
+  };
+}
+
+function repairNativeEnchantDamage(spec, request) {
+  if (spec?.kind !== "nativeEnchant") return { applied: false, spec, assumptions: [] };
+  const parts = parseDamageParts(request);
+  if (!parts.length) return { applied: false, spec, assumptions: [] };
+
+  const next = clone(spec);
+  next.enchantChanges = Array.isArray(next.enchantChanges) ? next.enchantChanges.filter(Boolean) : [];
+  const expected = parts[0];
+  const matchingDamageChange = next.enchantChanges.find(change => {
+    if (compactText(change?.key) !== "system.damage.parts") return false;
+    const value = change?.value?.damage ?? change?.value;
+    if (value && typeof value === "object") {
+      const types = Array.isArray(value.types) ? value.types.map(type => compactText(type).toLowerCase()) : [];
+      return Number(value.number) === expected.number
+        && Number(value.denomination) === expected.denomination
+        && types.includes(expected.types[0]);
+    }
+    const text = compactText(value).toLowerCase();
+    return text.includes(`${expected.number}d${expected.denomination}`)
+      && text.includes(expected.types[0]);
+  });
+  if (!matchingDamageChange) {
+    next.enchantChanges = next.enchantChanges.filter(change => compactText(change?.key) !== "system.damage.parts");
+    next.enchantChanges.push({ key: "system.damage.parts", mode: "ADD", value: expected });
+  }
+  next.unresolvedMechanics = (next.unresolvedMechanics ?? []).filter(mechanic => {
+    const text = `${compactText(mechanic?.category)} ${compactText(mechanic?.label)} ${compactText(mechanic?.reason)}`;
+    return !/weapon damage rider|enchantment rider|weapon enchantment timing|application workflow/i.test(text);
+  });
+  return {
+    applied: !matchingDamageChange,
+    spec: next,
+    assumptions: matchingDamageChange ? [] : ["Recovered the enchantment's typed damage rider from the request text."]
+  };
+}
+
+function explicitToggleLight(name, text) {
+  const source = compactText(text);
+  if (!/\b(?:ignite|extinguish)\b/i.test(source) || !/\bbright\s+light\b/i.test(source)) return null;
+  const brightMatch = source.match(/\b(\d+)\s*[- ]?(?:foot|feet|ft\.?)\s+(?:of\s+)?bright\s+light|\bbright\s+light\s+(?:for|out\s+to)\s+(\d+)\s*[- ]?(?:foot|feet|ft\.?)/i);
+  const bright = Number(brightMatch?.[1] ?? brightMatch?.[2]);
+  if (!Number.isFinite(bright) || bright <= 0) return null;
+  const dimMatch = source.match(/\b(additional\s+)?(\d+)\s*[- ]?(?:foot|feet|ft\.?)\s+(?:of\s+)?dim\s+light|\bdim\s+light\s+(?:for|out\s+to)\s+(additional\s+)?(\d+)\s*(?:more\s+)?(?:foot|feet|ft\.?)/i);
+  const dimValue = Number(dimMatch?.[2] ?? dimMatch?.[4] ?? 0);
+  const additionalDim = Boolean(dimMatch?.[1] ?? dimMatch?.[3]) || /\bdim\s+light\s+for\s+\d+\s+more\s+(?:foot|feet|ft\.?)\b/i.test(source);
+  const dim = Number.isFinite(dimValue) && dimValue > 0
+    ? (additionalDim ? bright + dimValue : Math.max(bright, dimValue))
+    : bright;
+  return {
+    activityId: stableId(`${name} Ignite`),
+    activityName: "Ignite the Flame",
+    activityImg: "icons/magic/fire/flame-burning-campfire-orange.webp",
+    activationType: inferActivationType(source),
+    effectId: stableId(`${name} Light`),
+    effectName: `${name} Ignited`,
+    effectImg: "icons/magic/fire/flame-burning-campfire-orange.webp",
+    flagKey: `${stableId(name)}Light`,
+    bright,
+    dim,
+    color: "#ff7a18",
+    alpha: 0.35,
+    animation: { type: "torch", speed: 3, intensity: 4 },
+    onChat: `${name} ignites, shedding bright light for ${bright} feet and dim light to ${dim} feet.`,
+    offChat: `${name}'s light fades.`,
+    chatFlavor: `Toggle ${name}'s light.`,
+    duration: { value: 10, units: "minute" },
+    range: { units: "self" },
+    target: { affects: { count: "1", type: "self" }, prompt: false }
+  };
+}
+
+function recoverArtifactPassiveFeatures(spec, request) {
+  if (spec?.kind !== "artifactWeaponHybrid") return { applied: false, spec, assumptions: [] };
+  const next = clone(spec);
+  const assumptions = [];
+  next.passiveEffects = Array.isArray(next.passiveEffects) ? [...next.passiveEffects] : [];
+
+  const genericEffects = Array.isArray(next.effects) ? next.effects : [];
+  const transferableEffects = genericEffects.filter(effect => Array.isArray(effect?.changes) && effect.changes.length);
+  let promotedEffects = 0;
+  for (const effect of transferableEffects) {
+    const alreadyPresent = next.passiveEffects.some(candidate =>
+      JSON.stringify(candidate?.changes ?? []) === JSON.stringify(effect.changes ?? [])
+    );
+    if (alreadyPresent) continue;
+    next.passiveEffects.push(effect);
+    promotedEffects += 1;
+  }
+  if (transferableEffects.length) {
+    next.effects = genericEffects.filter(effect => !transferableEffects.includes(effect));
+    if (!next.effects.length) delete next.effects;
+  }
+  if (promotedEffects) assumptions.push("Promoted generic passive effects into the artifact weapon renderer.");
+
+  const acBonus = explicitAcBonus(request);
+  if (acBonus && !hasEffectChange(next, "system.attributes.ac.bonus")) {
+    next.passiveEffects.push({
+      effectId: stableId(`${next.name} Guard`),
+      name: `${next.name} Guard`,
+      changes: [{ key: "system.attributes.ac.bonus", mode: "ADD", value: String(acBonus) }]
+    });
+    assumptions.push(`Recovered the explicit +${acBonus} AC passive effect from the request text.`);
+  }
+
+  const darkvision = explicitDarkvisionRange(request);
+  if (darkvision && !hasEffectChange(next, "system.attributes.senses.ranges.darkvision")) {
+    next.passiveEffects.push({
+      effectId: stableId(`${next.name} Darkvision`),
+      name: `${next.name} Darkvision`,
+      changes: [{ key: "system.attributes.senses.ranges.darkvision", mode: "ADD", value: String(darkvision) }]
+    });
+    assumptions.push(`Recovered the explicit ${darkvision}-foot darkvision passive effect from the request text.`);
+  }
+
+  if (!next.toggleLight) {
+    const toggleLight = explicitToggleLight(next.name, request);
+    if (toggleLight) {
+      next.toggleLight = toggleLight;
+      assumptions.push("Recovered the explicit ignite/light activity from the request text.");
+    }
+  }
+
+  if (!assumptions.length) return { applied: false, spec, assumptions };
+  return { applied: true, spec: next, assumptions };
 }
 
 function parseTemplateTarget(text) {
@@ -281,9 +678,19 @@ function inferSaveDc(text, fallback = null) {
   return match ? Number(match[1]) : fallback;
 }
 
+function inferConditionDurationSeconds(text) {
+  const source = compactText(text);
+  if (/\b(?:start|end) of (?:your|the wielder'?s?) next turn\b/i.test(source)) return 6;
+  const seconds = Number(source.match(/\b(\d+)\s+seconds?\b/i)?.[1]);
+  if (Number.isFinite(seconds) && seconds > 0) return seconds;
+  const rounds = Number(source.match(/\b(\d+)\s+rounds?\b/i)?.[1]);
+  if (Number.isFinite(rounds) && rounds > 0) return rounds * 6;
+  return 30;
+}
+
 function inferChargeCost(text, pattern, fallback = "") {
   const source = compactText(text);
-  const matches = Array.from(source.matchAll(new RegExp(`(?:spend\\s+)?(\\d+)\\s*charges?[^.]{0,160}${pattern}`, "ig")));
+  const matches = Array.from(source.matchAll(new RegExp(`(?:(?:spend|expend|use|burn)\\s+)?(\\d+)\\s*charges?[^.]{0,160}${pattern}`, "ig")));
   const match = matches.at(-1);
   return match ? Number(match[1]) : fallback;
 }
@@ -301,7 +708,7 @@ function castActivityName(name) {
 
 function inferSummonChargeCost(text, creatureLabel, fallback = "") {
   const escaped = creatureLabel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+");
-  const direct = compactText(text).match(new RegExp(`(?:spend\\s+)?(\\d+)\\s*charges?\\s+to\\s+summon\\s+[^.]*${escaped}\\b`, "i"))?.[1];
+  const direct = compactText(text).match(new RegExp(`(?:(?:spend|burn)\\s+)?(\\d+)\\s*charges?\\s+to\\s+(?:summon|conjure|call\\s+(?:forth|in))\\s+[^.]*${escaped}\\b`, "i"))?.[1];
   if (direct) return Number(direct);
   return inferChargeCost(text, `\\b${escaped}\\b`, fallback);
 }
@@ -384,7 +791,7 @@ function healingClause(text) {
 }
 
 function summonClause(text) {
-  return firstMatchingClause(text, /\b(?:summon|conjure|call forth|calls forth)\b/i, text);
+  return firstMatchingClause(text, /\b(?:summon|summons|summoned|summoning|conjure|conjures|call forth|calls forth|call in|calls in)\b/i, text);
 }
 
 function attackClause(text) {
@@ -449,10 +856,31 @@ function reroutePassiveKind(spec, request) {
   };
 }
 
+function rerouteExplicitArmorSuite(spec, request) {
+  const text = compactText(request);
+  const explicitArmor = /\b(?:padded|leather|studded leather|hide|chain shirt|scale mail|breastplate|half plate|ring mail|chain mail|splint|plate)(?:\s+armor)?\b/i.test(text);
+  if (!explicitArmor || SUITE_KINDS.has(spec?.kind)) return { applied: false, spec, assumptions: [] };
+  const hasActiveRequest = /\b(?:charges?|cast|summon|summons|conjure|conjures|once per (?:short|long) rest)\b/i.test(text)
+    || (Array.isArray(spec?.utilityActivities) && spec.utilityActivities.length > 0)
+    || (Array.isArray(spec?.saveActivities) && spec.saveActivities.length > 0)
+    || (Array.isArray(spec?.attackActivities) && spec.attackActivities.length > 0)
+    || spec?.summonActor
+    || (Array.isArray(spec?.summonProfiles) && spec.summonProfiles.length > 0);
+  if (!hasActiveRequest) return { applied: false, spec, assumptions: [] };
+  return {
+    applied: true,
+    spec: {
+      ...clone(spec),
+      kind: /\b(?:legendary|artifact)\b/i.test(text) ? "legendaryEquipmentSuite" : "equipmentPowerSuite"
+    },
+    assumptions: ["Promoted explicit armor with activated powers into an equipment suite so armor, spells, and summons share one supported chassis."]
+  };
+}
+
 function rerouteWeaponHybridKind(spec, request) {
   if (!DIRECT_WEAPON_KINDS.has(spec?.kind)) return { applied: false, spec };
   const text = compactText(request);
-  const hasHybridRequest = /\b(?:cast|spell|summon|conjure|call forth|calls forth|charges?|once per (?:short|long) rest|bonus action|reaction|teleport|misty step|clairvoyance|moonbeam|fog cloud)\b/i.test(text)
+  const hasHybridRequest = /\b(?:cast|spell|summon|summons|conjure|conjures|call forth|calls forth|call in|calls in|charges?|once per (?:short|long) rest|bonus action|reaction|teleport|misty step|clairvoyance|moonbeam|fog cloud)\b/i.test(text)
     || (Array.isArray(spec.utilityActivities) && spec.utilityActivities.length > 0)
     || (Array.isArray(spec.saveActivities) && spec.saveActivities.length > 0)
     || (Array.isArray(spec.attackActivities) && spec.attackActivities.length > 0)
@@ -466,6 +894,58 @@ function rerouteWeaponHybridKind(spec, request) {
       kind: "artifactWeaponHybrid"
     },
     assumptions: ["Promoted the weapon into a hybrid artifact structure to preserve its spell, summon, or charge-based powers."]
+  };
+}
+
+function promoteExplicitConditionOnHit(spec, request) {
+  if (spec?.kind !== "weaponExtraDamage" || spec?.conditionOnHit) return { applied: false, spec, assumptions: [] };
+  const source = compactText(request);
+  const condition = [...CONDITION_STATUSES].find(status => new RegExp(`\\bor be ${status}\\b`, "i").test(source));
+  const dc = inferSaveDc(source);
+  if (!condition || !dc || !/\bon a hit\b/i.test(source) || !/\b(?:saving throw|save)\b/i.test(source)) {
+    return { applied: false, spec, assumptions: [] };
+  }
+
+  const next = clone(spec);
+  next.kind = "weaponConditionOnHit";
+  next.conditionOnHit = {
+    macroName: `${next.name} - ${condition.charAt(0).toUpperCase()}${condition.slice(1)}`,
+    save: { ability: inferSaveAbility(source), dc },
+    condition,
+    effectName: `${next.name} - ${condition.charAt(0).toUpperCase()}${condition.slice(1)}`,
+    durationSeconds: inferConditionDurationSeconds(source),
+    img: "icons/svg/aura.svg"
+  };
+  if (Array.isArray(next.unresolvedMechanics)) {
+    next.unresolvedMechanics = next.unresolvedMechanics.filter(mechanic => !/save rider|saving throw/i.test(compactText(`${mechanic?.label} ${mechanic?.requestedText}`)));
+    if (!next.unresolvedMechanics.length) delete next.unresolvedMechanics;
+  }
+  return {
+    applied: true,
+    spec: next,
+    assumptions: ["Recovered the explicit on-hit condition and saving throw as a condition rider."]
+  };
+}
+
+function clearDefaultWeaponWorkflowMechanics(spec) {
+  if (!spec?.conditionOnHit || !Array.isArray(spec.unresolvedMechanics)) {
+    return { applied: false, spec, assumptions: [] };
+  }
+  const defaultWorkflowPattern = /single[-\s]?target|focused target|target[-\s]?selection|no extra target|verify (?:the )?(?:attack|save|effect)|attack, save, and effect behavior/i;
+  const next = clone(spec);
+  const before = next.unresolvedMechanics.length;
+  next.unresolvedMechanics = next.unresolvedMechanics.filter(mechanic => !defaultWorkflowPattern.test(compactText([
+    mechanic?.label,
+    mechanic?.requestedText,
+    mechanic?.reason,
+    mechanic?.handling
+  ].filter(Boolean).join(" "))));
+  if (next.unresolvedMechanics.length === before) return { applied: false, spec, assumptions: [] };
+  if (!next.unresolvedMechanics.length) delete next.unresolvedMechanics;
+  return {
+    applied: true,
+    spec: next,
+    assumptions: ["Applied the default single-target focused attack workflow for the on-hit condition rider."]
   };
 }
 
@@ -560,7 +1040,7 @@ function applyHybridDefaults(spec) {
         ...activity,
         save: {
           ...activity.save,
-          dc: 15
+          dc: DEFAULT_SAVE_DC
         }
       };
     });
@@ -579,6 +1059,7 @@ function addNamedSpellActivities(spec, request) {
   const next = clone(spec);
   next.saveActivities = Array.isArray(next.saveActivities) ? [...next.saveActivities] : [];
   next.utilityActivities = Array.isArray(next.utilityActivities) ? [...next.utilityActivities] : [];
+  next.attackActivities = Array.isArray(next.attackActivities) ? [...next.attackActivities] : [];
   let applied = false;
   const assumptions = [];
 
@@ -586,7 +1067,7 @@ function addNamedSpellActivities(spec, request) {
     const activityName = `Cast ${profile.name}`;
     if (hasNamedSpellActivity(next, profile.name) || hasNamedActivity(next, activityName) || hasNamedActivity(next, profile.name)) continue;
     const clause = spellClause(request, profile.name);
-    const dc = inferSaveDc(clause, profile.save?.dc ?? inferSaveDc(request, 15));
+    const dc = inferSaveDc(clause, profile.save?.dc ?? inferSaveDc(request, 13));
     const baseActivity = {
       activityId: stableId(`${next.name} ${profile.name}`),
       activityName,
@@ -599,6 +1080,15 @@ function addNamedSpellActivities(spec, request) {
     };
     if (profile.type === "utility") {
       next.utilityActivities.push(baseActivity);
+    } else if (profile.type === "attack") {
+      next.attackActivities.push({
+        ...baseActivity,
+        ability: "spellcasting",
+        attackBonus: "@prof",
+        attackType: profile.attackType || "ranged",
+        attackClassification: profile.attackClassification || "spell",
+        damageParts: clone(profile.damageParts)
+      });
     } else {
       next.saveActivities.push({
         ...baseActivity,
@@ -623,11 +1113,14 @@ function enrichNamedSpellActivities(spec, request) {
   if (!mentionedNames.size) return { applied: false, spec, assumptions: [] };
 
   const next = clone(spec);
+  next.attackActivities = Array.isArray(next.attackActivities) ? [...next.attackActivities] : [];
+  next.saveActivities = Array.isArray(next.saveActivities) ? [...next.saveActivities] : [];
+  next.utilityActivities = Array.isArray(next.utilityActivities) ? [...next.utilityActivities] : [];
   const assumptions = [];
   const enrichedNames = new Set();
   let applied = false;
 
-  for (const listName of ["saveActivities", "utilityActivities"]) {
+  for (const listName of ["saveActivities", "utilityActivities", "attackActivities"]) {
     if (!Array.isArray(next[listName])) continue;
     next[listName] = next[listName].map(activity => {
       const profile = spellProfileForActivityName(activity?.activityName);
@@ -654,12 +1147,42 @@ function enrichNamedSpellActivities(spec, request) {
         enriched.damageParts = clone(profile.damageParts);
       }
 
+      if (profile.type === "attack") {
+        delete enriched.save;
+        delete enriched.damageOnSave;
+        enriched.ability = "spellcasting";
+        enriched.attackBonus = "@prof";
+        enriched.attackType = profile.attackType || "ranged";
+        enriched.attackClassification = profile.attackClassification || "spell";
+        enriched.damageParts = clone(profile.damageParts);
+      }
+
       if (JSON.stringify(enriched) === JSON.stringify(activity)) return activity;
       applied = true;
       enrichedNames.add(profile.name);
       return enriched;
     });
   }
+
+  const moveNamedActivity = (from, to, profileType) => {
+    const moved = [];
+    next[from] = next[from].filter(activity => {
+      const profile = spellProfileForActivityName(activity?.activityName);
+      if (!profile || profile.type !== profileType) return true;
+      moved.push(activity);
+      return false;
+    });
+    for (const activity of moved) {
+      const name = compactText(activity?.activityName).toLowerCase();
+      next[to] = next[to].filter(candidate => compactText(candidate?.activityName).toLowerCase() !== name);
+      next[to].push(activity);
+      applied = true;
+      enrichedNames.add(spellProfileForActivityName(activity?.activityName).name);
+    }
+  };
+
+  moveNamedActivity("saveActivities", "attackActivities", "attack");
+  moveNamedActivity("utilityActivities", "attackActivities", "attack");
 
   for (const name of enrichedNames) {
     assumptions.push(`Applied the deterministic ${name} mechanical profile to the generated activity.`);
@@ -716,6 +1239,54 @@ function addNamedAttackActivities(spec, request) {
   return { applied, spec: next, assumptions };
 }
 
+function recoverUnnamedSpellAttack(spec, request) {
+  if (!SUITE_KINDS.has(spec?.kind)) return { applied: false, spec, assumptions: [] };
+  const source = compactText(request);
+  const match = source.match(/(?:as an action,?\s*)?(?:the wearer can\s*)?(?:spend\s*(\d+)\s*charges?\s*to\s*)?make a\s+(melee|ranged)\s+spell attack[^.]*?(?:within|against)\s+[^.]*?\bdealing\s+([^.]*)/i);
+  if (!match) return { applied: false, spec, assumptions: [] };
+
+  const damageParts = parseDamageParts(match[3]);
+  if (!damageParts.length) return { applied: false, spec, assumptions: [] };
+  const next = clone(spec);
+  next.attackActivities = Array.isArray(next.attackActivities) ? [...next.attackActivities] : [];
+  next.utilityActivities = Array.isArray(next.utilityActivities) ? [...next.utilityActivities] : [];
+  next.saveActivities = Array.isArray(next.saveActivities) ? [...next.saveActivities] : [];
+  const damageType = compactText(damageParts[0]?.types?.[0]);
+  const activityName = `${damageType ? `${damageType[0].toUpperCase()}${damageType.slice(1)}` : "Arcane"} Bolt`;
+  if (hasNamedActivity(next, activityName)) return { applied: false, spec, assumptions: [] };
+
+  const attackType = match[2].toLowerCase();
+  next.attackActivities.push({
+    activityId: stableId(`${next.name} ${activityName}`),
+    activityName,
+    activationType: inferActivationType(source),
+    chargeCost: Number(match[1] ?? inferChargeCost(source, "spell attack", 1)),
+    chatFlavor: `Use ${activityName} from ${next.name}.`,
+    range: attackType === "melee" ? { value: 5, units: "ft" } : rangeFromFeet(source, { value: 60, units: "ft" }),
+    target: { affects: { count: "1", type: "creature" }, prompt: true },
+    ability: "spellcasting",
+    attackBonus: "@prof",
+    attackType,
+    attackClassification: "spell",
+    damageParts
+  });
+  const isMalformedDamageActivity = activity => {
+    if (!Array.isArray(activity?.damageParts) || !activity.damageParts.length) return false;
+    const name = compactText(activity?.activityName);
+    const isGeneric = /^(?:utility|triggered power|secondary effect|save)\s*\d*$/i.test(name);
+    // A utility spell cannot be the separately requested damaging spell attack.
+    const isUtilitySpell = spellProfileForActivityName(name)?.type === "utility";
+    return isGeneric || isUtilitySpell;
+  };
+  next.utilityActivities = next.utilityActivities.filter(activity => !isMalformedDamageActivity(activity));
+  next.saveActivities = next.saveActivities.filter(activity => !isMalformedDamageActivity(activity));
+  return {
+    applied: true,
+    spec: next,
+    assumptions: [`Recovered the unnamed ${attackType} spell attack as ${activityName}.`]
+  };
+}
+
 function namedSaveMentions(request) {
   const source = String(request ?? "");
   const patterns = [
@@ -755,7 +1326,7 @@ function buildNamedSaveActivity(itemName, mention, request) {
     target: clone(template?.target ?? { affects: { count: "1", type: "creature" }, prompt: true }),
     save: {
       ability: inferSaveAbility(source),
-      dc: inferSaveDc(source, inferSaveDc(request, 15))
+      dc: inferSaveDc(source, inferSaveDc(request, 13))
     },
     damageOnSave: /half/i.test(source) ? "half" : "none",
     damageParts
@@ -822,7 +1393,7 @@ function addGenericSaveActivity(spec, request) {
   const diceMatch = source.match(/(\d+\s*d\s*\d+(?:\s*[+-]\s*\d+)?)\s+([a-z]+)\s+damage/i);
   const dice = parseDiceExpression(diceMatch?.[1] ?? "");
   const damageType = compactText(diceMatch?.[2] ?? "");
-  const dc = inferSaveDc(source, inferSaveDc(request, 15));
+  const dc = inferSaveDc(source, inferSaveDc(request, 13));
   if (!dice || !damageType || !dc) return { applied: false, spec, assumptions: [] };
 
   const template = parseTemplateTarget(source);
@@ -903,7 +1474,7 @@ function repairMalformedSaveActivities(spec, request) {
     if ((!Number.isFinite(currentDc) || currentDc <= 0) && nextActivity?.save) {
       nextActivity.save = {
         ...nextActivity.save,
-        dc: inferSaveDc(source, inferSaveDc(request, 15))
+        dc: inferSaveDc(source, inferSaveDc(request, 13))
       };
       applied = true;
     }
@@ -1011,25 +1582,51 @@ function addHealingActivity(spec, request) {
   if (!healing) return { applied: false, spec, assumptions: [] };
   const next = clone(spec);
   next.utilityActivities = Array.isArray(next.utilityActivities) ? [...next.utilityActivities] : [];
-  if (next.utilityActivities.some(activity => activity?.healing)) return { applied: false, spec, assumptions: [] };
-  next.utilityActivities.push({
-    activityId: stableId(`${next.name} Heal`),
-    activityName: /\btouch\b/i.test(clause) ? "Healing Touch" : "Restore Vitality",
-    activationType: inferActivationType(clause),
-    chargeCost: inferChargeCost(clause, "\\b(?:restore|regain|heal)\\b", inferChargeCost(request, "\\b(?:restore|regain|heal)\\b", "")),
-    chatFlavor: "Restore hit points using this item.",
-    range: /\btouch\b/i.test(clause) ? { units: "touch" } : { units: "self" },
-    target: /\btouch\b/i.test(clause)
-      ? { affects: { count: "1", type: "creature" }, prompt: true }
-      : { affects: { count: "1", type: "self" }, prompt: false },
-    healing
-  });
+  const chargeCost = inferChargeCost(clause, "\\b(?:restore|regain|heal)\\b", inferChargeCost(request, "\\b(?:restore|regain|heal)\\b", ""));
+  const explicitRange = rangeFromFeet(clause, null);
+  const targetsCreature = /\b(?:one|a|an)\s+(?:creature|target)\b/i.test(clause) || /\bcreature\b/i.test(clause);
+  const target = targetsCreature || /\btouch\b/i.test(clause)
+    ? { affects: { count: "1", type: "creature" }, prompt: true }
+    : { affects: { count: "1", type: "self" }, prompt: false };
+  const existingIndex = next.utilityActivities.findIndex(activity => activity?.healing);
+  if (existingIndex >= 0) {
+    const existing = clone(next.utilityActivities[existingIndex]);
+    if (inferredHealing) existing.healing = { ...inferredHealing, types: ["healing"] };
+    if (chargeCost !== "") existing.chargeCost = chargeCost;
+    existing.activationType = inferActivationType(clause);
+    existing.range = explicitRange ?? (/\btouch\b/i.test(clause) ? { units: "touch" } : existing.range ?? { units: "self" });
+    existing.target = target;
+    next.utilityActivities[existingIndex] = existing;
+  } else {
+    next.utilityActivities.push({
+      activityId: stableId(`${next.name} Heal`),
+      activityName: /\btouch\b/i.test(clause) ? "Healing Touch" : "Restore Vitality",
+      activationType: inferActivationType(clause),
+      chargeCost,
+      chatFlavor: "Restore hit points using this item.",
+      range: explicitRange ?? (/\btouch\b/i.test(clause) ? { units: "touch" } : { units: "self" }),
+      target,
+      healing
+    });
+  }
   delete next.healing;
   return {
     applied: true,
     spec: next,
     assumptions: ["Recovered a healing activity from the request text."]
   };
+}
+
+function explicitSummonProfileNames(text) {
+  const match = compactText(text).match(/\b(?:pick|choose)(?:s)?(?:\s+one)?(?:\s+(?:friendly|summoned))?(?:\s+(?:beast|creature|ally|profile))?\s*:?\s*([^.;]+)/i);
+  if (!match) return [];
+  return match[1]
+    .replace(/\s+when\b.*$/i, "")
+    .split(/\s*,\s*(?:or\s+)?|\s+or\s+/i)
+    .map(value => value.replace(/^(?:a|an|the)\s+/i, "").trim())
+    .filter(value => value && value.split(/\s+/).length <= 4)
+    .filter((value, index, values) => values.findIndex(candidate => candidate.toLowerCase() === value.toLowerCase()) === index)
+    .slice(0, 6);
 }
 
 function inferSummonActor(request) {
@@ -1041,18 +1638,46 @@ function inferSummonActor(request) {
       profiles: [
         {
           profileName: "Demon",
-          actor: { name: "Friendly Fiend (Demon)", type: "fiend", subtype: "demon", size: "lg", ac: 13, hp: { value: 40, max: 40 }, movement: { walk: 40, climb: 40, units: "ft" } }
+          actor: namedSrdSummonActor("Fiend (Demon)", "Quasit")
         },
         {
           profileName: "Devil",
-          actor: { name: "Friendly Fiend (Devil)", type: "fiend", subtype: "devil", size: "lg", ac: 13, hp: { value: 40, max: 40 }, movement: { walk: 40, fly: 60, units: "ft" } }
+          actor: namedSrdSummonActor("Fiend (Devil)", "Imp")
         },
         {
           profileName: "Yugoloth",
-          actor: { name: "Friendly Fiend (Yugoloth)", type: "fiend", subtype: "yugoloth", size: "lg", ac: 13, hp: { value: 60, max: 60 }, movement: { walk: 40, units: "ft" } }
+          actor: namedSrdSummonActor("Fiend (Yugoloth)", "Mezzoloth")
         }
       ]
     };
+  }
+  const explicitProfiles = explicitSummonProfileNames(source);
+  if (explicitProfiles.length >= 2) {
+    return {
+      activityName: "Summon Chosen Ally",
+      chargeLabel: "summon",
+      profiles: explicitProfiles.map(profileName => ({
+        profileName,
+        actor: genericSrdSummonActor(profileName)
+      }))
+    };
+  }
+  const summonPair = source.match(/\b(?:summon|summons|conjure|conjures|call forth|calls forth|call in|calls in)\s+(?:one\s+)?(?:a|an|the)?\s*friendly\s+([a-z][a-z' -]+?)\s+or\s+(?:a|an|the)?\s*([a-z][a-z' -]+?)(?=\s+(?:for|within|that|which|when)\b|[.;]|$)/i);
+  if (summonPair) {
+    const profiles = [summonPair[1], summonPair[2]]
+      .map(profileName => profileName.trim())
+      .filter(profileName => profileName && profileName.split(/\s+/).length <= 4)
+      .map(profileName => ({
+        profileName,
+        actor: genericSrdSummonActor(profileName)
+      }));
+    if (profiles.length === 2) {
+      return {
+        activityName: "Summon Chosen Ally",
+        chargeLabel: "summon",
+        profiles
+      };
+    }
   }
   if (/\breef shark\b/i.test(source) && /\bwolf\b/i.test(source)) {
     return {
@@ -1061,81 +1686,13 @@ function inferSummonActor(request) {
           activityName: "Summon Reef Shark",
           chargeLabel: "reef shark",
           profileName: "Reef Shark",
-          actor: {
-            name: "Friendly Reef Shark",
-            type: "beast",
-            size: "lg",
-            ac: 12,
-            hp: { value: 22, max: 22 },
-            movement: { swim: 40, units: "ft" },
-            items: [{
-              name: "Bite",
-              damage: { number: 1, denomination: 8, bonus: "+2", types: ["piercing"] }
-            }]
-          }
+          actor: genericSrdSummonActor("Reef Shark")
         },
         {
           activityName: "Summon Wolf",
           chargeLabel: "wolf",
           profileName: "Wolf",
-          actor: {
-            name: "Friendly Wolf",
-            type: "beast",
-            ac: 13,
-            hp: { value: 11, max: 11 },
-            items: [{
-              name: "Bite",
-              damage: { number: 2, denomination: 4, bonus: "+2", types: ["piercing"] }
-            }]
-          }
-        }
-      ]
-    };
-  }
-  if (/\bcelestial hound\b/i.test(source) || (/\bcelestial\b/i.test(source) && /\bhound\b/i.test(source))) {
-    return {
-      activityName: "Summon Celestial Hound",
-      chargeLabel: "hound",
-      profiles: [
-        {
-          profileName: "Celestial Hound",
-          actor: {
-            name: "Friendly Celestial Hound",
-            type: "celestial",
-            size: "med",
-            ac: 14,
-            hp: { value: 22, max: 22 },
-            movement: { walk: 40, units: "ft" },
-            items: [{
-              name: "Celestial Bite",
-              damage: { number: 1, denomination: 8, bonus: "+3", types: ["radiant"] },
-              properties: ["mgc"]
-            }]
-          }
-        }
-      ]
-    };
-  }
-  if (/\beclipse hound\b/i.test(source) || /\bshadow mastiff\b/i.test(source)) {
-    return {
-      activityName: /\beclipse hound\b/i.test(source) ? "Summon Eclipse Hound" : "Summon Shadow Mastiff",
-      chargeLabel: /\beclipse hound\b/i.test(source) ? "eclipse hound" : "shadow mastiff",
-      profiles: [
-        {
-          profileName: /\beclipse hound\b/i.test(source) ? "Eclipse Hound" : "Shadow Mastiff",
-          actor: {
-            name: /\beclipse hound\b/i.test(source) ? "Friendly Eclipse Hound" : "Friendly Shadow Mastiff",
-            type: "monstrosity",
-            size: "med",
-            ac: 12,
-            hp: { value: 33, max: 33 },
-            movement: { walk: 40, units: "ft" },
-            items: [{
-              name: /\beclipse hound\b/i.test(source) ? "Eclipse Bite" : "Shadow Bite",
-              damage: { number: 2, denomination: 6, bonus: "+3", types: ["necrotic"] },
-              properties: ["mgc"]
-            }]
-          }
+          actor: genericSrdSummonActor("Wolf")
         }
       ]
     };
@@ -1147,18 +1704,7 @@ function inferSummonActor(request) {
       profiles: [
         {
           profileName: "Reef Shark",
-          actor: {
-            name: "Friendly Reef Shark",
-            type: "beast",
-            size: "lg",
-            ac: 12,
-            hp: { value: 22, max: 22 },
-            movement: { swim: 40, units: "ft" },
-            items: [{
-              name: "Bite",
-              damage: { number: 1, denomination: 8, bonus: "+2", types: ["piercing"] }
-            }]
-          }
+          actor: genericSrdSummonActor("Reef Shark")
         }
       ]
     };
@@ -1170,16 +1716,7 @@ function inferSummonActor(request) {
       profiles: [
         {
           profileName: "Wolf",
-          actor: {
-            name: "Friendly Wolf",
-            type: "beast",
-            ac: 13,
-            hp: { value: 11, max: 11 },
-            items: [{
-              name: "Bite",
-              damage: { number: 2, denomination: 4, bonus: "+2", types: ["piercing"] }
-            }]
-          }
+          actor: genericSrdSummonActor("Wolf")
         }
       ]
     };
@@ -1191,36 +1728,104 @@ function inferSummonActor(request) {
       profiles: [
         {
           profileName: "Cat",
-          actor: {
-            name: "Friendly Cat",
-            type: "beast",
-            ac: 12,
-            hp: { value: 2, max: 2 }
-          }
+          actor: genericSrdSummonActor("Cat")
         }
       ]
+    };
+  }
+  if (/\bpseudodragon\b/i.test(source)) {
+    const profileName = "Pseudodragon";
+    return {
+      activityName: `Summon ${profileName}`,
+      chargeLabel: "pseudodragon",
+      profiles: [
+        {
+          profileName,
+          actor: genericSrdSummonActor(profileName)
+        }
+      ]
+    };
+  }
+  const srdCreatureName = extractNamedSrdSummon(source);
+  if (srdCreatureName) {
+    return {
+      activityName: `Summon ${srdCreatureName}`,
+      chargeLabel: srdCreatureName.toLowerCase(),
+      profiles: [{
+        profileName: srdCreatureName,
+        actor: genericSrdSummonActor(srdCreatureName)
+      }]
     };
   }
   return null;
 }
 
 function addSummonActivity(spec, request) {
-  if (!SUITE_KINDS.has(spec?.kind) && spec?.kind !== "artifactWeaponHybrid") return { applied: false, spec, assumptions: [] };
+  if (!SUITE_KINDS.has(spec?.kind) && !["nativeEnchant", "nativeSummon", "nativeMultiProfileSummon"].includes(spec?.kind)) {
+    return { applied: false, spec, assumptions: [] };
+  }
   const hasTopLevelSummon = (spec.summonProfiles?.length ?? 0) > 0 || spec?.summonActor || spec?.summonActivity;
-  if (!hasTopLevelSummon && !/\b(summon|conjure|call forth|calls forth)\b/i.test(request)) return { applied: false, spec, assumptions: [] };
+  if (!hasTopLevelSummon && !/\b(summon|summons|summoned|summoning|conjure|conjures|call forth|calls forth|call in|calls in)\b/i.test(request)) return { applied: false, spec, assumptions: [] };
   const clause = summonClause(request);
-  const summonMentionCount = compactText(request).match(/\b(?:summon|conjure|call forth|calls forth)\b/ig)?.length ?? 0;
-  const inferred = inferSummonActor(summonMentionCount > 1 ? request : (clause || request));
+  const summonMentionCount = compactText(request).match(/\b(?:summon|summons|summoned|summoning|conjure|conjures|call forth|calls forth|call in|calls in)\b/ig)?.length ?? 0;
+  const useFullRequest = summonMentionCount > 1
+    || (spec.summonProfiles?.length ?? 0) >= 2
+    || explicitSummonProfileNames(request).length >= 2;
+  const inferred = inferSummonActor(useFullRequest ? request : (clause || request));
   if (!inferred) return { applied: false, spec, assumptions: [] };
 
   const next = clone(spec);
   next.utilityActivities = Array.isArray(next.utilityActivities) ? [...next.utilityActivities] : [];
 
+  const embeddedSummonIndex = next.utilityActivities.findIndex(activity =>
+    Array.isArray(activity?.summonProfiles)
+    && activity.summonProfiles.length
+    && /\b(?:summon|conjur|call)\b/i.test(compactText(activity?.activityName))
+  );
+  if (embeddedSummonIndex >= 0 && Array.isArray(inferred.profiles) && inferred.profiles.length) {
+    const existing = clone(next.utilityActivities[embeddedSummonIndex]);
+    const existingProfiles = Array.isArray(existing.summonProfiles) ? existing.summonProfiles : [];
+    existing.activationType = existing.activationType || inferActivationType(clause);
+    existing.chargeCost = inferSummonChargeCost(
+      clause,
+      inferred.chargeLabel ?? inferred.profiles[0]?.profileName?.toLowerCase?.() ?? "summon",
+      existing.chargeCost ?? ""
+    );
+    existing.chatFlavor = inferred.profiles.length > 1
+      ? "Choose a summon profile from this item."
+      : `Summon a friendly ${inferred.profiles[0].profileName.toLowerCase()} ally.`;
+    existing.duration = inferDuration(`${clause} ${request}`);
+    existing.range = rangeFromFeet(clause, existing.range ?? { value: 30, units: "ft" });
+    existing.target = {
+      affects: { count: "1", type: "space", special: "An unoccupied space within range" },
+      prompt: true
+    };
+    delete existing.attack;
+    delete existing.damageOnSave;
+    delete existing.damageParts;
+    delete existing.save;
+    existing.summonProfiles = inferred.profiles.map((profile, index) => ({
+      profileId: existingProfiles[index]?.profileId ?? stableId(`${next.name} ${profile.profileName}`),
+      profileName: profile.profileName,
+      actor: profile.actor
+    }));
+    next.utilityActivities[embeddedSummonIndex] = existing;
+    delete next.summonProfiles;
+    delete next.summonActivity;
+    delete next.summonActor;
+    return {
+      applied: true,
+      spec: next,
+      assumptions: [`Replaced a generic summon fallback with the requested ${inferred.profiles.map(profile => profile.profileName).join(" or ")} SRD profile.`]
+    };
+  }
+
   if (Array.isArray(inferred.splitActivities) && inferred.splitActivities.length) {
     const range = rangeFromFeet(clause, { value: 30, units: "ft" });
-    const duration = inferDuration(clause);
+    const duration = inferDuration(`${clause} ${request}`);
     const activationType = next.summonActivity?.activationType || inferActivationType(clause);
-    const fallbackChargeCost = next.summonActivity?.chargeCost ?? inferChargeCost(clause, "\\b(?:summon|conjure|call forth|calls forth)\\b", "");
+    const fallbackChargeCost = next.summonActivity?.chargeCost
+      ?? inferChargeCost(clause, "\\b(?:summon|conjure|call forth|calls forth|call in|calls in)\\b", Number(next.uses?.max) > 0 ? 1 : "");
     const existingProfiles = new Map((next.summonProfiles ?? [])
       .map(profile => [compactText(profile?.profileName).toLowerCase(), clone(profile)]));
     let createdAny = false;
@@ -1240,8 +1845,9 @@ function addSummonActivity(spec, request) {
           affects: { count: "1", type: "space", special: "An unoccupied space within range" },
           prompt: true
         },
-        summonProfiles: [existingProfile ?? {
-          profileId: stableId(`${next.name} ${entry.profileName}`),
+        // The request's exact SRD actor wins over any stale model-produced profile.
+        summonProfiles: [{
+          profileId: existingProfile?.profileId ?? stableId(`${next.name} ${entry.profileName}`),
           profileName: entry.profileName,
           actor: entry.actor
         }]
@@ -1261,6 +1867,10 @@ function addSummonActivity(spec, request) {
         if (category === "summon") return false;
         if (reason.includes("does not contain a foundry summon payload")) return false;
         if (requestedText.includes("summon")) return false;
+        if (category === "unmappedspell"
+          && reason.includes("no specific spell")
+          && reason.includes("activity")
+          && !/\bcast\b/i.test(request)) return false;
         return true;
       });
       if (!next.unresolvedMechanics.length) delete next.unresolvedMechanics;
@@ -1281,11 +1891,11 @@ function addSummonActivity(spec, request) {
     activityId: stableId(`${next.name} Summon`),
     activityName: inferred.activityName ?? `Summon ${inferred.profiles[0]?.profileName ?? "Creature"}`,
     activationType: inferActivationType(clause),
-    chargeCost: inferSummonChargeCost(clause, inferred.chargeLabel ?? inferred.profiles[0]?.profileName?.toLowerCase?.() ?? "summon", inferChargeCost(clause, "\\b(?:summon|conjure|call forth|calls forth)\\b", "")),
+    chargeCost: inferSummonChargeCost(clause, inferred.chargeLabel ?? inferred.profiles[0]?.profileName?.toLowerCase?.() ?? "summon", inferChargeCost(clause, "\\b(?:summon|conjure|call forth|calls forth|call in|calls in)\\b", "")),
     chatFlavor: inferred.profiles.length > 1
       ? "Choose a summon profile from this item."
       : `Summon a friendly ${inferred.profiles[0].profileName.toLowerCase()} ally.`,
-    duration: inferDuration(clause),
+    duration: inferDuration(`${clause} ${request}`),
     range: rangeFromFeet(clause, { value: 30, units: "ft" }),
     target: {
       affects: { count: "1", type: "space", special: "An unoccupied space within range" },
@@ -1300,6 +1910,10 @@ function addSummonActivity(spec, request) {
       if (category === "summon") return false;
       if (reason.includes("does not contain a foundry summon payload")) return false;
       if (requestedText.includes("summon")) return false;
+      if (category === "unmappedspell"
+        && reason.includes("no specific spell")
+        && reason.includes("activity")
+        && !/\bcast\b/i.test(request)) return false;
       return true;
     });
     if (!next.unresolvedMechanics.length) delete next.unresolvedMechanics;
@@ -1309,6 +1923,42 @@ function addSummonActivity(spec, request) {
     spec: next,
     assumptions: [`Recovered a summon activity for ${inferred.activityName ?? inferred.profiles[0].profileName} from the request text.`]
   };
+}
+
+function hasSummonUsePool(spec) {
+  const limit = Number(spec?.uses?.max);
+  return Number.isFinite(limit) && limit > 0;
+}
+
+function normalizeSummonUseConsumption(spec) {
+  if (!spec?.summonActivity || !hasSummonUsePool(spec)) return { applied: false, spec, assumptions: [] };
+  if (Number(spec.summonActivity.chargeCost) > 0) return { applied: false, spec, assumptions: [] };
+  const next = clone(spec);
+  next.summonActivity.chargeCost = 1;
+  return {
+    applied: true,
+    spec: next,
+    assumptions: ["Bound the recovered summon activity to the item's shared use pool."]
+  };
+}
+
+function hasStructuredActivityPayload(activity) {
+  return Boolean(
+    activity?.macroCommand
+    || activity?.healing
+    || activity?.enchantChanges?.length
+    || activity?.summonProfiles?.length
+    || activity?.save?.ability
+    || activity?.save?.dc != null
+    || activity?.damageParts?.length
+    || activity?.target?.template?.type
+    || activity?.target?.affects?.type
+  );
+}
+
+function isLikelySummonPlaceholder(activity) {
+  if (hasStructuredActivityPayload(activity)) return false;
+  return /\b(?:summon|conjur|call(?:ing)?|fiend|whistle)\b/i.test(compactText(activity?.activityName));
 }
 
 function dropDuplicateSummonUtilities(spec) {
@@ -1322,7 +1972,9 @@ function dropDuplicateSummonUtilities(spec) {
   next.utilityActivities = utilities.filter(activity => {
     const name = compactText(activity?.activityName).toLowerCase();
     if (!name) return true;
-    const duplicate = (summonActivityName && name === summonActivityName) || /^summon\b/.test(name);
+    const duplicate = (summonActivityName && name === summonActivityName)
+      || /^summon\b/.test(name)
+      || isLikelySummonPlaceholder(activity);
     if (duplicate) {
       removed += 1;
       return false;
@@ -1338,8 +1990,34 @@ function dropDuplicateSummonUtilities(spec) {
   };
 }
 
+function promoteSummonOnlyMultiProfileSpec(spec) {
+  if ((spec?.summonProfiles?.length ?? 0) < 2 || spec.kind === "nativeMultiProfileSummon") {
+    return { applied: false, spec, assumptions: [] };
+  }
+  const hasOtherActivities = (spec.attackActivities?.length ?? 0) > 0
+    || (spec.saveActivities?.length ?? 0) > 0
+    || (spec.utilityActivities ?? []).some(hasStructuredActivityPayload)
+    || (spec.effects?.length ?? 0) > 0
+    || (spec.passiveEffects?.length ?? 0) > 0;
+  if (hasOtherActivities) return { applied: false, spec, assumptions: [] };
+
+  const next = clone(spec);
+  next.kind = "nativeMultiProfileSummon";
+  next.summonActivity = {
+    ...(next.summonActivity ?? {}),
+    activityId: next.summonActivity?.activityId ?? stableId(`${next.name} Summon`)
+  };
+  delete next.utilityActivities;
+  return {
+    applied: true,
+    spec: next,
+    assumptions: ["Promoted the summon-only item to the native multi-profile summon renderer."]
+  };
+}
+
 function clearResolvedSummonMechanics(spec) {
-  if (!(spec?.summonProfiles?.length) && !spec?.summonActor && !spec?.summonActivity?.activityId) {
+  const hasEmbeddedSummon = (spec?.utilityActivities ?? []).some(activity => activity?.summonProfiles?.length);
+  if (!(spec?.summonProfiles?.length) && !spec?.summonActor && !spec?.summonActivity?.activityId && !hasEmbeddedSummon) {
     return { applied: false, spec, assumptions: [] };
   }
   if (!Array.isArray(spec?.unresolvedMechanics) || !spec.unresolvedMechanics.length) {
@@ -1350,11 +2028,14 @@ function clearResolvedSummonMechanics(spec) {
   const beforeCount = next.unresolvedMechanics.length;
   next.unresolvedMechanics = next.unresolvedMechanics.filter(mechanic => {
     const category = compactText(mechanic?.category).toLowerCase();
+    const label = compactText(mechanic?.label).toLowerCase();
     const reason = compactText(mechanic?.reason).toLowerCase();
     const requestedText = compactText(mechanic?.requestedText).toLowerCase();
-    if (category === "summon") return false;
+    if (["summon", "nativesummon", "nativemultiprofilesummon", "beastchoice", "summonchoice", "profilechoice"].includes(category)) return false;
     if (reason.includes("does not contain a foundry summon payload")) return false;
-    if (requestedText.includes("summon")) return false;
+    if (/\b(?:summon|conjure|call\s+(?:forth|in))\b/.test(requestedText)) return false;
+    if (category === "unmappedspell" && /infernal calling/.test(`${label} ${reason} ${requestedText}`)
+      && /(?:supported spell|summon profile|limited-use casting)/.test(reason)) return false;
     return true;
   });
   if (next.unresolvedMechanics.length === beforeCount) {
@@ -1365,6 +2046,73 @@ function clearResolvedSummonMechanics(spec) {
     applied: true,
     spec: next,
     assumptions: ["Removed resolved summon review notes now that a native summon payload is present."]
+  };
+}
+
+function clearResolvedResistanceMechanics(spec) {
+  if (!Array.isArray(spec?.unresolvedMechanics) || !spec.unresolvedMechanics.length) {
+    return { applied: false, spec, assumptions: [] };
+  }
+
+  const resolvedTypes = new Set();
+  for (const listName of ["effects", "passiveEffects"]) {
+    for (const effect of spec?.[listName] ?? []) {
+      for (const change of effect?.changes ?? []) {
+        if (compactText(change?.key) !== "system.traits.dr.value") continue;
+        const value = typeof change?.value === "object" ? JSON.stringify(change.value) : compactText(change?.value);
+        for (const type of DAMAGE_RESISTANCE_TYPES) {
+          if (new RegExp(`\\b${type}\\b`, "i").test(value)) resolvedTypes.add(type);
+        }
+      }
+    }
+  }
+  if (!resolvedTypes.size) return { applied: false, spec, assumptions: [] };
+
+  const next = clone(spec);
+  const beforeCount = next.unresolvedMechanics.length;
+  next.unresolvedMechanics = next.unresolvedMechanics.filter(mechanic => {
+    const text = compactText(`${mechanic?.category} ${mechanic?.label} ${mechanic?.requestedText} ${mechanic?.reason} ${mechanic?.handling}`);
+    const describesResistance = /resistan|shrug\s+off|damage[- ]handling|passive defensive/i.test(text);
+    if (!describesResistance) return true;
+    return ![...resolvedTypes].some(type => new RegExp(`\\b${type}\\b`, "i").test(text));
+  });
+  if (next.unresolvedMechanics.length === beforeCount) return { applied: false, spec, assumptions: [] };
+  if (!next.unresolvedMechanics.length) delete next.unresolvedMechanics;
+  return {
+    applied: true,
+    spec: next,
+    assumptions: ["Removed damage-resistance review notes already represented by a native item effect."]
+  };
+}
+
+function clearResolvedSpellMechanics(spec, request) {
+  if (!Array.isArray(spec?.unresolvedMechanics) || !spec.unresolvedMechanics.length) {
+    return { applied: false, spec, assumptions: [] };
+  }
+
+  const requestedProfiles = spellMentions(request);
+  if (!requestedProfiles.length) return { applied: false, spec, assumptions: [] };
+  const activities = ["activities", "saveActivities", "utilityActivities", "attackActivities"]
+    .flatMap(listName => Array.isArray(spec?.[listName]) ? spec[listName] : []);
+  const allRecovered = requestedProfiles.every(profile => hasNamedSpellActivity(spec, profile.name)
+    || activities.some(activity => new RegExp(`\\b${profile.name.replace(/\\s+/g, "\\\\s+")}\\b`, "i").test(compactText(activity?.activityName))));
+  if (!allRecovered) return { applied: false, spec, assumptions: [] };
+
+  const next = clone(spec);
+  const beforeCount = next.unresolvedMechanics.length;
+  next.unresolvedMechanics = next.unresolvedMechanics.filter(mechanic => {
+    const category = compactText(mechanic?.category).toLowerCase();
+    const label = compactText(mechanic?.label).toLowerCase();
+    const requestedText = compactText(mechanic?.requestedText).toLowerCase();
+    if (category !== "unmappedspell" && !/spellcasting activities|unmapped spell/.test(label)) return true;
+    return !requestedProfiles.every(profile => requestedText.includes(profile.name.toLowerCase()) || label.includes("spellcasting activities"));
+  });
+  if (next.unresolvedMechanics.length === beforeCount) return { applied: false, spec, assumptions: [] };
+  if (!next.unresolvedMechanics.length) delete next.unresolvedMechanics;
+  return {
+    applied: true,
+    spec: next,
+    assumptions: ["Removed named-spell review notes after deterministic SRD activities were recovered."]
   };
 }
 
@@ -1458,6 +2206,52 @@ function dropGenericPlaceholders(spec) {
   return next;
 }
 
+function dropRedundantWeaponRiderActivities(spec, request) {
+  const riderParts = Array.isArray(spec?.extraDamageParts) ? spec.extraDamageParts : [];
+  const requestText = compactText(request);
+  if (!riderParts.length || !/\bon (?:a|every|each) hit\b/i.test(requestText)) return { applied: false, spec, assumptions: [] };
+
+  const matchesRider = activity => {
+    const parts = Array.isArray(activity?.damageParts) ? activity.damageParts : [];
+    return parts.length === riderParts.length && parts.every((part, index) =>
+      Number(part?.number) === Number(riderParts[index]?.number)
+      && Number(part?.denomination) === Number(riderParts[index]?.denomination)
+      && compactText(part?.types?.[0]).toLowerCase() === compactText(riderParts[index]?.types?.[0]).toLowerCase()
+    );
+  };
+  const sameDamagePart = (left, right) =>
+    Number(left?.number) === Number(right?.number)
+    && Number(left?.denomination) === Number(right?.denomination)
+    && compactText(left?.types?.[0]).toLowerCase() === compactText(right?.types?.[0]).toLowerCase();
+  const next = clone(spec);
+  const original = Array.isArray(next.saveActivities) ? next.saveActivities : [];
+  let changed = false;
+  next.saveActivities = original.flatMap(activity => {
+    const name = compactText(activity?.activityName).toLowerCase();
+    const activityName = compactText(activity?.activityName);
+    const isGenericPlaceholder = ["triggered power", "secondary effect"].includes(name);
+    const isKnownSpell = Boolean(spellProfileForActivityName(activityName));
+    const escapedName = activityName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+");
+    const wasExplicitlyNamed = activityName && new RegExp(`\\b${escapedName}\\b`, "i").test(requestText);
+    if (matchesRider(activity)) {
+      if (!isGenericPlaceholder) return [activity];
+      changed = true;
+      return [];
+    }
+    const damageParts = Array.isArray(activity?.damageParts) ? activity.damageParts : [];
+    const remainingDamage = damageParts.filter(part => !riderParts.some(rider => sameDamagePart(part, rider)));
+    if (remainingDamage.length === damageParts.length || !remainingDamage.length || isKnownSpell || wasExplicitlyNamed) return [activity];
+    changed = true;
+    return [{ ...activity, damageParts: remainingDamage }];
+  });
+  if (!changed) return { applied: false, spec, assumptions: [] };
+  return {
+    applied: true,
+    spec: next,
+    assumptions: ["Removed a redundant placeholder activity that duplicated the weapon's on-hit damage rider."]
+  };
+}
+
 function rerouteTemplateUtilityActivities(spec) {
   const next = clone(spec);
   const utilities = Array.isArray(next.utilityActivities) ? [...next.utilityActivities] : [];
@@ -1479,6 +2273,7 @@ function rerouteTemplateUtilityActivities(spec) {
       namedSpellProfile?.type === "utility"
       || activity?.macroCommand
       || activity?.healing
+      || (Array.isArray(activity?.summonProfiles) && activity.summonProfiles.length)
       || (Array.isArray(activity?.enchantChanges) && activity.enchantChanges.length)
     );
 
@@ -1514,25 +2309,42 @@ function repairHybridSpecFromRequest(spec, request) {
   const assumptions = [];
 
   for (const repair of [
+    repairExplicitAttunement,
+    defaultMultiPropertyAttunement,
+    repairRequestedSkillAdvantage,
+    repairRequestedDarkvision,
+    repairGenericSummonProfileActors,
+    repairRequestedSpellcastingBonuses,
     reroutePassiveKind,
+    rerouteExplicitArmorSuite,
+    promoteExplicitConditionOnHit,
+    clearDefaultWeaponWorkflowMechanics,
     rerouteWeaponHybridKind,
     repairStaffWeaponBase,
     repairKnownWeaponBase,
     recoverWeaponExtraDamage,
     applyHybridDefaults,
+    recoverArtifactPassiveFeatures,
     addNamedSpellActivities,
     enrichNamedSpellActivities,
+    clearResolvedSpellMechanics,
     addNamedAttackActivities,
     addNamedSaveActivities,
     repairMalformedSaveActivities,
     repairExplicitConsumableTargets,
     addGenericSaveActivity,
+    recoverUnnamedSpellAttack,
     addHealingActivity,
     addSummonActivity,
+    normalizeSummonUseConsumption,
     dropDuplicateSummonUtilities,
+    promoteSummonOnlyMultiProfileSpec,
     clearResolvedSummonMechanics,
+    clearResolvedResistanceMechanics,
+    repairNativeEnchantDamage,
     addEnchantActivity,
-    rerouteTemplateUtilityActivities
+    rerouteTemplateUtilityActivities,
+    dropRedundantWeaponRiderActivities
   ]) {
     const result = repair(next, request);
     next = result.spec;

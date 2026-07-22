@@ -1,10 +1,11 @@
 import { splitItemRequests } from "./request-normalization.js";
 import { consumableProjectileFallbackImage } from "./system-art-enrichment.js";
+import { extractNamedSrdSummon, genericSrdSummonActor } from "./srd-summon-profiles.js";
 
 const COMPILER_VERSION = "2.4.0";
-const DEFAULT_SAVE_DC = 15;
+const DEFAULT_SAVE_DC = 13;
 
-const KNOWN_CASTING_SPELLS = /\b(?:clairvoyance|command|ice\s+storm|cone\s+of\s+cold|flame\s+strike|burning\s+hands|thunderwave|ice\s+knife|ray\s+of\s+sickness)\b/i;
+const KNOWN_CASTING_SPELLS = /\b(?:clairvoyance|command|ice\s+storm|cone\s+of\s+cold|flame\s+strike|burning\s+hands|thunderwave|ice\s+knife|poison\s+spray|ray\s+of\s+sickness|cloudkill)\b/i;
 
 const DAMAGE_TYPES = [
   "acid", "bludgeoning", "cold", "fire", "force", "lightning", "necrotic",
@@ -28,8 +29,9 @@ const WEAPONS = {
 };
 
 const CREATURES = {
-  cat: { size: "tiny", type: "beast", ac: 12, hp: 2, walk: 40, abilities: { str: 3, dex: 15, con: 10, int: 3, wis: 12, cha: 7 }, attack: [1, 1, "slashing"], img: "icons/creatures/mammals/cat-hunched-glowing-red.webp" },
-  wolf: { size: "med", type: "beast", ac: 13, hp: 11, walk: 40, abilities: { str: 12, dex: 15, con: 12, int: 3, wis: 12, cha: 6 }, attack: [2, 4, "piercing"], img: "icons/creatures/mammals/wolf-howl-moon-black.webp" }
+  cat: { img: "icons/creatures/mammals/cat-hunched-glowing-red.webp" },
+  pseudodragon: { img: "icons/creatures/reptiles/dragon-horned-blue.webp" },
+  wolf: { img: "icons/creatures/mammals/wolf-howl-moon-black.webp" }
 };
 
 const SAVE_SPELLS = {
@@ -67,37 +69,15 @@ const SAVE_SPELLS = {
 const FIEND_SUMMON_PROFILES = {
   demon: {
     name: "Demon",
-    img: "icons/creatures/abilities/mouth-teeth-rows-red.webp",
-    hp: 50,
-    movement: { walk: 40, climb: 40, units: "ft" },
-    attack: {
-      name: "Bite",
-      img: "icons/creatures/abilities/fangs-teeth-bite-red.webp",
-      damage: { number: 1, denomination: 12, bonus: "9", types: ["necrotic"] }
-    }
+    srdActorName: "Quasit"
   },
   devil: {
     name: "Devil",
-    img: "icons/creatures/unholy/demon-horned-winged-laughing.webp",
-    hp: 40,
-    movement: { walk: 40, fly: 60, units: "ft" },
-    attack: {
-      name: "Fiery Strike",
-      img: "icons/magic/fire/projectile-fireball-orange.webp",
-      damage: { number: 2, denomination: 6, bonus: "9", types: ["fire"] },
-      range: { value: 150, units: "ft" }
-    }
+    srdActorName: "Imp"
   },
   yugoloth: {
     name: "Yugoloth",
-    img: "icons/creatures/unholy/demon-fanged-horned-yellow.webp",
-    hp: 60,
-    movement: { walk: 40, units: "ft" },
-    attack: {
-      name: "Claws",
-      img: "icons/creatures/claws/claw-talons-glowing-orange.webp",
-      damage: { number: 1, denomination: 8, bonus: "9", types: ["slashing"] }
-    }
+    srdActorName: "Mezzoloth"
   }
 };
 
@@ -215,7 +195,8 @@ function detectWeapon(text) {
 }
 
 function detectCreature(text) {
-  return Object.keys(CREATURES).find(name => new RegExp(`\\b${name}\\b`, "i").test(text));
+  return Object.keys(CREATURES).find(name => new RegExp(`\\b${name}\\b`, "i").test(text))
+    ?? extractNamedSrdSummon(text).toLowerCase();
 }
 
 function detectSaveSpells(text) {
@@ -301,7 +282,9 @@ function parseUses(text, fallback = null) {
     recovery = [{ period: "dawn", type: formula ? "formula" : "recoverAll", formula }];
   }
 
-  return { max: String(uses), recovery, autoDestroy: /consumed|destroyed|one[- ]use/i.test(text) };
+  const autoDestroy = /consumed|destroyed|one[- ]use/i.test(text);
+  if (!autoDestroy && !recovery.length) recovery = [{ period: "lr", type: "recoverAll", formula: "" }];
+  return { max: String(uses), recovery, autoDestroy };
 }
 
 function parseSave(text, rarity) {
@@ -495,8 +478,6 @@ function compileMultiProfileFiendSummon(context, profiles) {
   if (!/\b(?:once|twice|thrice|\d+\s+(?:charges?|uses?|times?))\b/i.test(request)) {
     assumptions.push("No use limit was supplied; used one use.");
   }
-  const abilities = { str: 13, dex: 16, con: 15, int: 10, wis: 10, cha: 16 };
-
   return {
     kind: "nativeMultiProfileSummon",
     name,
@@ -525,26 +506,8 @@ function compileMultiProfileFiendSummon(context, profiles) {
       actor: {
         name: `Forge Summon - ${name} - ${profile.name}`,
         tokenName: `Fiend Spirit ${profile.name}`,
-        img: profile.img,
-        tokenImg: profile.img,
-        tokenWidth: 2,
-        tokenHeight: 2,
-        size: "lg",
-        type: "fiend",
-        subtype: profile.name,
-        alignment: "Neutral",
-        ac: 18,
-        hp: { value: profile.hp, max: profile.hp },
-        movement: profile.movement,
-        abilities,
-        darkvision: 60,
-        items: [{
-          name: profile.attack.name,
-          img: profile.attack.img,
-          damage: profile.attack.damage,
-          range: profile.attack.range,
-          description: `${profile.attack.name} attack for the ${profile.name} fiend spirit.`
-        }]
+        srdActorName: profile.srdActorName,
+        requireSrdActor: true
       }
     }))
   };
@@ -839,7 +802,8 @@ function compileWeapon(context) {
   }
 
   const magicalBonus = request.match(/\+(\d+)\b/)?.[1] ?? "";
-  const condition = lower.includes("poisoned") ? "poisoned" : null;
+  const condition = ["blinded", "charmed", "deafened", "frightened", "paralyzed", "poisoned", "prone", "restrained", "stunned", "unconscious"]
+    .find(status => new RegExp(`\\b${status}\\b`, "i").test(lower)) ?? null;
   const save = parseSave(request, rarity);
   const durationSeconds = Number(request.match(/\b(\d+)\s+seconds?\b/i)?.[1] ?? 30);
   const kind = condition && save ? "weaponConditionOnHit" : "weaponExtraDamage";
@@ -1069,14 +1033,14 @@ function compileSaveDamage(context) {
 function compileSummon(context) {
   const { request, name, rarity, attunement, creatureName, assumptions, warnings } = context;
   const creature = CREATURES[creatureName];
-  if (!creature) throw new Error("The local compiler currently supports cat and wolf summon profiles. Use JSON review for other creatures.");
-  assumptions.push(`Used the Forge's conservative ${creatureName} summon profile; review its actor statistics before creation.`);
+  const profileName = titleCase(creatureName);
+  assumptions.push(`The named summon will resolve an exact DND5e SRD actor named ${profileName}; non-SRD creatures require manual authoring.`);
   if (/multiple|choose|choice| or /i.test(request)) warnings.push("Multiple summon choices require explicit profile details and were not inferred by the local compiler.");
   const uses = parseUses(request, "1");
   return {
     kind: "nativeSummon",
     name,
-    img: creature.img,
+    img: creature?.img ?? "icons/svg/mystery-man.svg",
     description: request,
     rarity,
     attunement,
@@ -1088,24 +1052,12 @@ function compileSummon(context) {
     activityId: stableId(`${name} Summon`),
     profileId: stableId(`${name} ${creatureName} Profile`),
     activityName: `Summon ${titleCase(creatureName)}`,
-    profileName: titleCase(creatureName),
+    profileName,
     activationType: parseActivation(request),
     chargeCost: 1,
     range: parseRange(request, { value: 30, units: "ft" }),
     duration: { value: 1, units: "hour", concentration: false },
-    summonActor: {
-      name: `Forge Summon - ${titleCase(creatureName)}`,
-      img: creature.img,
-      tokenImg: creature.img,
-      size: creature.size,
-      type: creature.type,
-      alignment: "Friendly",
-      ac: creature.ac,
-      hp: { value: creature.hp, max: creature.hp },
-      movement: { walk: creature.walk, units: "ft" },
-      abilities: creature.abilities,
-      items: [{ name: `${titleCase(creatureName)} Attack`, img: creature.img, damage: baseDamage(creature.attack) }]
-    }
+    summonActor: genericSrdSummonActor(profileName)
   };
 }
 
@@ -1154,10 +1106,10 @@ function compileOne(request) {
       pattern = "equipmentPowerSuite";
       spec = compileThrowableConsumableAttack(context);
     }
-  } else if (/summon|conjure|call forth/i.test(trimmed) && fiendProfiles.length >= 2) {
+  } else if (/summon|conjure|call forth|call in/i.test(trimmed) && fiendProfiles.length >= 2) {
     pattern = "nativeMultiProfileSummon";
     spec = compileMultiProfileFiendSummon(context, fiendProfiles);
-  } else if (/summon|conjure|call forth/i.test(trimmed) && creatureName) {
+  } else if (/summon|conjure|call forth|call in/i.test(trimmed) && creatureName) {
     pattern = "nativeSummon";
     spec = compileSummon(context);
   } else if (saveSpells.length >= 2 && /\b(?:staff|wand|rod)\b/i.test(trimmed)) {

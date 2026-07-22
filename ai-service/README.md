@@ -1,15 +1,15 @@
 # Dungeon Master's Forge AI Service
 
-This is the reference Forge-compatible AI service for Dungeon Master's Forge. Foundry sends the versioned Forge `1.0` request envelope to this service; the service compiles it with either a deterministic mock or OpenAI and returns reviewed Forge item specs.
+This is the reference Forge-compatible service for Dungeon Master's Forge. Foundry sends it a versioned Forge `1.0` request, and the service turns that request into reviewed Forge item specs using either deterministic mock output or OpenAI.
 
-At the time of writing, it serves two practical module lanes:
+The service currently supports two module lanes:
 
-- stable manifest lane `2.21.12`, which still expects a reachable Forge-compatible endpoint
-- tester migration lane `2.23.0-test.2`, which can auto-connect invited testers to the hosted Free Forge service
+- stable module lane `2.23.1`, which expects a reachable Forge-compatible endpoint
+- tester lane `2.23.1-test.45`, which can connect invited testers to the hosted Free Forge service
 
 The service requires Node.js 22.13 or newer and has no package dependencies.
 
-## Architecture
+## How It Works
 
 - Foundry stores the service endpoint and optional model name.
 - The Foundry API token field can carry either an optional `DMF_CLIENT_TOKEN` for a server-owned deployment, or a personal OpenAI API key for bring-your-own-key mode.
@@ -44,7 +44,7 @@ Configure the Forge Describe view:
 
 The legacy `/api/compile` path is also accepted for compatibility, but the versioned endpoint above is preferred.
 
-Mock mode always returns a known-good longsword with `1d4` extra fire damage. It verifies transport, CORS, review, validation, and creation boundaries; it does not interpret the request.
+Mock mode always returns a known-good longsword with `1d4` extra fire damage. It is useful for checking transport, CORS, review, validation, and creation boundaries, but it does not interpret the request.
 
 ## OpenAI Mode
 
@@ -65,7 +65,7 @@ node src/cli.mjs
 
 For server-key mode, enter the same `DMF_CLIENT_TOKEN` in Foundry's **API token** field if one was configured. For client-key mode, enter the personal OpenAI API key in Foundry's **API token** field instead. The default `gpt-5.4-mini` favors lower cost and latency; the server owner controls the allowlist and can change the default. OpenAI currently recommends the Responses API for model calls and supports JSON-formatted or schema-constrained output through `text.format`: [Structured model outputs](https://developers.openai.com/api/docs/guides/structured-outputs), [Models](https://developers.openai.com/api/docs/models).
 
-In Foundry V2.18 and newer, use **Check Connection** after the service starts. A healthy live setup should report `openai` mode; if it reports `mock`, the Forge is still using deterministic test output.
+On the supported Foundry versions, use **Check Connection** after the service starts. A healthy live setup should report `openai` mode; if it reports `mock`, the Forge is still using deterministic test output.
 
 ## Current Recommended Local Launch Path
 
@@ -97,14 +97,17 @@ Copy `.env.example` to `.env` and run `npm run start:env`, or set variables dire
 | `DMF_AI_MODE` | `mock` | `mock` or `openai`. |
 | `DMF_ALLOWED_ORIGINS` | localhost Foundry origins | Comma-separated exact Foundry origins. |
 | `DMF_CLIENT_TOKEN` | empty | Optional bearer token shared with the Foundry client in server-key mode. |
-| `DMF_PUBLIC_FREE_TIER` | `false` | Enables bounded anonymous downloader access; requires a server key, wildcard origins, a monthly client allowance, and a global daily ceiling. |
+| `DMF_PUBLIC_FREE_TIER` | `false` | Enables bounded tokenless public access; requires a server key, wildcard origins, a monthly client allowance, and a global daily ceiling. The service may still use a keyed network identifier for rate limiting. |
 | `DMF_TRUST_PROXY` | `false` | Trust the first `X-Forwarded-For` address. Enable only behind a proxy that replaces untrusted forwarding headers. |
-| `DMF_RATE_LIMIT_PER_MINUTE` | `20` | Per-client in-memory limit. |
+| `DMF_RATE_LIMIT_PER_MINUTE` | `20` private / `2` free-tier template | Per-client in-memory limit. The hosted tester may use a different value. |
 | `DMF_CLIENT_DAILY_LIMIT` | `0` | Optional per-client daily request limit; `0` disables it. |
-| `DMF_CLIENT_MONTHLY_LIMIT` | `0` private / `20` free tier | Per-client calendar-month request limit; required in public free-tier mode. |
-| `DMF_GLOBAL_DAILY_LIMIT` | `0` private / `100` free tier | Global daily request limit; `0` disables it outside free-tier mode. |
+| `DMF_CLIENT_MONTHLY_LIMIT` | `0` private / `100` free-tier template | Per-client calendar-month request limit; required in public free-tier mode. |
+| `DMF_GLOBAL_DAILY_LIMIT` | `0` private / `50` free-tier template | Global daily request limit; `0` disables it outside free-tier mode. |
 | `DMF_QUOTA_DATABASE_PATH` | `:memory:` private / `./data/free-tier-quota.sqlite` free tier | SQLite quota ledger. Public mode rejects in-memory storage. |
 | `DMF_QUOTA_HASH_SECRET` | empty | Server-only secret of at least 32 characters used to pseudonymize client addresses in the quota ledger. Required in public mode. |
+| `DMF_ERROR_REPORTS_ENABLED` | public mode default | Enables the separate, user-triggered failed-item report endpoint. |
+| `DMF_ERROR_REPORT_PATH` | `./data/error-reports.jsonl` | Host-local report file; protect it like other service data. |
+| `DMF_ERROR_REPORT_RETENTION_DAYS` | `30` | Number of days to retain normalized failed-item reports; bounded to 1-365 days and pruned when a new report is written. |
 | `DMF_MAX_CONCURRENT_COMPILATIONS` | `2` | Maximum simultaneous compiler or model calls. |
 | `DMF_MAX_QUEUED_COMPILATIONS` | `20` | Waiting compilation limit; `0` rejects when all active slots are occupied. |
 | `DMF_CACHE_TTL_MS` | `300000` | Successful-result lifetime in milliseconds; `0` disables caching. |
@@ -178,4 +181,4 @@ For the current hardened workspace build, a direct local smoke proof was verifie
 
 ## Production Boundary
 
-Service `1.6.0` includes bounded public free-tier mode with a durable SQLite quota ledger and one controlled retry for malformed or contract-invalid model output. Authentication, quota, timeout, network, and generic upstream failures are never retried. See `docs/FREE_TIER_DEPLOYMENT.md` and `.env.free-tier.example`. The per-minute limiter and result cache remain in memory by design, while the 20-request client calendar-month allowance and global daily ceiling survive restarts. The service is intended for one persistent host; horizontally scaled deployments need a shared transactional quota backend.
+Service `1.6.1` includes bounded public free-tier mode with a durable SQLite quota ledger and one controlled retry for malformed or contract-invalid model output. Authentication, quota, timeout, network, and generic upstream failures are never retried. See `docs/FREE_TIER_DEPLOYMENT.md` and `.env.free-tier.example`. The per-minute limiter and result cache remain in memory by design, while the temporary 100-prompt client calendar-month allowance and global daily ceiling survive restarts. The service is intended for one persistent host; horizontally scaled deployments need a shared transactional quota backend.

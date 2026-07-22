@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { normalizeModelOutput, validateForgeRequest } from "../src/contract.mjs";
+import { actor } from "./fixtures/valid-specs.mjs";
 import { envelope } from "./helpers.mjs";
 
 function ids() {
@@ -56,6 +57,39 @@ test("normal charged multi-spell items remain allowed", () => {
   assert.equal(result.request.includes("10 charges"), true);
 });
 
+test("empty named poison spell activities are recovered without a stale unresolved note", () => {
+  const request = "Create a Longsword named \"Giant's Toothpick\" that gives a +2 magical bonus and does an additional 2d4 in poison damage. On a successful hit the target must make a DC 13 constitution saving throw or be poisoned for one minute. It has 12 charges that can be used to cast the spells poison spray, ray of sickness, and cloudkill with charges used based on spell level.";
+  const requestEnvelope = validateForgeRequest(envelope({ request }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "artifactWeaponHybrid",
+      name: "Giant's Toothpick",
+      description: request,
+      weaponType: "martialM",
+      baseItem: "longsword",
+      damage: { base: { number: 1, denomination: 8, bonus: "@mod", types: ["slashing"] } },
+      extraDamageParts: [{ number: 2, denomination: 4, bonus: "", types: ["poison"] }],
+      uses: { max: "12", recovery: [] },
+      saveActivities: [],
+      attackActivities: [],
+      utilityActivities: [],
+      unresolvedMechanics: [{
+        category: "unmappedSpell",
+        label: "Spellcasting activities",
+        requestedText: "It has 12 charges that can be used to cast the spells poison spray, ray of sickness, and cloudkill with charges used based on spell level.",
+        reason: "The spell activities were not fully specified.",
+        handling: "Review and add separate activities if needed."
+      }]
+    }]
+  }, requestEnvelope, { makeId: ids() });
+
+  const spec = result.specs[0];
+  assert.deepEqual(spec.saveActivities.map(activity => [activity.activityName, activity.chargeCost]), [["Cast Poison Spray", 1], ["Cast Cloudkill", 5]]);
+  assert.deepEqual(spec.attackActivities.map(activity => [activity.activityName, activity.chargeCost]), [["Cast Ray of Sickness", 1]]);
+  assert.deepEqual(spec.uses.recovery, [{ period: "lr", type: "recoverAll", formula: "" }]);
+  assert.equal(spec.unresolvedMechanics, undefined);
+});
+
 test("model output becomes the exact Forge response envelope", () => {
   const request = validateForgeRequest(envelope());
   const result = normalizeModelOutput({
@@ -93,6 +127,7 @@ test("model output becomes the exact Forge response envelope", () => {
   assert.equal(result.specs[0].unresolvedMechanics[0].id, "0000000000000003");
   assert.equal(result.specs[0].unresolvedMechanics[0].resolved, false);
   assert.equal(result.unresolvedMechanics[0].itemName, "Mind Crown");
+  assert.match(result.preparedSpecFingerprint, /^sha256:[0-9a-f]{64}$/);
 });
 
 test("empty model-generated effects are pruned before suite validation", () => {
@@ -159,6 +194,60 @@ test("pattern aliases normalize into Forge kinds", () => {
   assert.deepEqual(result.specs[0].properties, ["fin", "lgt", "thr", "mgc"]);
   assert.equal(result.specs[0].damage.base.denomination, 4);
   assert.equal(result.specs[0].extraDamageParts[0].denomination, 4);
+});
+
+test("attunement phrasing is normalized before the Forge response is returned", () => {
+  const required = normalizeModelOutput({
+    specs: [{
+      kind: "weaponExtraDamage",
+      name: "Needful Rapier",
+      description: "A rapier for a spellcaster.",
+      attunement: "",
+      weaponType: "martialM",
+      baseItem: "rapier",
+      damage: { base: { number: 1, denomination: 8, bonus: "@mod", types: ["piercing"] } },
+      extraDamageParts: [{ number: 1, denomination: 6, bonus: "", types: ["acid"] }]
+    }]
+  }, validateForgeRequest(envelope({
+    request: "Create a rare rapier called Needful Rapier. It needs attunement by a spellcaster."
+  })), { makeId: ids() });
+  assert.equal(required.specs[0].attunement, "required");
+
+  const optional = normalizeModelOutput({
+    specs: [{
+      kind: "weaponExtraDamage",
+      name: "Unbound Rapier",
+      description: "A simple rapier.",
+      attunement: "required",
+      weaponType: "martialM",
+      baseItem: "rapier",
+      damage: { base: { number: 1, denomination: 8, bonus: "@mod", types: ["piercing"] } },
+      extraDamageParts: [{ number: 1, denomination: 6, bonus: "", types: ["acid"] }]
+    }]
+  }, validateForgeRequest(envelope({
+    request: "Create a rare rapier called Unbound Rapier. It does not need attunement."
+  })), { makeId: ids() });
+  assert.equal(optional.specs[0].attunement, "");
+});
+
+test("multi-property magical items default to required attunement", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a rare longsword called Emberfang. It is a +2 longsword that deals an extra 1d6 fire damage on hit and has a DC 13 poison rider."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "weaponConditionOnHit",
+      name: "Emberfang",
+      description: "A fiery poisoned longsword.",
+      attunement: "",
+      magicalBonus: "2",
+      weaponType: "martialM",
+      baseItem: "longsword",
+      extraDamageParts: [{ number: 1, denomination: 6, bonus: "", types: ["fire"] }],
+      conditionOnHit: { condition: "poisoned", save: { ability: "con", dc: 13 }, durationSeconds: 60 }
+    }]
+  }, request, { makeId: ids() });
+  assert.equal(result.specs[0].attunement, "required");
 });
 
 test("unsupported generated kinds cannot reach Foundry", () => {
@@ -401,6 +490,27 @@ test("longbow hybrids recover known base weapon damage", () => {
   assert.deepEqual(result.specs[0].damage.base.types, ["piercing"]);
 });
 
+test("sling weapons recover the native simple ranged base damage", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create an uncommon +1 sling called Twinbolt Sling. Every hit deals an extra 1d4 force damage."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "weaponExtraDamage",
+      name: "Twinbolt Sling",
+      description: "A force-charged sling.",
+      magicalBonus: "1",
+      baseItem: "sling",
+      damage: { base: { number: 1, denomination: "bad", bonus: "@mod", types: [] } },
+      extraDamageParts: [{ number: 1, denomination: 4, bonus: "", types: ["force"] }]
+    }]
+  }, request, { makeId: ids() });
+
+  assert.equal(result.specs[0].weaponType, "simpleR");
+  assert.equal(result.specs[0].damage.base.denomination, 4);
+  assert.deepEqual(result.specs[0].damage.base.types, ["bludgeoning"]);
+});
+
 test("trident hybrids recover martial piercing base damage", () => {
   const request = validateForgeRequest(envelope({
     request: "Create a rare trident called Frostwave Trident. It can cast Fog Cloud from its charges and summon friendly sea beasts."
@@ -478,6 +588,27 @@ test("condition riders recover aliases and short duration phrases", () => {
   assert.equal(result.specs[0].conditionOnHit.durationSeconds, 6);
 });
 
+test("condition riders recover numeric duration from a malformed next-turn value", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create an uncommon dagger called Needle of Alarms. Once per turn when you hit a creature that has not acted yet, it takes an extra 1d4 psychic damage and cannot benefit from being hidden until the start of your next turn."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "weaponConditionOnHit",
+      name: "Needle of Alarms",
+      description: "A watchful dagger.",
+      conditionOnHit: {
+        condition: "hidden",
+        save: { ability: "wis", dc: 12 },
+        durationSeconds: "until the start of your next turn"
+      }
+    }]
+  }, request, { makeId: ids() });
+
+  assert.equal(result.specs[0].kind, "weaponConditionOnHit");
+  assert.equal(result.specs[0].conditionOnHit.durationSeconds, 6);
+});
+
 test("healing and activity damage formulas are normalized from dice expressions", () => {
   const request = validateForgeRequest(envelope({
     request: "Create a rare amulet called Heartglass Pendant. It has 3 charges and heals 2d8 + 2 hit points."
@@ -537,6 +668,30 @@ test("charged healing can recover from request text when healing data is incompl
   assert.deepEqual(result.specs[0].healing.types, ["healing"]);
 });
 
+test("healing activity values and recovery are corrected from the request", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a Wand named \"Dawnmender's Spark [VIDEO-FF-02]\" with 6 charges. As an action, it can expend 1 charge to restore 2d8+3 hit points to one creature within 60 feet. All expended charges recover at long rest."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "casterUtilityEquipment",
+      name: "Dawnmender's Spark [VIDEO-FF-02]",
+      description: "A restorative wand.",
+      uses: { max: "6", recovery: [{ period: "longRest", type: "formula", formula: "1" }] },
+      utilityActivities: [{
+        activityName: "Restore Vitality",
+        chargeCost: 6,
+        healing: { number: 1, denomination: 6, bonus: "", types: ["healing"] }
+      }]
+    }]
+  }, request, { makeId: ids() });
+
+  const activity = result.specs[0].utilityActivities[0];
+  assert.deepEqual(activity.healing, { number: 2, denomination: 8, bonus: "+3", types: ["healing"] });
+  assert.equal(activity.chargeCost, 1);
+  assert.deepEqual(result.specs[0].uses.recovery, [{ period: "lr", type: "recoverAll", formula: "" }]);
+});
+
 test("weapon base recovery fills missing damage types from known weapon data", () => {
   const request = validateForgeRequest(envelope({
     request: "Create a rare mace called Mace of Stunning. It is a +1 mace. On a hit, the target must make a DC 15 Wisdom saving throw or be stunned for 1 round."
@@ -593,6 +748,39 @@ test("single-use summon and enchant items may omit recovery", () => {
   assert.equal(enchant.specs[0].uses.autoDestroy, true);
 });
 
+test("rest-recharging summon items remain reusable", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create an uncommon whistle called Kennel Whistle. Once per long rest, summon a friendly Mastiff for 1 hour."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "nativeSummon",
+      name: "Kennel Whistle",
+      uses: { max: "1", recovery: [{ period: "longRest", type: "longRest" }], autoDestroy: true },
+      summonActor: { name: "Friendly Mastiff", srdActorName: "Mastiff", type: "beast", ac: 12, hp: { value: 5, max: 5 } }
+    }]
+  }, request, { makeId: ids() });
+
+  assert.equal(result.specs[0].uses.autoDestroy, false);
+  assert.equal(result.specs[0].uses.recovery.length, 1);
+});
+
+test("charge recovery formulas repair incomplete model recovery entries", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a rare brooch with 5 charges that regains 1d4 + 1 charges at dawn."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "casterUtilityEquipment",
+      name: "Highwire Brooch",
+      uses: { max: 5, recovery: [{ period: "dawn", type: "spec" }] },
+      utilityActivities: [{ activityName: "Cast Light", activationType: "action" }]
+    }]
+  }, request, { makeId: ids() });
+
+  assert.equal(result.specs[0].uses.recovery[0].formula, "1d4 + 1");
+});
+
 test("enchant oils recover from save-damage model drift", () => {
   const request = validateForgeRequest(envelope({
     request: "Create a rare oil called Oil of Stormforging. Apply it to a weapon. For 1 hour that weapon becomes magical and deals an extra 1d4 lightning damage. The oil is consumed after one use."
@@ -634,6 +822,154 @@ test("nativeEnchant specs synthesize missing duration from the request text", ()
   assert.equal(result.specs[0].kind, "nativeEnchant");
   assert.deepEqual(result.specs[0].duration, { seconds: 3600 });
   assert.equal(result.specs[0].restrictions.type, "weapon");
+  assert.deepEqual(
+    result.specs[0].enchantChanges.find(change => change.key === "system.damage.parts")?.value,
+    { number: 1, denomination: 4, bonus: "", types: ["lightning"] }
+  );
+});
+
+test("plural no-attunement wording, skill advantage, and darkvision use DND5e 5.x fields", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create uncommon goggles called Owlglass Lenses. While worn, they grant 60-foot darkvision and advantage on Wisdom (Perception) checks. They do not require attunement."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "passiveEffectEquipment",
+      name: "Owlglass Lenses",
+      description: "Goggles that sharpen the wearer's sight.",
+      attunement: "required",
+      effects: [{
+        name: "Owlglass Sight",
+        changes: [
+          { key: "system.attributes.senses.darkvision", mode: "OVERRIDE", value: "60" },
+          { key: "system.skills.prc.bonuses.check", mode: "CUSTOM", value: "advantage on Wisdom (Perception) checks" }
+        ]
+      }]
+    }]
+  }, request, { makeId: ids() });
+
+  const spec = result.specs[0];
+  assert.equal(spec.attunement, "");
+  assert.equal(spec.effects[0].changes.some(change => change.key === "system.skills.prc.bonuses.check"), false);
+  assert.deepEqual(
+    spec.effects[0].changes.find(change => change.key === "system.skills.prc.roll.mode"),
+    { key: "system.skills.prc.roll.mode", mode: "ADD", value: "1" }
+  );
+  assert.deepEqual(
+    spec.effects[0].changes.find(change => change.key === "system.attributes.senses.ranges.darkvision"),
+    { key: "system.attributes.senses.ranges.darkvision", mode: "ADD", value: "60" }
+  );
+});
+
+test("Investigation advantage repairs malformed model keys", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create uncommon spectacles called Surveyor Spectacles. They grant advantage on Intelligence (Investigation) checks and darkvision out to 60 feet."
+  }));
+  const result = normalizeModelOutput({ specs: [{
+    kind: "passiveEffectEquipment",
+    name: "Surveyor Spectacles",
+    effects: [{ name: "Surveyor Sight", changes: [
+      { key: "system.skills.ith.prc", mode: "CUSTOM", value: "advantage" },
+      { key: "system.attributes.darkvision.distance", mode: "OVERRIDE", value: "60" }
+    ] }]
+  }] }, request, { makeId: ids() });
+
+  const changes = result.specs[0].effects[0].changes;
+  assert.deepEqual(changes.find(change => change.key === "system.skills.inv.roll.mode"), {
+    key: "system.skills.inv.roll.mode", mode: "ADD", value: "1"
+  });
+  assert.deepEqual(changes.find(change => change.key === "system.attributes.senses.ranges.darkvision"), {
+    key: "system.attributes.senses.ranges.darkvision", mode: "ADD", value: "60"
+  });
+  assert.equal(changes.some(change => change.key === "system.skills.ith.prc"), false);
+});
+
+test("multi-profile summons preserve each explicitly named SRD actor", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create an uncommon horn. Pick one friendly beast: Giant Toad, Giant Scorpion, or Rhinoceros."
+  }));
+  const result = normalizeModelOutput({ specs: [{
+    kind: "nativeMultiProfileSummon",
+    name: "Menagerie Horn",
+    summonProfiles: ["Giant Toad", "Giant Scorpion", "Rhinoceros"].map(profileName => ({
+      profileName,
+      actor: { name: "Friendly One Friendly Beast", srdActorName: "One Friendly Beast", type: "beast" }
+    }))
+  }] }, request, { makeId: ids() });
+
+  assert.deepEqual(result.specs[0].summonProfiles.map(profile => profile.actor.srdActorName), [
+    "Giant Toad", "Giant Scorpion", "Rhinoceros"
+  ]);
+  assert.deepEqual(result.specs[0].summonProfiles.map(profile => profile.actor.name), [
+    "Friendly Giant Toad", "Friendly Giant Scorpion", "Friendly Rhinoceros"
+  ]);
+});
+
+test("explicit summon choices recover multi-profile structure from a collapsed single actor", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create an uncommon horn. Pick one friendly beast: Giant Toad, Giant Scorpion, or Rhinoceros when it shows up."
+  }));
+  const result = normalizeModelOutput({ specs: [{
+    kind: "nativeSummon",
+    name: "Menagerie Horn",
+    summonActor: { name: "Chosen Beast", srdActorName: "Chosen Beast", type: "beast" },
+    unresolvedMechanics: [{ category: "beastChoice", reason: "Choose the beast at the table." }]
+  }] }, request, { makeId: ids() });
+
+  assert.equal(result.specs[0].kind, "nativeMultiProfileSummon");
+  assert.deepEqual(result.specs[0].summonProfiles.map(profile => profile.profileName), [
+    "Giant Toad", "Giant Scorpion", "Rhinoceros"
+  ]);
+  assert.equal(result.specs[0].unresolvedMechanics, undefined);
+});
+
+test("compound friendly summon placeholders recover exact SRD profiles", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a very rare seal. As an action, summon one friendly Skeleton or Zombie for 1 hour."
+  }));
+  const result = normalizeModelOutput({ specs: [{
+    kind: "nativeMultiProfileSummon",
+    name: "Skeletal Menagerie",
+    summonProfiles: ["Skeleton", "Zombie"].map(profileName => ({
+      profileName,
+      actor: {
+        name: "Friendly One Friendly Skeleton Or Zombie",
+        srdActorName: "One Friendly Skeleton Or Zombie",
+        type: "undead"
+      }
+    }))
+  }] }, request, { makeId: ids() });
+
+  assert.deepEqual(result.specs[0].summonProfiles.map(profile => profile.actor.srdActorName), ["Skeleton", "Zombie"]);
+  assert.deepEqual(result.specs[0].summonProfiles.map(profile => profile.actor.name), ["Friendly Skeleton", "Friendly Zombie"]);
+});
+
+test("single friendly SRD summon strips leading request filler from malformed model identity", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a rare seal. As an action, summon one friendly Giant Scorpion for 1 hour using the exact D&D5e SRD actor profile."
+  }));
+  const result = normalizeModelOutput({ specs: [{
+    kind: "nativeSummon",
+    name: "Scorpioncall Seal",
+    summonProfiles: [{
+      profileName: "Profile Separate",
+      actor: { name: "Friendly Profile Separate", srdActorName: "Profile Separate", requireSrdActor: true }
+    }]
+  }] }, request, { makeId: ids() });
+
+  assert.equal(result.specs[0].summonActor.srdActorName, "Giant Scorpion");
+  assert.equal(result.specs[0].summonActor.name, "Friendly Giant Scorpion");
+});
+
+test("nested spell objects provide activity names", () => {
+  const request = validateForgeRequest(envelope({ request: "Create a shield that can cast Greater Invisibility once per long rest." }));
+  const result = normalizeModelOutput({ specs: [{
+    kind: "equipmentPowerSuite",
+    name: "Veiled Aegis",
+    utilityActivities: [{ activityName: "Utility 1", spell: { name: "Greater Invisibility" } }]
+  }] }, request, { makeId: ids() });
+
+  assert.equal(result.specs[0].utilityActivities[0].activityName, "Greater Invisibility");
 });
 
 test("single summon actor aliases normalize into summonActor", () => {
@@ -676,9 +1012,95 @@ test("nativeSummon specs can infer a simple companion actor from the request", (
 
   assert.equal(result.specs[0].kind, "nativeSummon");
   assert.equal(result.specs[0].summonActor.name, "Friendly Wolf");
+  assert.equal(result.specs[0].summonActor.srdActorName, "Wolf");
+  assert.equal(result.specs[0].summonActor.requireSrdActor, false);
+  assert.equal(result.specs[0].summonActor.ac, 12);
+});
+
+test("call in summon slang recovers a named SRD actor suggestion", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create very rare plate armor. Burn 5 charges to call in a friendly Lion for 1 hour."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "equipmentPowerSuite",
+      name: "Gatecrash Harness",
+      description: "Very rare plate armor with a charged ally call.",
+      summonActivity: { activityName: "Call Lion", chargeCost: 5 }
+    }]
+  }, request, { makeId: ids() });
+
+  assert.equal(result.specs[0].summonProfiles[0].profileName, "Lion");
+  assert.equal(result.specs[0].summonProfiles[0].actor.srdActorName, "Lion");
+  assert.equal(result.specs[0].summonProfiles[0].actor.requireSrdActor, false);
+});
+
+test("summon suggestions prefer an SRD actor while retaining a safe fallback", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a legendary book called The Dragonomicon. As an action, summon a friendly pseudodragon that serves the user for 1 hour."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "nativeSummon",
+      name: "The Dragonomicon",
+      description: "A dragon lore tome.",
+      uses: { max: "1" },
+      summonActor: {
+        name: "Fabricated Dragon",
+        type: "dragon",
+        ac: 99,
+        hp: { value: 999, max: 999 }
+      }
+    }]
+  }, request, { makeId: ids() });
+
+  assert.deepEqual(result.specs[0].summonActor, {
+    name: "Friendly Pseudodragon",
+    srdActorName: "Pseudodragon",
+    requireSrdActor: false,
+    type: "dragon",
+    ac: 99,
+    hp: { value: 999, max: 999 },
+    movement: { walk: 30, units: "ft" },
+    size: "med"
+  });
+});
+
+test("generic summon suggestions receive a reviewed fallback actor", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a rare whistle called Companion Call. As an action, summon a friendly companion for 1 hour."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "nativeSummon",
+      name: "Companion Call",
+      description: "A vague whistle.",
+      uses: { max: "1" },
+      summonActor: actor("Invented Companion")
+    }]
+  }, request, { makeId: ids() });
+
+  assert.equal(result.specs[0].summonActor.name, "Invented Companion");
+  assert.equal(result.specs[0].summonActor.requireSrdActor, false);
   assert.equal(result.specs[0].summonActor.type, "beast");
-  assert.equal(result.specs[0].summonActor.ac, 13);
-  assert.equal(result.specs[0].summonActor.hp.max, 11);
+});
+
+test("generic companion requests suggest a Wolf before using the fallback actor", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a rare whistle called Companion Call. As an action, summon a friendly companion for 1 hour."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "nativeSummon",
+      name: "Companion Call",
+      description: "A companion whistle.",
+      uses: { max: "1" }
+    }]
+  }, request, { makeId: ids() });
+
+  assert.equal(result.specs[0].summonActor.name, "Friendly Wolf");
+  assert.equal(result.specs[0].summonActor.srdActorName, "Wolf");
+  assert.equal(result.specs[0].summonActor.requireSrdActor, false);
 });
 
 test("missing activity names are backfilled for suite outputs", () => {
@@ -1052,10 +1474,11 @@ test("missing hybrid mechanics are surfaced in unresolved review notes", () => {
   }, request, { makeId: ids() });
 
   const unresolvedCategories = new Set((result.specs[0].unresolvedMechanics ?? []).map(mechanic => mechanic.category));
-  assert.equal(unresolvedCategories.has("summon"), true);
+  assert.equal(unresolvedCategories.has("summon"), false);
   assert.equal(unresolvedCategories.has("lightToggle"), true);
   assert.equal(unresolvedCategories.has("namedSpell"), true);
-  assert.equal(result.warnings.includes("A requested summon was not preserved in the generated Foundry structure."), true);
+  assert.equal(result.specs[0].summonProfiles[0].actor.srdActorName, "Wolf");
+  assert.equal(result.warnings.includes("A requested summon was not preserved in the generated Foundry structure."), false);
   assert.equal(result.warnings.includes("Specific named spells were reduced to generic utility placeholders."), true);
 });
 
@@ -1242,6 +1665,7 @@ test("grenade save activities recover missing template and thrown range from req
   assert.equal(spec.target.template.size, 10);
   assert.equal(spec.target.affects.type, "creature");
   assert.equal(spec.target.prompt, true);
+  assert.deepEqual(spec.uses.recovery, []);
 });
 
 test("grenade normalization prefers explicit request range over stale model defaults", () => {
@@ -1477,6 +1901,50 @@ test("explicit armor chassis overrides a contradictory shield model output", () 
   assert.equal(spec.effects[0].changes.some(change => change.key === "system.traits.dr.value" && change.value === "fire"), true);
 });
 
+test("legendary armor with spell and summon powers remains an equipment suite", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create legendary +2 plate armor called Bastion of the Quiet World. It has 18 charges and regains 1d10 + 8 charges at dawn. While attuned, it grants resistance to force and psychic damage. Spend 8 charges to cast Antimagic Field, 8 charges to cast Power Word Stun, or 5 charges to summon a friendly Elephant for 1 hour."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "nativeSummon",
+      name: "Bastion of the Quiet World",
+      description: "Legendary plate armor with spells and a summoned ally.",
+      baseItem: "plate",
+      rarity: "legendary",
+      magicalBonus: "2",
+      uses: { max: "18", recovery: [{ period: "dawn", type: "formula", formula: "1d10 + 8" }] },
+      effects: [{
+        name: "Quiet World Ward",
+        changes: [{ key: "system.traits.dr.value", mode: "CUSTOM", value: "force,psychic" }]
+      }],
+      saveActivities: [
+        { activityName: "Antimagic Field", chargeCost: 8 },
+        { activityName: "Power Word Stun", chargeCost: 8 }
+      ],
+      summonActivity: { activityName: "Summon Elephant", chargeCost: 5 },
+      summonActor: {
+        name: "Friendly Elephant",
+        type: "npc",
+        ac: 12,
+        hp: { value: 76, max: 76 },
+        srdActorName: "Elephant",
+        requireSrdActor: false
+      }
+    }]
+  }, request, { makeId: ids() });
+
+  const spec = result.specs[0];
+  assert.equal(spec.kind, "legendaryEquipmentSuite");
+  assert.equal(spec.baseItem, "plate");
+  assert.equal(spec.equipmentType, "heavy");
+  assert.equal(spec.armorValue, 18);
+  assert.equal(spec.magicalBonus, "2");
+  assert.deepEqual(spec.utilityActivities.map(activity => activity.activityName), ["Antimagic Field", "Power Word Stun"]);
+  assert.equal(spec.summonActivity.activityName, "Summon Elephant");
+  assert.equal(spec.summonProfiles[0].actor.srdActorName, "Elephant");
+});
+
 test("explicit passive resistance is restored when the model only returns AC", () => {
   const request = validateForgeRequest(envelope({
     request: "Create a rare cloak called Cloak of the Stormwatch. While worn, it grants +1 AC and resistance to lightning damage. It requires attunement."
@@ -1491,6 +1959,31 @@ test("explicit passive resistance is restored when the model only returns AC", (
   }, request, { makeId: ids() });
 
   assert.equal(result.specs[0].effects[0].changes.some(change => change.key === "system.traits.dr.value" && change.value === "lightning"), true);
+});
+
+test("attack-and-damage trinkets cannot be normalized into AC shields", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Make a trinket that gives +3 to attack and damage rolls when attuned."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "shieldArmorBonus",
+      name: "Aegis of Guarding",
+      description: "A mistaken shield result.",
+      armorValue: 2,
+      magicalBonus: "3"
+    }]
+  }, request, { makeId: ids() });
+
+  assert.equal(result.specs[0].kind, "passiveEffectEquipment");
+  assert.equal(result.specs[0].equipmentType, "wondrous");
+  assert.equal(result.specs[0].attunement, "required");
+  assert.deepEqual(result.specs[0].effects[0].changes, [
+    { key: "system.bonuses.mwak.attack", mode: "ADD", value: "3" },
+    { key: "system.bonuses.rwak.attack", mode: "ADD", value: "3" },
+    { key: "system.bonuses.mwak.damage", mode: "ADD", value: "3" },
+    { key: "system.bonuses.rwak.damage", mode: "ADD", value: "3" }
+  ]);
 });
 
 test("explicit healing formula replaces a generic healing consumable payload", () => {
@@ -1508,6 +2001,65 @@ test("explicit healing formula replaces a generic healing consumable payload", (
   }, request, { makeId: ids() });
 
   assert.deepEqual(result.specs[0].healing, { number: 3, denomination: 4, bonus: "+3", types: ["healing"] });
+});
+
+test("non-healing spell tonics recover from charged healing model drift", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create an uncommon one-use tonic called Clearblood Tonic. Drinking it takes an action and casts Lesser Restoration on the drinker. The tonic is consumed after use."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "chargedHealing",
+      name: "Clearblood Tonic",
+      description: "A cleansing tonic.",
+      uses: { max: "1", recovery: [], autoDestroy: true },
+      healing: { number: null, denomination: null, bonus: "", types: ["healing"] }
+    }]
+  }, request, { makeId: ids() });
+
+  const spec = result.specs[0];
+  assert.equal(spec.kind, "casterUtilityEquipment");
+  assert.equal(spec.itemType, "consumable");
+  assert.equal(spec.uses.autoDestroy, true);
+  assert.equal(spec.utilityActivities[0].activityName, "Cast Lesser Restoration");
+  assert.equal(spec.utilityActivities[0].target.affects.type, "self");
+  assert.equal("healing" in spec, false);
+});
+
+test("spell consumable recovery does not reroute explicit hit-point healing", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a one-use potion called Restoring Draught. It casts a restoring charm and heals 2d4 + 2 hit points."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "chargedHealing",
+      name: "Restoring Draught",
+      description: "A healing potion.",
+      uses: { max: "1", recovery: [], autoDestroy: true },
+      healing: { number: 2, denomination: 4, bonus: "2", types: ["healing"] }
+    }]
+  }, request, { makeId: ids() });
+
+  assert.equal(result.specs[0].kind, "chargedHealing");
+  assert.equal(result.specs[0].healing.denomination, 4);
+});
+
+test("charge recovery is not recorded as a missing healing payload", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a wand with 6 charges. Spend 3 charges to cast Fireball at DC 15. Regain 1d6 charges at dawn."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "chargedSaveDamage",
+      name: "Wand of Fireball",
+      description: "A wand of flame.",
+      uses: { max: "6", recovery: [{ period: "dawn", type: "formula", formula: "1d6" }] },
+      save: { ability: "dex", dc: 15 },
+      damageParts: [{ number: 8, denomination: 6, bonus: "", types: ["fire"] }]
+    }]
+  }, request, { makeId: ids() });
+
+  assert.equal(result.specs[0].unresolvedMechanics?.some(mechanic => mechanic.category === "healing") ?? false, false);
 });
 
 test("wand save-and-template request becomes a save activity instead of on-hit weapon damage", () => {
@@ -1569,4 +2121,365 @@ Area: 15-foot cone`
   assert.equal(spec.save.dc, 14);
   assert.equal(spec.target.template.type, "cone");
   assert.equal(spec.target.template.size, 15);
+});
+
+test("explicit spellcaster utility prompts promote passive model output and recover Detect Thoughts", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a rare circlet called Circlet of Quiet Sight. While worn, it grants +1 to spell attack rolls and spell save DC. It also lets the wearer cast Detect Thoughts once per long rest. It requires attunement by a spellcaster."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "passiveEffectEquipment",
+      name: "Circlet of Quiet Sight",
+      description: "A circlet that sharpens magical perception.",
+      effects: [{ name: "Quiet Sight", changes: [{ key: "system.bonuses.rsak.attack", mode: "ADD", value: "1" }] }]
+    }]
+  }, request, { makeId: ids() });
+
+  const spec = result.specs[0];
+  assert.equal(spec.kind, "casterUtilityEquipment");
+  assert.equal(spec.uses.max, "1");
+  assert.equal(spec.uses.recovery[0].period, "lr");
+  assert.equal(spec.utilityActivities[0].activityName, "Cast Detect Thoughts");
+  assert.equal(spec.utilityActivities[0].duration.concentration, true);
+});
+
+test("mixed staff spell payloads are rerouted before malformed shared saves reach validation", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a rare quarterstaff called Shepherd's Reliquary. It has 8 charges and regains 1d6 + 2 charges daily at dawn. As an action, the wielder can spend 1 charge to restore 2d8 + 2 hit points to a creature they touch, spend 2 charges to cast Shatter at DC 14, or spend 3 charges to summon a friendly wolf for 1 hour. It requires attunement."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "multiActivityStaff",
+      name: "Shepherd's Reliquary",
+      description: "A staff of restorative and summoning magic.",
+      uses: { max: "8", recovery: [{ period: "dawn", type: "formula", formula: "1d6 + 2" }] },
+      activities: [
+        { activityName: "Restore Vitality" },
+        { activityName: "Cast Shatter", save: null },
+        { activityName: "Summon Friendly Wolf" }
+      ]
+    }]
+  }, request, { makeId: ids() });
+
+  const spec = result.specs[0];
+  assert.equal(spec.kind, "equipmentPowerSuite");
+  assert.equal(spec.saveActivities[0].activityName, "Cast Shatter");
+  assert.deepEqual(spec.saveActivities[0].save, { ability: "con", dc: 14 });
+  assert.deepEqual(spec.saveActivities[0].damageParts, [{ number: 3, denomination: 8, bonus: "", types: ["thunder"] }]);
+  assert.equal(spec.utilityActivities.some(activity => activity.healing?.denomination === 8), true);
+  assert.equal(spec.summonProfiles[0].actor.name, "Friendly Wolf");
+});
+
+test("mixed utility and save spell staff activities are rerouted before validation", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a very rare scepter called Winter's Verdict. It requires attunement by a spellcaster and has 12 charges, regaining 1d6 + 6 at dawn. As an action, spend 3 charges to cast Sleet Storm, 4 charges to cast Ice Storm at DC 16, or 5 charges to cast Cone of Cold at DC 16."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "multiActivityStaff",
+      name: "Winter's Verdict",
+      description: "A scepter that holds the violence of a winter storm.",
+      uses: { max: "12", recovery: [{ period: "dawn", type: "formula", formula: "1d6 + 6" }] },
+      activities: [
+        { activityName: "Cast Sleet Storm", chargeCost: 3 },
+        {
+          activityName: "Cast Ice Storm",
+          chargeCost: 4,
+          save: { ability: "dex", dc: 16 },
+          damageParts: [
+            { number: 2, denomination: 8, bonus: "", types: ["bludgeoning"] },
+            { number: 4, denomination: 6, bonus: "", types: ["cold"] }
+          ]
+        },
+        {
+          activityName: "Cast Cone of Cold",
+          chargeCost: 5,
+          save: { ability: "con", dc: 16 },
+          damageParts: [{ number: 8, denomination: 8, bonus: "", types: ["cold"] }]
+        }
+      ]
+    }]
+  }, request, { makeId: ids() });
+
+  const spec = result.specs[0];
+  assert.equal(spec.kind, "equipmentPowerSuite");
+  assert.equal(spec.utilityActivities[0].activityName, "Cast Sleet Storm");
+  assert.deepEqual(spec.saveActivities.map(activity => activity.activityName), ["Cast Ice Storm", "Cast Cone of Cold"]);
+});
+
+test("explicit named spell charge costs override model drift", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a rare rod called Cinderweb Rod. Spend 2 charges to cast Web at DC 15 or 3 charges to cast Scorching Ray."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "casterUtilityEquipment",
+      name: "Cinderweb Rod",
+      description: "A charged spell rod.",
+      uses: { max: "8", recovery: [{ period: "dawn", type: "formula", formula: "1d6 + 2" }] },
+      saveActivities: [{
+        activityName: "Cast Web",
+        chargeCost: 1,
+        save: { ability: "dex", dc: 15 },
+        damageParts: []
+      }],
+      utilityActivities: [{ activityName: "Cast Scorching Ray", chargeCost: 2 }]
+    }]
+  }, request, { makeId: ids() });
+
+  const spec = result.specs[0];
+  assert.equal(spec.saveActivities[0].chargeCost, 2);
+  assert.equal(spec.utilityActivities[0].chargeCost, 3);
+});
+
+test("malformed non-damaging save activities are rerouted to utility activities", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a legendary staff called Meridian Breaker. Spend 4 charges to cast Wall of Fire, 6 charges to cast Disintegrate, or 7 charges to cast Teleport."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "equipmentPowerSuite",
+      name: "Meridian Breaker",
+      description: "A staff with three charged spells.",
+      uses: { max: "15", recovery: [{ period: "dawn", type: "formula", formula: "1d8 + 4" }] },
+      saveActivities: [
+        {
+          activityName: "Cast Wall of Fire",
+          save: { ability: "dex", dc: 17 },
+          damageParts: [{ number: 5, denomination: 8, bonus: "", types: ["fire"] }]
+        },
+        {
+          activityName: "Cast Disintegrate",
+          save: { ability: "dex", dc: 17 },
+          damageParts: [{ number: 10, denomination: 6, bonus: "40", types: ["force"] }]
+        },
+        { activityName: "Cast Teleport", save: {} }
+      ]
+    }]
+  }, request, { makeId: ids() });
+
+  const spec = result.specs[0];
+  assert.deepEqual(spec.saveActivities.map(activity => activity.activityName), ["Cast Wall of Fire", "Cast Disintegrate"]);
+  assert.equal(spec.utilityActivities[0].activityName, "Cast Teleport");
+  assert.equal("save" in spec.utilityActivities[0], false);
+});
+
+test("malformed damaging save activities still fail closed", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a rare rod called Unsafe Rod that deals 3d8 force damage on a failed save."
+  }));
+
+  assert.throws(() => normalizeModelOutput({
+    specs: [{
+      kind: "equipmentPowerSuite",
+      name: "Unsafe Rod",
+      description: "A malformed damaging power.",
+      saveActivities: [{
+        activityName: "Force Burst",
+        save: {},
+        damageParts: [{ number: 3, denomination: 8, bonus: "", types: ["force"] }]
+      }]
+    }]
+  }, request, { makeId: ids() }), /saveActivities\[0\]\.save\.ability/);
+});
+
+test("incomplete explicit fiend profile choices recover the supported SRD trio", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a rare idol called Gatekeeper's Token. It can summon a friendly fiend for 1 hour; choose Demon, Devil, or Yugoloth. It is consumed after use."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "nativeMultiProfileSummon",
+      name: "Gatekeeper's Token",
+      description: "An idol that opens a brief fiendish gate.",
+      uses: { max: "1", recovery: [] },
+      summonProfiles: [{ profileName: "Demon" }]
+    }]
+  }, request, { makeId: ids() });
+
+  const spec = result.specs[0];
+  assert.equal(spec.kind, "nativeMultiProfileSummon");
+  assert.deepEqual(spec.summonProfiles.map(profile => profile.profileName), ["Demon", "Devil", "Yugoloth"]);
+  assert.deepEqual(spec.summonProfiles.map(profile => profile.actor.srdActorName), ["Quasit", "Imp", "Mezzoloth"]);
+});
+
+test("explicit fiend choices replace generic model actors in complete profile output", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a censer that can call in a friendly fiend for 1 hour; choose Demon, Devil, or Yugoloth."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "nativeMultiProfileSummon",
+      name: "Fiend Censer",
+      description: "A censer with three selectable fiend profiles.",
+      uses: { max: "1", recovery: [{ type: "longRest" }] },
+      summonProfiles: [
+        { profileName: "Demon", actor: { name: "Demon", srdActorName: "Demon" } },
+        { profileName: "Devil", actor: { name: "Devil", srdActorName: "Devil" } },
+        { profileName: "Yugoloth", actor: { name: "Fiend", srdActorName: "Fiend" } }
+      ]
+    }]
+  }, request, { makeId: ids() });
+
+  assert.deepEqual(result.specs[0].summonProfiles.map(profile => profile.actor.srdActorName), ["Quasit", "Imp", "Mezzoloth"]);
+});
+
+test("pure fiend profile summons recover from generic equipment suite routing", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a very rare censer called Back-Alley Pact Burner. Pop it once per long rest with an action to call in a friendly fiend for 1 hour. Pick demon, devil, or yugoloth when it shows up. It requires attunement."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "legendaryEquipmentSuite",
+      name: "Back-Alley Pact Burner",
+      description: "A censer that summons one of three friendly fiends.",
+      uses: { max: "1", recovery: [{ type: "longRest" }] },
+      utilityActivities: [{
+        activityName: "Summon Friendly Fiend",
+        activationType: "action",
+        duration: { seconds: 3600 }
+      }],
+      summonProfiles: [
+        { profileName: "Demon", actor: { name: "Friendly Demon", srdActorName: "Quasit" } },
+        { profileName: "Devil", actor: { name: "Friendly Devil", srdActorName: "Imp" } },
+        { profileName: "Yugoloth", actor: { name: "Friendly Yugoloth", srdActorName: "Mezzoloth" } }
+      ],
+      summonActivity: { activityName: "Summon Ally" }
+    }]
+  }, request, { makeId: ids() });
+
+  const spec = result.specs[0];
+  assert.equal(spec.kind, "nativeMultiProfileSummon");
+  assert.equal(spec.activationType, "action");
+  assert.equal(spec.duration, 3600);
+  assert.equal(spec.utilityActivities, undefined);
+  assert.deepEqual(spec.summonProfiles.map(profile => profile.actor.srdActorName), ["Quasit", "Imp", "Mezzoloth"]);
+});
+
+test("explicit charged spell attacks recover an empty suite response", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a very rare mask called Mask of the Soul Lance. It has 5 charges and regains 1d4 + 1 charges daily at dawn. As an action, the wearer can spend 1 charge to make a ranged spell attack against one creature within 90 feet, dealing 4d8 psychic damage on a hit. It requires attunement."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "legendaryEquipmentSuite",
+      name: "Mask of the Soul Lance",
+      description: "A mask containing a focused psychic power."
+    }]
+  }, request, { makeId: ids() });
+
+  const spec = result.specs[0];
+  assert.equal(spec.kind, "equipmentPowerSuite");
+  assert.equal(spec.uses.max, "5");
+  assert.equal(spec.uses.recovery[0].period, "dawn");
+  assert.equal(spec.attackActivities[0].attackType, "ranged");
+  assert.equal(spec.attackActivities[0].attackClassification, "spell");
+  assert.equal(spec.attackActivities[0].chargeCost, 1);
+  assert.deepEqual(spec.attackActivities[0].damageParts, [{ number: 4, denomination: 8, bonus: "", types: ["psychic"] }]);
+  assert.deepEqual(spec.attackActivities[0].range, { value: 90, units: "ft" });
+});
+
+test("named utility spells recover an empty multi-activity rod response", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a rare rod called Stillwater Rod. It has 6 charges and regains 1d4 + 2 charges daily at dawn. As an action, spend 3 charges to cast Slow at DC 15. It requires attunement by a spellcaster."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "multiActivityStaff",
+      name: "Stillwater Rod",
+      description: "A charged rod that casts Slow.",
+      uses: { max: "6", recovery: [{ period: "dawn", type: "formula", formula: "1d4 + 2" }] }
+    }]
+  }, request, { makeId: ids() });
+
+  const spec = result.specs[0];
+  assert.equal(spec.kind, "casterUtilityEquipment");
+  assert.equal(spec.saveActivities[0].activityName, "Cast Slow");
+  assert.equal(spec.saveActivities[0].chargeCost, 3);
+  assert.equal(spec.saveActivities[0].save.dc, 15);
+});
+
+test("named damaging save spells recover an empty multi-activity wand response", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a rare wand called Icevein Wand. It has 8 charges and regains 1d6 + 2 charges daily at dawn. As an action, spend 4 charges to cast Ice Storm at DC 16. It requires attunement by a spellcaster."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "multiActivityStaff",
+      name: "Icevein Wand",
+      description: "A charged wand that casts Ice Storm.",
+      uses: { max: "8", recovery: [{ period: "dawn", type: "formula", formula: "1d6 + 2" }] }
+    }]
+  }, request, { makeId: ids() });
+
+  const spec = result.specs[0];
+  assert.equal(spec.kind, "casterUtilityEquipment");
+  assert.equal(spec.saveActivities[0].activityName, "Cast Ice Storm");
+  assert.equal(spec.saveActivities[0].chargeCost, 4);
+  assert.deepEqual(spec.saveActivities[0].save, { ability: "dex", dc: 16 });
+  assert.deepEqual(spec.saveActivities[0].damageParts, [
+    { number: 2, denomination: 8, bonus: "", types: ["bludgeoning"] },
+    { number: 4, denomination: 6, bonus: "", types: ["cold"] }
+  ]);
+  assert.deepEqual(spec.saveActivities[0].range, { value: 300, units: "ft" });
+});
+
+test("named damaging wand spells reroute when a staff response omits shared activities", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a rare wand called Icevein Wand. It has 8 charges and regains 1d6 + 2 charges daily at dawn. As an action, spend 4 charges to cast Ice Storm at DC 16. It requires attunement by a spellcaster."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "multiActivityStaff",
+      name: "Icevein Wand",
+      description: "A charged wand that casts Ice Storm.",
+      uses: { max: "8", recovery: [{ period: "dawn", type: "formula", formula: "1d6 + 2" }] },
+      saveActivities: [{
+        activityName: "Cast Ice Storm",
+        activationType: "action",
+        chargeCost: 4,
+        save: { ability: "dex", dc: 16 },
+        damageParts: [
+          { number: 2, denomination: 8, bonus: "", types: ["bludgeoning"] },
+          { number: 4, denomination: 6, bonus: "", types: ["cold"] }
+        ]
+      }]
+    }]
+  }, request, { makeId: ids() });
+
+  const spec = result.specs[0];
+  assert.equal(spec.kind, "casterUtilityEquipment");
+  assert.equal(spec.saveActivities.length, 1);
+  assert.equal(spec.saveActivities[0].activityName, "Cast Ice Storm");
+  assert.equal(spec.saveActivities[0].chargeCost, 4);
+});
+
+test("named non-damaging save spells are canonicalized from utility model drift", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a rare rod called Stillwater Rod. It has 6 charges and regains 1d4 + 2 charges daily at dawn. As an action, spend 3 charges to cast Slow at DC 15. It requires attunement by a spellcaster."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "casterUtilityEquipment",
+      name: "Stillwater Rod",
+      description: "A charged rod that casts Slow.",
+      uses: { max: "6", recovery: [{ period: "dawn", type: "formula", formula: "1d4 + 2" }] },
+      utilityActivities: [{
+        activityName: "Slow",
+        activationType: "action",
+        chargeCost: 3,
+        save: { ability: "dex", dc: 15 },
+        spell: "slow"
+      }]
+    }]
+  }, request, { makeId: ids() });
+
+  const spec = result.specs[0];
+  assert.equal(spec.utilityActivities.length, 0);
+  assert.equal(spec.saveActivities[0].activityName, "Cast Slow");
+  assert.deepEqual(spec.saveActivities[0].save, { ability: "wis", dc: 15 });
+  assert.deepEqual(spec.saveActivities[0].damageParts, []);
+  assert.deepEqual(spec.saveActivities[0].range, { value: 120, units: "ft" });
+  assert.equal(spec.saveActivities[0].duration.concentration, true);
 });

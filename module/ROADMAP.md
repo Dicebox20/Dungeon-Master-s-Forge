@@ -1,8 +1,9 @@
 # Dungeon Master's Forge Roadmap
 
-## Stable Baseline: V2
+## Stable Baseline
 
 - Foundry VTT v14 / DND5e v5.3.3 module integration.
+- Prefer native Foundry VTT and DND5e documents, activities, effects, summons, and Scene Region Behaviors before optional module integrations.
 - JSON specification validation, preview, and item creation.
 - Weapons, equipment, consumables, effects, charges, attacks, saves, healing, enchantments, summons, conditions, and scripted token-light powers.
 - GM-only Items directory launcher and reusable module API.
@@ -15,20 +16,30 @@
 - Editable generated specifications before creation.
 - Validation and explicit approval before writing world documents.
 - Provider-neutral `compile` API for future AI adapters.
-- Non-destructive in-world diagnostics for high-risk compiler families. Implemented in V2.9.
-- Private Forge provenance flags with custom-label preservation. Implemented in V2.10; visible item-sheet source branding is no longer added to new generated items.
+- Non-destructive in-world diagnostics for high-risk compiler families. Added in the 2.9 release.
+- Private Forge provenance flags with custom-label preservation. Added in the 2.10 release; new item sheets no longer show a Forge source label.
 
 ## In Progress: Request-to-Spec V2
 
-- Support multiple item requests in one compilation. Implemented in V2.2.
-- Expand deterministic mappings for enchantments, multi-profile summons, multi-spell items, attack activities, and hybrid artifacts. Multi-profile fiends and the proven Ice Storm/Cone of Cold shared-charge pattern were implemented in V2.3. Native extra-damage oils and equipment attack activities were implemented in V2.4. The proven Stormfire Reaver hybrid artifact family was implemented in V2.5.
-- Add structured fields for unresolved mechanics instead of description-only fallback. Implemented in V2.6 for ally auras, class resources, and unmapped spells.
-- Add a provider selector and provider configuration UI. Implemented in V2.7 with Local Rules active and future providers registered as unavailable.
+- Support multiple item requests in one compilation. Added in the 2.2 release.
+- Expand deterministic mappings for enchantments, multi-profile summons, multi-spell items, attack activities, and hybrid artifacts. Multi-profile fiends and the proven Ice Storm/Cone of Cold shared-charge pattern arrived in 2.3. Native extra-damage oils and equipment attack activities arrived in 2.4. The proven Stormfire Reaver hybrid artifact family arrived in 2.5.
+- Add structured fields for unresolved mechanics instead of description-only fallback. Added in 2.6 for ally auras, class resources, and unmapped spells.
+- Add a provider selector and provider configuration UI. Added in 2.7 with Local Rules active and future providers registered as unavailable.
+
+## Planned: Native Multi-Profile Summon Breadth
+
+- Keep explicit selectable Actor profiles as the Beta V1 baseline. Current Foundry rendering supports named profiles, per-profile counts, a selection prompt, and several summon activities inside equipment suites.
+- Add CR-filtered summon pools using native `summon.mode = "cr"`, creature-type filters, CR ceilings, and reviewed count formulas instead of expanding every eligible Actor UUID.
+- Add spell- or character-level profile gates through native `profiles[].level.min` and `profiles[].level.max`, with visible preview notes explaining which profiles are currently available.
+- Add random profile resolution for Bag-of-Tricks-style items using native no-prompt summon activities plus a controlled random/table result; do not substitute a player choice for an explicitly random result.
+- Add dynamic-profile summon activities for captured or GM-selected creatures. Empty profiles must remain a clear review state until a safe Actor UUID is supplied.
+- Keep 2014 and 2024 rules implementations distinct. Check system-owned source metadata before routing a named spell to Actor summoning because newer versions may create an area or abstract effect instead.
+- Use the installed DND5e summon schema as the contract for bonuses, matching, counts, CR, level gates, creature filters, prompt behavior, and temporary hit points; do not copy protected rules text into Forge fixtures.
 
 ## In Progress: System Content Resolution
 
-- Read-only exact-name Spell and Equipment lookup from system-owned DND5e packs. Implemented in V2.19.
-- Source UUID provenance and compatibility reporting without importing compendium documents. Implemented in V2.19.
+- Read-only exact-name Spell and Equipment lookup from system-owned DND5e packs. Added in 2.19.
+- Source UUID provenance and compatibility reporting without importing compendium documents. Added in 2.19.
 - Prefer system-native SRD spell activity shapes for exact-name spellcasting items when Foundry's DND5e schema can safely support it, mirroring the useful parts of dragging a spell onto an item and then applying reviewed item-specific overrides.
 - Add charge-scaled spell item support where shared-charge items default each spell's charge cost to the spell level, with extra charge spend preserved as upcast/scaling review data.
 - Prefer available SRD spells before creating placeholder spell utilities when a prompt requests unnamed spells "of your choice"; surface review notes when no safe SRD match is available.
@@ -50,25 +61,25 @@
 
 ## Implemented: Usability V1
 
-- Keep status and action regions visible while the active workflow panel scrolls. Implemented in V2.13.
-- Show only relevant commands in the Describe and Review steps. Implemented in V2.13.
-- Gate item creation behind explicit approval and revoke approval after specification edits. Implemented in V2.13.
-- Preserve responsive layouts for narrow Forge windows. Implemented in V2.13.
+- Keep status and action regions visible while the active workflow panel scrolls. Added in the 2.13 release.
+- Show only relevant commands in the Describe and Review steps. Added in the 2.13 release.
+- Gate item creation behind explicit approval and revoke approval after specification edits. Added in the 2.13 release.
+- Preserve responsive layouts for narrow Forge windows. Added in the 2.13 release.
 
 ## Implemented: Usability V2
 
-- Lead Review with readable per-item mechanics instead of raw JSON. Implemented in V2.14.
-- Keep the exact JSON specification available in a collapsed Advanced editor. Implemented in V2.14.
-- Place assumptions, warnings, deferred handling, and unresolved mechanics with the affected item. Implemented in V2.14.
-- Require current-session validation before approval can enable creation. Implemented in V2.14.
+- Lead Review with readable per-item mechanics instead of raw JSON. Added in the 2.14 release.
+- Keep the exact JSON specification available in a collapsed Advanced editor. Added in the 2.14 release.
+- Place assumptions, warnings, deferred handling, and unresolved mechanics with the affected item. Added in the 2.14 release.
+- Require current-session validation before approval can enable creation. Added in the 2.14 release.
 
 ## In Progress: AI Providers
 
-- Versioned remote request/response contract, endpoint safeguards, and secret redaction. Implemented in V2.8.
-- Provider configuration persistence boundaries and session-only secret classification. Implemented in V2.11.
-- Secret-free provider configuration profile export/import contract. Implemented in V2.12.
-- Bring Your Own API adapter, configuration UI, readiness gating, and mocked transport tests. Implemented in V2.15.
-- Remote health checks and mock-vs-live connection verification. Implemented in V2.18.
+- Versioned remote request/response contract, endpoint safeguards, and secret redaction. Added in the 2.8 release.
+- Provider configuration persistence boundaries and session-only secret classification. Added in the 2.11 release.
+- Secret-free provider configuration profile export/import contract. Added in the 2.12 release.
+- Bring Your Own API adapter, configuration UI, readiness gating, and mocked transport tests. Added in the 2.15 release.
+- Remote health checks and mock-vs-live connection verification. Added in the 2.18 release.
 - Disabled-by-default Free Forge release configuration and automatic first-launch provider selection for private hosted builds. Implemented in workspace; public activation waits for a stable HTTPS hostname.
 - Hosted generation service with production authentication and abuse protection.
 - Server-side secrets, usage limits, logging controls, and abuse protection.
@@ -84,6 +95,20 @@
 - Continue testing all 14 Forge item families: `weaponExtraDamage`, `chargedSaveDamage`, `passiveEffectEquipment`, `chargedHealing`, `weaponConditionOnHit`, `shieldArmorBonus`, `multiActivityStaff`, `nativeEnchant`, `nativeSummon`, `nativeMultiProfileSummon`, `casterUtilityEquipment`, `equipmentPowerSuite`, `legendaryEquipmentSuite`, and `artifactWeaponHybrid`.
 - Rotate mixed-item tests across simple melee weapons, martial melee weapons, ranged weapons, polearms, finesse weapons, heavy weapons, shields, light armor, medium armor, heavy armor, caster gear, consumables, summons, and enchantments.
 - Keep duplicate failed-test entries when they represent unresolved bugs or release blockers.
+
+## Planned: Beta V1 Verification Harness
+
+- Make `docs/BETA_V1_MANUAL_VERIFICATION_STANDARD.md` the required evidence process for Free Forge readiness testing.
+- Add a GM-only, opt-in harness bounded to a dedicated `DMF Verification Actor` and tagged test folders; never use campaign Actors or perform broad cleanup.
+- Compare approved created documents against deterministic scenario expectation cards and capture compact pass/warn/fail evidence for type, activities, effects, uses/recovery, targeting, damage, saves, conditions, summons, and attunement.
+- Allow GM-triggered safe item use probes, but prohibit automatic target selection, token placement, macro/script execution, Scene/Region writes, and automatic migrations.
+- Record structural, partial/safely degraded, and full-function outcomes separately; only actual document-plus-use verification advances Beta V1 readiness.
+
+## Planned: Language Refinement
+
+- Add and maintain a focused Free Forge language-regression pack covering common D&D shorthand, casual action phrasing, abbreviations, and player slang without treating ambiguous narrative language as guaranteed automation.
+- Normalize proven item-mechanics aliases such as "once a day," "pop a charge," "bamf," "shrug off," "one-and-done," "on a hit," and informal summon wording before provider output is validated.
+- Keep campaign and table jargon such as BBEG, TPK, RAW, RAI, nova, mook, and homebrew as contextual vocabulary unless a prompt gives enough mechanical detail to map it safely.
 
 ## Release Blockers From Testing
 
@@ -101,7 +126,9 @@
 ## Planned: Midi-QOL Compatibility
 
 - Keep core DND5e activities, uses, effects, saves, damage, summons, and enchantments as the portable baseline.
-- Add an optional Midi-QOL compatibility mode that is enabled only when a supported Midi-QOL version is detected and the GM opts in.
+- An optional world setting now enables basic Midi-QOL compatibility only when Midi-QOL is active: generated attacks and targeted saves confirm targets, while charged and summon activities confirm resource use.
+- With Item Macro active, supported condition riders apply standard DND5e conditions after failed saves and expire through combat-round Active Effect durations; outside combat they use elapsed seconds.
+- Add optional summon-creature scaling from the summoner's character level, with the level-derived AC, hit points, attacks, and save values visible for GM review before creation.
 - Generate reviewed Midi-QOL hooks for proven patterns such as post-hit conditions, post-active-effects workflows, save/damage riders, and separate Item Macro activities.
 - Detect and report required companion modules such as DAE and Item Macro instead of silently creating incomplete automation.
 - Preserve clean core-DND5e items with no Midi-QOL flags when Midi-QOL is absent, disabled, unsupported, or not requested.
@@ -109,14 +136,23 @@
 - Add migration and validation warnings for deprecated Midi-QOL flags or hooks before generated items are written.
 - Keep ally auras outside this track until a compatible aura engine is available and separately verified.
 
-## Planned: Founding Tier Scene Mechanics
+## Experimental: Native Scene Region Forge
 
-- Add a Founding Tier track for item-linked and spell-linked scene transfer mechanics that build on the stable V2 item engine instead of replacing it.
-- Support reviewed pocket-dimension and maze-style transfers through premade, configurable scene templates rather than unrestricted map generation.
-- Add optional Monk's Active Tile Triggers integration for supported transfer, return, exit, and fail-state flows when a compatible version is detected.
-- Add optional bespoke item-icon image generation without changing the portable mechanical output.
-- Generate safe transfer/return utilities for mechanics such as pocket dimensions, cursed keys, Maze variants, banishment-style realm effects, and similar isolated-scene powers.
-- Keep all realm-transfer features opt-in, clearly labeled as advanced automation, and separate from the portable baseline item output.
+- The first GM-only Scene Region workflow is implemented separately from the 14 Free Forge item families and uses the V2 preview/approval model.
+- The experimental workflow enhances one selected Region with allowlisted native behavior types; geometry creation and linked workflows remain deferred until this phase is proven.
+- Use native Region teleportation for reviewed pocket dimensions, maze transfers, stairs, elevators, portals, return zones, and fail states instead of making Monk's Active Tile Triggers the default dependency.
+- Use native Active Effect, movement cost, darkness, weather suppression, scrolling text, pause, level, and toggle behaviors where they fully express the requested mechanic.
+- Keep arbitrary script generation prohibited. Existing GM-selected Macro UUIDs may be referenced only through an explicit reviewed workflow.
+- Keep Midi-QOL, DAE, Item Macro, and Monk's Active Tile Triggers as optional compatibility layers for mechanics that native Regions do not replace.
+- The first Region implementation ships behind a disabled-by-default experimental world setting and does not automatically migrate existing worlds.
+- Follow the staged contract, migration inventory, security boundaries, and test matrix in `docs/SCENE_REGION_MIGRATION_PLAN.md`.
+
+## Planned: Master Patreon World And Region Items
+
+- Add reviewed World- and Region-Affecting items to the Master Patreon tier after the native Scene Region workflow is stable.
+- Let approved item activities apply allowlisted native Scene Region Behaviors or world-scoped effects without embedding arbitrary scripts or silently changing unrelated Regions.
+- Require a clear scope preview, affected Scene/Region list, explicit GM approval, reversible provenance, and safe cleanup before any world- or region-level write.
+- Keep portable item mechanics in Free Forge; reserve these broader environment-changing workflows for the Master tier because they require additional validation, reconciliation, and support.
 
 ## Documentation And Community Launch Tasks
 

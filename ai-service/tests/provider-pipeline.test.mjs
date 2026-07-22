@@ -35,7 +35,12 @@ test("all fourteen Forge families survive the complete mocked provider pipeline"
       fetchImpl: responsesFetch({ specs: [spec], assumptions: [], warnings: [], deferred: [] }, captures),
       makeId: ids()
     });
-    const request = envelope({ request: `Item name: ${spec.name}\nCreate the requested test item.` });
+    const summonClause = spec.kind === "nativeMultiProfileSummon"
+      ? " It can summon a friendly fiend; choose Demon, Devil, or Yugoloth."
+      : spec.kind === "nativeSummon"
+        ? " It can summon a friendly wolf."
+        : "";
+    const request = envelope({ request: `Item name: ${spec.name}\nCreate the requested test item.${summonClause}` });
     const result = await compile(request);
     assert.equal(result.specs[0].kind, spec.kind);
     assert.equal(result.specs[0].name, spec.name);
@@ -148,7 +153,7 @@ test("malformed nested generated IDs are replaced with service IDs", async () =>
     makeId: ids()
   });
 
-  const result = await compile(envelope({ request: `Item name: ${spec.name}` }));
+  const result = await compile(envelope({ request: `Item name: ${spec.name}\nIt can summon a friendly wolf.` }));
   assert.equal(result.specs[0].attackActivities[0].activityId, "0000000000000001");
   assert.equal(result.specs[0].effects[0].effectId, "0000000000000002");
   assert.equal(result.specs[0].summonProfiles[0].profileId, "0000000000000003");
@@ -332,6 +337,30 @@ test("upstream service errors are not retried", async () => {
     error => error.code === "openai_error"
   );
   assert.equal(attempts, 1);
+});
+
+test("single-item count mismatches receive one bounded model repair attempt", async () => {
+  let attempts = 0;
+  const retryHints = [];
+  const spec = validSpecs.find(candidate => candidate.name === "Validated Circlet");
+  const compile = createCompiler({
+    config: config({ mode: "openai" }),
+    openaiAdapter: async (_envelope, options) => {
+      attempts += 1;
+      retryHints.push(options.retryHint);
+      return attempts === 1
+        ? { specs: [spec, validSpecs[0]], assumptions: [], warnings: [], deferred: [] }
+        : { specs: [spec], assumptions: [], warnings: [], deferred: [] };
+    },
+    makeId: ids()
+  });
+
+  const result = await compile(envelope({ request: "Item name: Validated Circlet" }));
+  assert.equal(result.requestCount, 1);
+  assert.equal(result.specs[0].name, "Validated Circlet");
+  assert.equal(attempts, 2);
+  assert.equal(retryHints[0], "");
+  assert.match(retryHints[1], /Previous validation error \[item_count_mismatch\]/);
 });
 
 test("retryable model output stops after the second failed attempt", async () => {

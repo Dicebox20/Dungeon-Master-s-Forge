@@ -42,7 +42,9 @@ const BASE_ITEMS = [
 ];
 
 const SPELL_NAMES = [
+  "Poison Spray",
   "Ray of Sickness",
+  "Cloudkill",
   "Burning Hands",
   "Thunderwave",
   "Ice Knife",
@@ -87,6 +89,39 @@ function titleCaseWords(value) {
     .join(" ");
 }
 
+function replaceLanguageAlias(source, pattern, replacement, label, matches) {
+  let replaced = false;
+  const text = source.replace(pattern, (...args) => {
+    replaced = true;
+    if (typeof replacement === "function") return replacement(...args);
+    return replacement.replace(/\$(\d+)/g, (_token, index) => String(args[Number(index)] ?? ""));
+  });
+  if (replaced) matches.add(label);
+  return text;
+}
+
+// This is intentionally a small, deterministic adapter rather than a second
+// interpretation pass. Every replacement expands to wording the existing
+// extraction and family templates already understand.
+function normalizeDndLanguage(request) {
+  const matches = new Set();
+  let text = String(request ?? "");
+  text = replaceLanguageAlias(text, /\bonce\s+a\s+day\b/gi, "once per day", "once a day", matches);
+  text = replaceLanguageAlias(text, /\b(?:pop|burn)\s+(\d+)\s+charges?\b/gi, "spend $1 charges", "spend charges", matches);
+  text = replaceLanguageAlias(text, /\b(?:tops?\s+(?:itself\s+)?(?:back\s+)?up|gets?)\s+(\d+d\d+(?:\s*[+-]\s*\d+)?)\s+(?:charges?\s+)?back\s+at\s+dawn\b/gi, "regains $1 charges daily at dawn", "dawn charge recovery", matches);
+  text = replaceLanguageAlias(text, /\bat\s+dawn,?\s+roll\s+(\d+d\d+(?:\s*[+-]\s*\d+)?)\s+and\s+(?:put|get)\s+that\s+many\s+charges?\s+back\b/gi, "regains $1 charges daily at dawn", "dawn charge recovery", matches);
+  text = replaceLanguageAlias(text, /\bshrug\s+off\s+(acid|cold|fire|force|lightning|necrotic|poison|psychic|radiant|thunder)(?:\s+damage)?\b/gi, "resistance to $1 damage", "damage resistance", matches);
+  text = replaceLanguageAlias(text, /\b(?:chug(?:ging)?|drink(?:ing)?)\s+(?:it|this)\s+takes?\s+an\s+action\b/gi, "a creature can drink it as an action", "drink as an action", matches);
+  text = replaceLanguageAlias(text, /\bgets?\s+(?:you|the\s+(?:drinker|user|wearer))\s+back\s+(\d+d\d+(?:\s*[+-]\s*\d+)?)\s+HP\b/gi, "regain $1 hit points", "healing hit points", matches);
+  text = replaceLanguageAlias(text, /\b(?:one-and-done|single-use)\b/gi, "consumed after one use", "single use", matches);
+  text = replaceLanguageAlias(text, /\bcall\s+in\s+(a\s+)?friendly\b/gi, "summon a friendly", "summon creature", matches);
+  for (const spellName of SPELL_NAMES) {
+    const escaped = spellName.replace(/[^A-Za-z ]/g, "\\$&").replace(/\s+/g, "\\s+");
+    text = replaceLanguageAlias(text, new RegExp(`\\b(?:bamf\\s+with|fire\\s+off|drop|go\\s+nova\\s+with)\\s+${escaped}\\b`, "gi"), `cast ${spellName}`, "cast named spell", matches);
+  }
+  return { text, aliases: [...matches] };
+}
+
 function parseFields(request) {
   const fields = {};
   for (const line of String(request ?? "").split(/\r?\n/)) {
@@ -97,10 +132,20 @@ function parseFields(request) {
   return fields;
 }
 
+function explicitNameValue(value) {
+  const text = compactText(value);
+  if (!text) return "";
+  const beforeInstruction = text.match(/^(.{2,80}?)[.!?]\s+(?=(?:make|create|build|design|craft|generate)\b)/i)?.[1];
+  return compactText(beforeInstruction ?? text);
+}
+
 function firstTitleLine(request) {
   const line = String(request ?? "").split(/\r?\n/).map(value => value.trim()).find(Boolean) ?? "";
-  if (!line || line.includes(":") || line.length > 80 || /^(make|create|build|design|craft|generate)\b/i.test(line)) return "";
-  return line;
+  if (!line || line.includes(":") || /^(make|create|build|design|craft|generate)\b/i.test(line)) return "";
+  const beforeInstruction = line.match(/^(.{2,80}?)[.!?]\s+(?=(?:make|create|build|design|craft|generate)\b)/i)?.[1];
+  if (beforeInstruction) return compactText(beforeInstruction);
+  if (line.length > 80) return "";
+  return compactText(line);
 }
 
 function splitItemRequests(request) {
@@ -143,15 +188,15 @@ function detectRarity(text, fields = {}) {
 }
 
 function detectExplicitName(text, fields = {}) {
-  const explicit = compactText(fields["item name"] ?? fields.name);
+  const explicit = explicitNameValue(fields["item name"] ?? fields.name);
   if (explicit) return explicit;
   if (/\balchemist(?:'s)?\s+fire\b/i.test(text)) return "Alchemist Fire";
   if (/\bacid\s+flask\b/i.test(text)) return "Acid Flask";
   if (/\bholy\s+water\b/i.test(text)) return "Holy Water";
   const title = firstTitleLine(text);
   if (title) return title;
-  const named = String(text ?? "").match(/\b(?:named|called)\s+["']?([^"'.,;\n]+)["']?/i)?.[1]?.trim();
-  return named ?? "";
+  const named = String(text ?? "").match(/\b(?:named|called)\s+(?:"([^"]+)"|'([^']+)'|(.+?))(?=\s+(?:with|that|which|who|it|once|as|while|requiring|requires)\b|[.,;\n]|$)/i);
+  return compactText(named?.[1] ?? named?.[2] ?? named?.[3]);
 }
 
 function detectMagicalBonus(text, baseItem = "", { skipDefault = false } = {}) {
@@ -183,7 +228,7 @@ function detectAttunement(text, fields = {}) {
     if (/(?:none|no|not required|does not require)/i.test(explicit)) return "none";
     if (/required/i.test(explicit)) return "required";
   }
-  if (/attunement\s*:\s*(?:not required|no|none)|does not require attunement|no attunement/i.test(text)) return "none";
+  if (/attunement\s*:\s*(?:not required|no|none)|(?:does|do)(?:\s+not|n't)\s+(?:need|require)\s+attunement|no attunement/i.test(text)) return "none";
   if (/attunement|required by|requires? attunement/i.test(text)) return "required";
   return "";
 }
@@ -325,7 +370,7 @@ function buildLayeredBrief(chunk, extracted) {
   const resourceLines = [];
   if (extracted.spellUsage) resourceLines.push(`Spell usage: ${extracted.spellUsage}`);
   if (extracted.chargeSummary) resourceLines.push(`Charges: ${extracted.chargeSummary}`);
-  if (extracted.throwableConsumable && /\b(?:consumed|one use|single use)\b/i.test(chunk)) {
+  if ((extracted.throwableConsumable || ["potion", "oil"].includes(extracted.baseItem)) && /\b(?:consumed|one use|single use)\b/i.test(chunk)) {
     resourceLines.push("Use model: Consumed after one use");
   }
   if (resourceLines.length) {
@@ -365,42 +410,50 @@ function buildLayeredBrief(chunk, extracted) {
 
 function normalizeSingleItemRequest(chunk) {
   const original = String(chunk ?? "").trim();
-  const fields = parseFields(original);
-  const baseItem = detectBaseItem(original, fields);
-  const throwableConsumable = detectThrowableConsumable(original, fields);
+  const language = normalizeDndLanguage(original);
+  const canonical = language.text;
+  const fields = parseFields(canonical);
+  const baseItem = detectBaseItem(canonical, fields);
+  const throwableConsumable = detectThrowableConsumable(canonical, fields);
   const extracted = {
-    name: detectExplicitName(original, fields),
+    name: detectExplicitName(canonical, fields),
     baseItem,
-    rarity: detectRarity(original, fields),
-    magicalBonus: detectMagicalBonus(original, baseItem, { skipDefault: throwableConsumable }),
-    damageParts: parseDamageParts(original),
-    spellNames: detectSpellNames(original, fields),
-    spellUsage: detectSpellUsage(original),
-    saveDc: detectSaveDc(original, detectSpellNames(original, fields)),
-    saveAbility: detectSaveAbility(original),
-    saveActivity: detectSaveActivity(original),
-    damageResistances: detectDamageResistances(original),
-    healingFormula: detectHealingFormula(original),
-    chargeCost: detectChargeCost(original),
-    halfOnSuccess: detectHalfOnSuccess(original),
-    chargeSummary: detectChargeSummary(original),
-    attunement: detectAttunement(original, fields),
+    rarity: detectRarity(canonical, fields),
+    magicalBonus: detectMagicalBonus(canonical, baseItem, { skipDefault: throwableConsumable }),
+    damageParts: parseDamageParts(canonical),
+    spellNames: detectSpellNames(canonical, fields),
+    spellUsage: detectSpellUsage(canonical),
+    saveDc: detectSaveDc(canonical, detectSpellNames(canonical, fields)),
+    saveAbility: detectSaveAbility(canonical),
+    saveActivity: detectSaveActivity(canonical),
+    damageResistances: detectDamageResistances(canonical),
+    healingFormula: detectHealingFormula(canonical),
+    chargeCost: detectChargeCost(canonical),
+    halfOnSuccess: detectHalfOnSuccess(canonical),
+    chargeSummary: detectChargeSummary(canonical),
+    attunement: detectAttunement(canonical, fields),
     throwableConsumable,
     throwRange: detectThrownRange(original),
     areaSummary: detectAreaSummary(original)
   };
 
-  const layeredBrief = buildLayeredBrief(original, extracted);
-  const normalized = extracted.name
+  const layeredBrief = buildLayeredBrief(canonical, extracted);
+  const structured = extracted.name
     ? `Item name: ${extracted.name}\n\n${layeredBrief}`
     : layeredBrief;
+  // Preserve the concise player-facing wording so service-side recovery can
+  // distinguish a trinket or charm from a model-inferred weapon chassis.
+  const normalized = compactText(structured) === compactText(original)
+    ? structured
+    : `${structured}\n\nOriginal request: ${original}`;
   const changed = compactText(normalized) !== compactText(original) && !ITEM_FIELD_PATTERN.test(original);
 
   return {
     original,
     normalized,
     changed,
-    extracted
+    extracted,
+    languageAliases: language.aliases
   };
 }
 
@@ -412,6 +465,10 @@ function normalizeItemRequest(request) {
   const notes = [];
   if (items.some(item => item.changed)) {
     notes.push("Converted the request into a layered Forge brief before compilation.");
+  }
+  const languageAliases = [...new Set(items.flatMap(item => item.languageAliases ?? []))];
+  if (languageAliases.length) {
+    notes.push(`Recognized D&D shorthand: ${languageAliases.join(", ")}.`);
   }
   return {
     originalRequest,

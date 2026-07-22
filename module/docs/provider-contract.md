@@ -53,7 +53,7 @@ Clients must verify `forge.schemaVersion` and intersect `forge.supportedKinds` w
     "foundryVersion": "14",
     "systemId": "dnd5e",
     "systemVersion": "5.3.3",
-    "moduleVersion": "2.8.0",
+    "moduleVersion": "2.23.1",
     "supportedKinds": ["weaponExtraDamage"]
   },
   "options": {
@@ -70,6 +70,7 @@ Clients must verify `forge.schemaVersion` and intersect `forge.supportedKinds` w
   "schemaVersion": "1.0",
   "compilerVersion": "provider-version",
   "promptVersion": "provider-prompt-version",
+  "preparedSpecFingerprint": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
   "request": "Create a rare fire dagger",
   "requestCount": 1,
   "specs": [
@@ -85,6 +86,8 @@ Clients must verify `forge.schemaVersion` and intersect `forge.supportedKinds` w
   "unresolvedMechanics": []
 }
 ```
+
+`preparedSpecFingerprint` is optional response metadata. When present, it is a SHA-256 fingerprint of the provider's canonicalized, normalized `specs` array. The module preserves a valid fingerprint for diagnostics and comparison; it does not treat the value as executable input. Providers that do not emit it remain compatible.
 
 The module validates the envelope before returning it to the Forge. Item specs still pass through the normal Foundry engine validator and explicit user approval before world documents can be created.
 

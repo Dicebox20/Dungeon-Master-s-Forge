@@ -44,15 +44,21 @@ const validSpecs = [
     restrictions: { type: "weapon" },
     enchantChanges: [{ key: "system.properties", mode: "ADD", value: "mgc" }]
   },
-  { kind: "nativeSummon", name: "Validated Whistle", description: "Whistle description", uses: uses(), summonActor: actor("Friendly Wolf") },
+  {
+    kind: "nativeSummon",
+    name: "Validated Whistle",
+    description: "Whistle description",
+    uses: uses(),
+    summonActor: { name: "Friendly Wolf", srdActorName: "Wolf", requireSrdActor: true }
+  },
   {
     kind: "nativeMultiProfileSummon",
     name: "Validated Stone",
     description: "Stone description",
     uses: uses(),
     summonProfiles: [
-      { profileName: "Wolf", actor: actor("Wolf Spirit") },
-      { profileName: "Bear", actor: actor("Bear Spirit") }
+      { profileName: "Wolf", actor: { name: "Friendly Wolf", srdActorName: "Wolf", requireSrdActor: true } },
+      { profileName: "Bear", actor: { name: "Friendly Black Bear", srdActorName: "Black Bear", requireSrdActor: true } }
     ]
   },
   {

@@ -17,7 +17,7 @@ import {
 assert.equal(mechanicsRequestForCompilation({
   originalRequest: "Create a wand with a save cone.",
   request: "Base item: Wand\nSaving throw: Dexterity DC 14"
-}), "Create a wand with a save cone.");
+}, "Create a wand requiring attunement."), "Create a wand requiring attunement.");
 assert.equal(mechanicsRequestForCompilation({
   request: "Base item: Wand"
 }, "Create a fallback wand."), "Create a fallback wand.");

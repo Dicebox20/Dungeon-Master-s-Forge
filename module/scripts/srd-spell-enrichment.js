@@ -8,7 +8,7 @@ function compactText(value) {
   return String(value ?? "").replace(/\s+/g, " ").trim();
 }
 
-const DEFAULT_SAVE_DC = 15;
+const DEFAULT_SAVE_DC = 13;
 
 function stableId(label) {
   const base = String(label).replace(/[^A-Za-z0-9]/g, "").slice(0, 11) || "Forge";
@@ -56,6 +56,14 @@ function ensureSaveDc(save = {}) {
   const dc = Number(next?.dc?.formula ?? next?.dc);
   if (!Number.isFinite(dc) || dc <= 0) next.dc = DEFAULT_SAVE_DC;
   return next;
+}
+
+function requestedSaveDc(request) {
+  const text = compactText(request);
+  const value = text.match(/\b(?:spell\s+)?save\s+dc\s*(?:of|:)?\s*(\d+)\b/i)?.[1]
+    ?? text.match(/\bdc\s*(\d+)\b/i)?.[1];
+  const dc = Number(value);
+  return Number.isFinite(dc) && dc > 0 ? dc : null;
 }
 
 function specNeedsDefaultMagicalBonus(spec = {}) {
@@ -211,6 +219,26 @@ async function spellDocumentMetadata(spellName, options = {}) {
 }
 
 const SPELL_LIBRARY = Object.freeze([
+  Object.freeze({
+    name: "Poison Spray",
+    type: "save",
+    level: 0,
+    tags: Object.freeze(["poison"]),
+    save: { ability: "con" },
+    damageOnSave: "none",
+    damageParts: Object.freeze([{
+      number: 1,
+      denomination: 12,
+      bonus: "",
+      types: Object.freeze(["poison"]),
+      scaling: Object.freeze({ mode: "whole", number: 1, formula: "" })
+    }]),
+    range: { value: 30, units: "ft" },
+    target: {
+      affects: { count: "1", type: "creature", special: "One creature within range" },
+      prompt: true
+    }
+  }),
   Object.freeze({
     name: "Ray of Sickness",
     type: "attack",
@@ -423,6 +451,28 @@ const SPELL_LIBRARY = Object.freeze([
     }
   }),
   Object.freeze({
+    name: "Cloudkill",
+    type: "save",
+    level: 5,
+    tags: Object.freeze(["poison"]),
+    save: { ability: "con" },
+    damageOnSave: "half",
+    damageParts: Object.freeze([{
+      number: 5,
+      denomination: 8,
+      bonus: "",
+      types: Object.freeze(["poison"]),
+      scaling: Object.freeze({ mode: "whole", number: 1, formula: "" })
+    }]),
+    range: { value: 120, units: "ft" },
+    duration: { value: 10, units: "minute", concentration: true },
+    target: {
+      template: { count: "1", type: "sphere", size: 20, units: "ft" },
+      affects: { type: "creature", special: "Creatures in the 20-foot-radius sphere" },
+      prompt: true
+    }
+  }),
+  Object.freeze({
     name: "Flame Strike",
     level: 5,
     tags: Object.freeze(["fire", "radiant"]),
@@ -459,6 +509,17 @@ const SPELL_LIBRARY = Object.freeze([
       template: { count: "1", type: "sphere", size: 20, units: "ft" },
       affects: { type: "space", special: "A 20-foot-radius sphere of fog" },
       prompt: true
+    }
+  }),
+  Object.freeze({
+    name: "Detect Thoughts",
+    level: 2,
+    tags: Object.freeze([]),
+    range: { units: "self" },
+    duration: { value: 1, units: "minute", concentration: true },
+    target: {
+      affects: { count: "1", type: "self", special: "Self" },
+      prompt: false
     }
   }),
   Object.freeze({
@@ -631,13 +692,15 @@ function isSpellChoiceMechanic(mechanic) {
   return /\bspell/.test(text) && (/\bchoice\b/.test(text) || /\bcharges?\b/.test(text));
 }
 
-function buildSaveActivity(itemName, spellProfile, metadata = null) {
+function buildSaveActivity(itemName, spellProfile, metadata = null, request = "") {
   const source = metadata ?? spellProfile;
+  const explicitCost = explicitSpellChargeCost(request, spellProfile.name);
+  const usesCharges = /\bcharges?\b/i.test(compactText(request));
   return {
     activityId: stableId(`${itemName} ${spellProfile.name}`),
     activityName: `Cast ${spellProfile.name}`,
     activationType: "action",
-    chargeCost: source.level,
+    chargeCost: explicitCost ?? (usesCharges ? source.level : 1),
     chargeScaling: supportsScalingFromDamageParts(source.damageParts)
       ? { allowed: true, max: "@item.uses.value", mode: "amount", formula: "" }
       : undefined,
@@ -678,9 +741,11 @@ function spellProfileForActivity(activityName) {
 
 function explicitSpellChargeCost(request, spellName) {
   const escaped = compactText(spellName).replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+");
-  const direct = compactText(request).match(new RegExp(`(?:costs?|spend|expend(?:s)?|uses?)\\s*(\\d+)\\s*charges?[^.]{0,120}${escaped}\\b`, "i"))?.[1];
+  const text = compactText(request);
+  const direct = text.match(new RegExp(`(?:\\b(?:spend|expend(?:s)?|costs?|uses?)\\s*)?(\\d+)\\s*charges?\\s+(?:to\\s+)?cast\\s+${escaped}\\b`, "i"))?.[1]
+    ?? text.match(new RegExp(`\\b(\\d+)\\s*charges?\\s*:\\s*(?:cast\\s+)?${escaped}\\b`, "i"))?.[1];
   if (direct) return Number(direct);
-  const trailing = compactText(request).match(new RegExp(`${escaped}[^.]{0,80}(?:costs?|for|using|use)\\s*(\\d+)\\s*charges?`, "i"))?.[1];
+  const trailing = text.match(new RegExp(`${escaped}\\b\\s*(?:costs?|for|using|uses?)\\s*(\\d+)\\s*charges?`, "i"))?.[1];
   if (trailing) return Number(trailing);
   return null;
 }
@@ -689,6 +754,18 @@ function usesSharedCharges(spec, request) {
   if (/\bcharges?\b/i.test(compactText(request))) return true;
   const max = Number(spec?.uses?.max ?? 0);
   return Number.isFinite(max) && max > 1 && /\bcast\b/i.test(compactText(request));
+}
+
+function normalizedSpellUseCost(activity, spellProfile, request) {
+  const explicitCost = explicitSpellChargeCost(request, spellProfile.name);
+  if (explicitCost != null) return explicitCost;
+
+  // A daily/rest-limited item use is not a spell-level charge pool. Do not retain
+  // a model-supplied spell level as its consumption cost unless charges were requested.
+  if (!/\bcharges?\b/i.test(compactText(request))) return 1;
+
+  const existingCost = Number(activity?.chargeCost);
+  return Number.isFinite(existingCost) && existingCost > 0 ? existingCost : 1;
 }
 
 async function spellMetadataForActivity(activityName, options = {}) {
@@ -762,10 +839,11 @@ function activityLooksLikeScaledDuplicate(activity, spellProfile, repeatedCount)
   });
 }
 
-function normalizedSpellActivity(activity, spellProfile, repeatedCount = 1, suffix = "", metadata = null) {
+function normalizedSpellActivity(activity, spellProfile, repeatedCount = 1, suffix = "", metadata = null, request = "") {
   const source = metadata ?? spellProfile;
   const next = clone(activity);
   next.activityName = suffix ? `Cast ${spellProfile.name} ${suffix}` : `Cast ${spellProfile.name}`;
+  next.chargeCost = normalizedSpellUseCost(activity, spellProfile, request);
   next.range = {
     ...clone(source.range ?? spellProfile.range),
     override: true
@@ -775,10 +853,10 @@ function normalizedSpellActivity(activity, spellProfile, repeatedCount = 1, suff
     override: true,
     prompt: true
   };
+  const explicitDc = requestedSaveDc(request);
   next.save = {
     ...clone(source.save ?? spellProfile.save),
-    ...(activity?.save?.dc ? { dc: activity.save.dc } : {}),
-    ...(activity?.save?.dc?.formula ? { dc: Number(activity.save.dc.formula) || undefined } : {})
+    ...(explicitDc != null ? { dc: explicitDc } : { dc: DEFAULT_SAVE_DC })
   };
   if (!next.save?.ability) next.save = clone(source.save ?? spellProfile.save);
   next.save = ensureSaveDc(next.save);
@@ -791,10 +869,11 @@ function normalizedSpellActivity(activity, spellProfile, repeatedCount = 1, suff
   return next;
 }
 
-function normalizedUtilitySpellActivity(activity, spellProfile, metadata = null) {
+function normalizedUtilitySpellActivity(activity, spellProfile, metadata = null, request = "") {
   const source = metadata ?? spellProfile;
   const next = clone(activity);
   next.activityName = spellActivityDisplayName(activity, spellProfile.name);
+  next.chargeCost = normalizedSpellUseCost(activity, spellProfile, request);
   next.range = {
     ...clone(source.range ?? spellProfile.range),
     override: true
@@ -815,6 +894,7 @@ function normalizedAttackSpellActivity(activity, spellProfile, metadata = null, 
   const source = metadata ?? spellProfile;
   const next = clone(activity);
   next.activityName = spellActivityDisplayName(activity, spellProfile.name, request);
+  next.chargeCost = normalizedSpellUseCost(activity, spellProfile, request);
   next.activationType = next.activationType ?? "action";
   next.range = {
     ...clone(source.range ?? spellProfile.range),
@@ -867,11 +947,19 @@ function spellProfileForActivityOrAlias(activityName, request = "") {
   return alias ? spellProfileForActivity(alias) : null;
 }
 
+function activityContainsMultipleKnownSpells(activityName) {
+  const candidate = compactText(activityName);
+  return SPELL_LIBRARY.filter(profile => new RegExp(`\\b${profile.name.replace(/\s+/g, "\\s+")}\\b`, "i").test(candidate)).length > 1;
+}
+
 function spellActivityDisplayName(activity, spellName, request = "") {
   const alias = spellAliasFromRequest(request, spellName);
   if (alias) return alias;
   const current = compactText(activity?.activityName);
-  if (current && current.toLowerCase() !== `cast ${spellName}`.toLowerCase() && activitySpellName(current).toLowerCase() === spellName.toLowerCase()) {
+  if (current
+    && current.toLowerCase() !== `cast ${spellName}`.toLowerCase()
+    && activitySpellName(current).toLowerCase() === spellName.toLowerCase()
+    && !activityContainsMultipleKnownSpells(current)) {
     return current;
   }
   return `Cast ${spellName}`;
@@ -973,8 +1061,8 @@ async function reconcilePlannedSrdSpellActivities(spec, plan, request, options =
     const activity = attackLike
       ? normalizedAttackSpellActivity(existing, profile, metadata, request)
       : saveLike
-        ? normalizedSpellActivity(existing, profile, 1, "", metadata)
-        : normalizedUtilitySpellActivity(existing, profile, metadata);
+        ? normalizedSpellActivity(existing, profile, 1, "", metadata, request)
+        : normalizedUtilitySpellActivity(existing, profile, metadata, request);
 
     if (placeholder) {
       next[placeholder.listName] = next[placeholder.listName].filter((_, index) => index !== placeholder.index);
@@ -1225,7 +1313,7 @@ async function repairNamedSrdSpellActivities(spec, request, options = {}) {
       if (count > 1) {
         for (let index = 0; index < count; index += 1) {
           const suffix = `${index + 1}/${count}`;
-          const normalized = normalizedSpellActivity(activity, spellProfile, count, suffix, metadata);
+          const normalized = normalizedSpellActivity(activity, spellProfile, count, suffix, metadata, request);
           normalized.activityId = stableId(`${next.name} ${spellProfile.name} ${suffix}`);
           normalized.activityName = `${spellActivityDisplayName(activity, spellProfile.name, request)} ${suffix}`;
           repaired.push(normalized);
@@ -1236,7 +1324,7 @@ async function repairNamedSrdSpellActivities(spec, request, options = {}) {
       }
 
       if (missingTemplate || missingRange || missingSave) {
-        const normalized = normalizedSpellActivity(activity, spellProfile, 1, "", metadata);
+        const normalized = normalizedSpellActivity(activity, spellProfile, 1, "", metadata, request);
         normalized.activityName = spellActivityDisplayName(activity, spellProfile.name, request);
         repaired.push(normalized);
         applied = true;
@@ -1289,14 +1377,14 @@ async function repairNamedSrdSpellActivities(spec, request, options = {}) {
         if (count > 1) {
           for (let index = 0; index < count; index += 1) {
             const suffix = `${index + 1}/${count}`;
-            const normalized = normalizedSpellActivity(activity, spellProfile, count, suffix, metadata);
+            const normalized = normalizedSpellActivity(activity, spellProfile, count, suffix, metadata, request);
             normalized.activityId = stableId(`${next.name} ${spellProfile.name} ${suffix}`);
             normalized.activityName = `${spellActivityDisplayName(activity, spellProfile.name, request)} ${suffix}`;
             promotedSaveActivities.push(normalized);
           }
           assumptions.push(`Interpreted repeated ${spellProfile.name} request as ${count} consecutive casts using separate activities.`);
         } else {
-          const normalized = normalizedSpellActivity(activity, spellProfile, 1, "", metadata);
+          const normalized = normalizedSpellActivity(activity, spellProfile, 1, "", metadata, request);
           normalized.activityName = spellActivityDisplayName(activity, spellProfile.name, request);
           promotedSaveActivities.push(normalized);
           assumptions.push(`Promoted ${spellProfile.name} into a structured spell activity using SRD targeting data.`);
@@ -1309,7 +1397,7 @@ async function repairNamedSrdSpellActivities(spec, request, options = {}) {
         repairedUtilities.push(normalizedUtilitySpellActivity({
           ...activity,
           activityName: spellActivityDisplayName(activity, spellProfile.name, request)
-        }, spellProfile, metadata));
+        }, spellProfile, metadata, request));
         assumptions.push(`Promoted ${spellProfile.name} into a structured healing activity using SRD targeting data.`);
         applied = true;
         continue;
@@ -1322,7 +1410,7 @@ async function repairNamedSrdSpellActivities(spec, request, options = {}) {
         repairedUtilities.push(normalizedUtilitySpellActivity({
           ...activity,
           activityName: spellActivityDisplayName(activity, spellProfile.name, request)
-        }, spellProfile, metadata));
+        }, spellProfile, metadata, request));
         assumptions.push(`Applied compatible SRD ${spellProfile.name} utility targeting details to the generated activity.`);
         applied = true;
         continue;
@@ -1379,12 +1467,12 @@ async function autoSelectSrdChoiceSpells(spec, request, options = {}) {
   if (!String(next.uses?.max ?? "").trim()) next.uses.max = parseChargeMax(request);
   next.saveActivities = [
     ...(Array.isArray(next.saveActivities) ? next.saveActivities : []),
-    ...chosen.map(({ profile }) => buildSaveActivity(next.name, profile))
+    ...chosen.map(({ profile }) => buildSaveActivity(next.name, profile, null, request))
   ];
   next.saveActivities = next.saveActivities.map(activity => {
     const spellName = activitySpellName(activity.activityName);
     const chosenEntry = chosen.find(entry => entry.profile.name === spellName);
-    return chosenEntry ? buildSaveActivity(next.name, chosenEntry.profile, chosenEntry.metadata) : activity;
+    return chosenEntry ? buildSaveActivity(next.name, chosenEntry.profile, chosenEntry.metadata, request) : activity;
   });
   next.systemReferences = [
     ...(Array.isArray(next.systemReferences) ? next.systemReferences : []),

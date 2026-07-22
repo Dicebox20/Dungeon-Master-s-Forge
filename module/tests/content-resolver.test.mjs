@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import {
   findSystemNonMagicalEquipmentForText,
+  entryIdentifier,
+  packValues,
   isSystemOwnedDnd5ePack,
   isNonMagicalEquipmentDocument,
   normalizeLookupName,
@@ -136,6 +138,14 @@ const packs = [
     ]
   }),
   fakePack({
+    collection: "dnd5e.monsters",
+    label: "Monsters",
+    documentName: "Actor",
+    index: [
+      { _id: "giant-spider", name: "Giant Spider", type: "npc" }
+    ]
+  }),
+  fakePack({
     collection: "dnd5e.monsterfeatures",
     label: "Monster Features",
     index: [
@@ -161,8 +171,10 @@ const packs = [
 ];
 
 assert.equal(normalizeLookupName("  Flame   Strike "), "flame strike");
+assert.equal(entryIdentifier({ id: "document-id" }), "document-id");
+assert.equal(packValues({ packs: { contents: packs } }).length, packs.length);
 assert.equal(isSystemOwnedDnd5ePack(packs[1]), true);
-assert.equal(isSystemOwnedDnd5ePack(packs[7]), false);
+assert.equal(isSystemOwnedDnd5ePack(packs[8]), false);
 
 const command = await resolveSpellByName("Command", { packs });
 assert.equal(command.status, "compatible");
@@ -209,6 +221,87 @@ assert.equal(direWolf.status, "compatible");
 assert.equal(direWolf.match.pack.collection, "dnd5e.actors24");
 assert.equal(direWolf.match.documentType, "Actor");
 
+const giantSpider = await resolveActorByName("Giant Spider", { packs });
+assert.equal(giantSpider.status, "compatible");
+assert.equal(giantSpider.match.pack.collection, "dnd5e.monsters");
+assert.equal(giantSpider.match.documentType, "Actor");
+
+const collectionIndexPack = {
+  ...fakePack({
+    collection: "dnd5e.legacy-monsters",
+    label: "Legacy Monsters",
+    documentName: "Actor",
+    index: []
+  }),
+  index: {
+    contents: [{ _id: "owl", name: "Owl", type: "npc" }]
+  }
+};
+const owl = await resolveActorByName("Owl", { packs: [collectionIndexPack] });
+assert.equal(owl.status, "compatible");
+assert.equal(owl.match.pack.collection, "dnd5e.legacy-monsters");
+
+const objectIndexPack = {
+  ...fakePack({
+    collection: "dnd5e.object-monsters",
+    label: "Object Monsters",
+    documentName: "Actor",
+    index: []
+  }),
+  index: {
+    owl: { _id: "owl", name: "Object Owl", type: "npc" }
+  }
+};
+const objectOwl = await resolveActorByName("Object Owl", { packs: [objectIndexPack] });
+assert.equal(objectOwl.status, "compatible");
+assert.equal(objectOwl.match.pack.collection, "dnd5e.object-monsters");
+
+const documentFallbackPack = {
+  ...fakePack({
+    collection: "dnd5e.document-monsters",
+    label: "Document Monsters",
+    documentName: "Actor",
+    index: []
+  }),
+  async getDocuments() {
+    return [{ _id: "document-spider", name: "Document Spider", type: "npc" }];
+  }
+};
+const documentSpider = await resolveActorByName("Document Spider", { packs: [documentFallbackPack] });
+assert.equal(documentSpider.status, "compatible");
+assert.equal(documentSpider.match.pack.collection, "dnd5e.document-monsters");
+
+const documentLookupFallbackPack = {
+  ...fakePack({
+    collection: "dnd5e.lookup-fallback-monsters",
+    label: "Lookup Fallback Monsters",
+    documentName: "Actor",
+    index: [{ _id: "lookup-spider", name: "Lookup Spider", type: "npc" }]
+  }),
+  async getDocument() {
+    return null;
+  }
+};
+const lookupSpiderResolution = await resolveActorByName("Lookup Spider", { packs: [documentLookupFallbackPack] });
+assert.equal(lookupSpiderResolution.status, "compatible");
+const lookupSpiderDocument = await resolveDocumentFromMatch(lookupSpiderResolution.match, { packs: [documentLookupFallbackPack] });
+assert.equal(lookupSpiderDocument?.name, "Lookup Spider");
+
+const worldActorPack = fakePack({
+  collection: "world.custom-actors",
+  label: "Custom Actors",
+  packageType: "world",
+  packageName: "custom-world",
+  system: "dnd5e",
+  documentName: "Actor",
+  index: [{ _id: "world-dire-wolf", name: "Dire Wolf", type: "npc" }]
+});
+const systemOwnedDireWolf = await resolveActorByName("Dire Wolf", { packs: [...packs, worldActorPack] });
+assert.equal(systemOwnedDireWolf.status, "compatible");
+assert.equal(systemOwnedDireWolf.match.pack.collection, "dnd5e.actors24");
+const worldOnlyDireWolf = await resolveActorByName("Dire Wolf", { packs: [worldActorPack] });
+assert.equal(worldOnlyDireWolf.status, "not-found");
+
 const magicResistance = await resolveMonsterFeatureByName("Magic Resistance", { packs });
 assert.equal(magicResistance.status, "compatible");
 assert.equal(magicResistance.match.pack.collection, "dnd5e.monsterfeatures");
@@ -225,4 +318,4 @@ const diagnostics = await runSystemContentDiagnostics({ packs });
 assert.equal(diagnostics.healthy, true);
 assert.equal(diagnostics.total, 7);
 
-export const testedContentResolverCases = 29;
+export const testedContentResolverCases = 32;

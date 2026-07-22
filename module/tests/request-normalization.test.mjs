@@ -9,7 +9,7 @@ assert.match(flameforce.normalizedRequest, /Magical bonus: \+1/);
 assert.match(flameforce.normalizedRequest, /Complexity layer 4 - Named activities/);
 assert.match(flameforce.normalizedRequest, /Spell: Burning Hands/);
 assert.match(flameforce.normalizedRequest, /Spell usage: once per day/);
-assert.doesNotMatch(flameforce.normalizedRequest, /On a hit, it deals an extra 1d6 fire damage and 1d6 force damage\./);
+assert.match(flameforce.normalizedRequest, /Original request: Create a dagger that deals an additional 1d6 fire damage/);
 
 const shortbow = normalizeItemRequest("Create a shortbow that gives +1 to attack rolls, deals an additional 1d6 poison damage and 1d6 necrotic damage on hit, and can cast Ray of Sickness once per day.");
 assert.match(shortbow.normalizedRequest, /Base item: Shortbow/);
@@ -38,6 +38,9 @@ const armorAndResistance = normalizeItemRequest("Create a rare suit of half plat
 assert.match(armorAndResistance.normalizedRequest, /Base item: Half Plate/);
 assert.match(armorAndResistance.normalizedRequest, /Resistance to: fire damage/);
 
+const pluralNoAttunement = normalizeItemRequest("Create uncommon goggles called Owlglass Lenses. They do not require attunement.");
+assert.equal(pluralNoAttunement.items[0].extracted.attunement, "none");
+
 const bloomdraught = normalizeItemRequest("Create an uncommon potion called Bloomdraught. As an action, a creature can drink it to regain 3d4 + 3 hit points. It has 1 use and is consumed after drinking.");
 assert.match(bloomdraught.normalizedRequest, /Healing: 3d4 \+ 3 hit points/);
 
@@ -64,4 +67,29 @@ Spell usage: once per day
 assert.match(alreadyStructured.normalizedRequest, /Item name: Emberglass Dagger/);
 assert.match(alreadyStructured.normalizedRequest, /Spell: Burning Hands/);
 
-export const testedNormalizationCases = 9;
+const inlineNameField = normalizeItemRequest("Name: Ashen Signet. Create a rare magical signet ring that grants resistance to fire damage while worn.");
+assert.match(inlineNameField.normalizedRequest, /Item name: Ashen Signet/);
+assert.doesNotMatch(inlineNameField.normalizedRequest, /Item name: Ashen Signet\. Create/);
+
+const leadingTitle = normalizeItemRequest("Wand of Searing Hail. Create a rare wand with 7 charges that regains 1d6 + 1 charges at dawn. It casts Ice Storm for 4 charges.");
+assert.match(leadingTitle.normalizedRequest, /Item name: Wand of Searing Hail/);
+
+const quotedNamedItem = normalizeItemRequest('Create a legendary trident named "Frostwave Trident" with 12 charges that regains 1d8 + 4 charges daily at dawn.');
+assert.match(quotedNamedItem.normalizedRequest, /Item name: Frostwave Trident/);
+
+const slang = normalizeItemRequest("Make an uncommon ring called Skipstone. The wearer can bamf with Misty Step once a day. It has 4 charges and at dawn, roll 1d4 and put that many charges back. While worn, it lets the user shrug off fire damage.");
+assert.match(slang.normalizedRequest, /Spell: Misty Step/);
+assert.match(slang.normalizedRequest, /Spell usage: once per day/);
+assert.match(slang.normalizedRequest, /Charges: 4 charges; regains 1d4 daily at dawn/);
+assert.match(slang.normalizedRequest, /Resistance to: fire damage/);
+assert.match(slang.normalizedRequest, /Original request: Make an uncommon ring called Skipstone\. The wearer can bamf/);
+for (const alias of ["once a day", "cast named spell", "dawn charge recovery", "damage resistance"]) {
+  assert.match(slang.notes.join(" "), new RegExp(alias, "i"));
+}
+
+const slangHealing = normalizeItemRequest("Make a one-and-done healing potion called Redcap's Pick-Me-Up. Chugging it takes an action and gets you back 2d4 + 2 HP.");
+assert.match(slangHealing.normalizedRequest, /Healing: 2d4 \+ 2 hit points/);
+assert.match(slangHealing.normalizedRequest, /Use model: Consumed after one use/);
+assert.match(slangHealing.notes.join(" "), /drink as an action/);
+
+export const testedNormalizationCases = 15;

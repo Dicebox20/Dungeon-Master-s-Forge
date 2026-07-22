@@ -173,6 +173,11 @@ function stringArray(value, field) {
   return [...value];
 }
 
+function optionalPreparedSpecFingerprint(value) {
+  const fingerprint = String(value ?? "").trim().toLowerCase();
+  return /^sha256:[0-9a-f]{64}$/.test(fingerprint) ? fingerprint : "";
+}
+
 function normalizeRemoteProviderResponse(payload, provider = {}) {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     throw new Error("Remote provider response must be a JSON object.");
@@ -205,6 +210,9 @@ function normalizeRemoteProviderResponse(payload, provider = {}) {
   return {
     compilerVersion: String(payload.compilerVersion ?? "remote"),
     promptVersion: String(payload.promptVersion ?? ""),
+    ...(optionalPreparedSpecFingerprint(payload.preparedSpecFingerprint)
+      ? { preparedSpecFingerprint: optionalPreparedSpecFingerprint(payload.preparedSpecFingerprint) }
+      : {}),
     provider: String(provider.id ?? "remote"),
     providerLabel: String(provider.label ?? "Remote Provider"),
     providerMode: "network",

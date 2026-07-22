@@ -1,5 +1,5 @@
 /*
- * Dungeon Master's Forge V2 Module Engine
+ * Dungeon Master's Forge Module Engine
  * Foundry VTT v14 / DND5e v5.3.3
  *
  * Expects Foundry globals: game, ui, Folder, Item, Actor, CONFIG, CONST, foundry, Roll, ChatMessage, canvas.
@@ -7,6 +7,8 @@
 
 import { MODULE_ID, readForgeFlags } from "./package-identity.js";
 import { armorBonusValue, inferArmorProfile, isImplementCategory, normalizeItemDocumentType, normalizeMagicalBonus, normalizeWeight, safeItemIcon } from "./equipment-normalization.js";
+import { resolveActorByName, resolveDocumentFromMatch } from "./content-resolver.js";
+import { sanitizeForgeSpec } from "./forge-spec-integrity.js";
 
 const CHOOSER_ACTIVITY_LISTS = Object.freeze(["attackActivities", "saveActivities", "utilityActivities", "activities"]);
 
@@ -17,13 +19,67 @@ function itemHasExplicitActivityChoices(spec = {}) {
     || Boolean(spec?.summonActivity);
 }
 
-function forceExplicitChoiceOnAttack(activity = {}) {
-  return foundry.utils.mergeObject(foundry.utils.deepClone(activity), {
+function midiQolEnabled(config = {}) {
+  return config?.enabled === true;
+}
+
+function activityNeedsTargetConfirmation(target = {}) {
+  const affects = target?.affects ?? {};
+  const template = target?.template ?? {};
+  return Boolean(
+    target?.prompt === true
+    || template.type
+    || template.size != null
+    || (affects.type && affects.type !== "self")
+  );
+}
+
+function applyMidiQolActivityDefaults(activity = {}, { enabled = false, target = {}, useCost = 0, forceTargetConfirmation = false, suppressTargetConfirmation = false } = {}) {
+  if (!enabled) return activity;
+  const midiProperties = {
+    confirmTargets: !suppressTargetConfirmation && (forceTargetConfirmation || activityNeedsTargetConfirmation(target)) ? "always" : "default"
+  };
+  // Prevent automatic workflows from spending a limited item use before the GM
+  // has selected the intended targets or summon profile.
+  if (useCost) midiProperties.forceConsumeDialog = "always";
+  return foundry.utils.mergeObject(foundry.utils.deepClone(activity), { midiProperties }, { inplace: false });
+}
+
+function isFriendlySummon(spec = {}, activitySpec = {}) {
+  if (typeof activitySpec.friendlySummon === "boolean") return activitySpec.friendlySummon;
+  if (typeof spec.friendlySummon === "boolean") return spec.friendlySummon;
+  const text = [
+    activitySpec.activityName,
+    activitySpec.chatFlavor,
+    spec.description,
+    spec.name
+  ].filter(Boolean).join(" ");
+  return /\b(?:friendly|allied|ally|companion|pal|obeys(?:\s+the\s+wielder)?)\b/i.test(text);
+}
+
+function suppressMidiTargetConfirmationForUtility(activitySpec = {}) {
+  if (activitySpec.midiTargetConfirmation === false) return true;
+  const target = activitySpec.target ?? {};
+  const template = target.template ?? {};
+  return /\bmisty\s+step\b/i.test(String(activitySpec.activityName ?? ""))
+    && target.affects?.type === "space"
+    && !template.type;
+}
+
+function forceExplicitChoiceOnAttack(activity = {}, { midiQol = false } = {}) {
+  const patch = {
     otherActivityId: "none",
-    otherActivityUuid: "",
-    midiProperties: {
-      triggeredActivityId: "none"
-    }
+    otherActivityUuid: ""
+  };
+  if (midiQol) patch.midiProperties = { triggeredActivityId: "none" };
+  return foundry.utils.mergeObject(foundry.utils.deepClone(activity), patch, { inplace: false });
+}
+
+function forceSummonUseConfirmation(activity = {}, { midiQol = false, profileCount = 0, useCost = 0 } = {}) {
+  // Keep the native summon dialog ahead of Midi-QOL's automatic resource consumption.
+  if (!midiQolEnabled({ enabled: midiQol }) || !activity?.midiProperties || !useCost) return activity;
+  return foundry.utils.mergeObject(foundry.utils.deepClone(activity), {
+    midiProperties: { forceConsumeDialog: "always" }
   }, { inplace: false });
 }
 
@@ -41,7 +97,79 @@ function multiActivityStaffActivityLists(spec = {}) {
   return lists;
 }
 
-async function runDungeonMastersForge(FORGE, ITEMS, { validateOnly = false } = {}) {
+function stripEmbeddedDocumentIds(entries) {
+  return (entries ?? []).map(entry => {
+    const copy = foundry.utils.deepClone(entry);
+    delete copy._id;
+    delete copy.id;
+    return copy;
+  });
+}
+
+function normalizeSrdActorLookupName(name = "") {
+  return String(name)
+    .trim()
+    .replace(/^(?:one|a|an|the)\s+/i, "")
+    .replace(/^(?:friendly|loyal|tame)\s+/i, "")
+    .trim();
+}
+
+async function resolveSrdSummonActor(actorSpec = {}) {
+  const requestedName = String(actorSpec.srdActorName ?? "").trim();
+  if (!requestedName) return null;
+  const lookupNames = [requestedName];
+  const normalizedName = normalizeSrdActorLookupName(requestedName);
+  if (normalizedName && normalizedName !== requestedName) lookupNames.push(normalizedName);
+  for (const lookupName of lookupNames) {
+    const resolution = await resolveActorByName(lookupName);
+    const resolved = resolution.status === "compatible"
+      ? await resolveDocumentFromMatch(resolution.match)
+      : null;
+    if (resolved) return resolved;
+  }
+  if (actorSpec.requireSrdActor) {
+    throw new Error(`Free Forge can only summon exact DND5e SRD actors. No SRD actor named "${requestedName}" was found; use a supported SRD creature or author a custom summon manually.`);
+  }
+  return null;
+}
+
+function clonedSrdSummonActorData(sourceActor, actorSpec, folder, forgeFlags = {}) {
+  const data = foundry.utils.deepClone(sourceActor.toObject());
+  delete data._id;
+  delete data.id;
+  data.items = stripEmbeddedDocumentIds(data.items);
+  data.effects = stripEmbeddedDocumentIds(data.effects);
+
+  const owner = CONST.DOCUMENT_OWNERSHIP_LEVELS?.OWNER ?? 3;
+  const friendly = CONST.TOKEN_DISPOSITIONS?.FRIENDLY ?? 1;
+  const actorName = actorSpec.name || sourceActor.name;
+  const actorImage = actorSpec.img || data.img;
+  data.name = actorName;
+  data.folder = folder.id;
+  data.ownership = { default: owner };
+  data.img = actorImage;
+  data.prototypeToken = foundry.utils.mergeObject(data.prototypeToken ?? {}, {
+    name: actorSpec.tokenName ?? actorName,
+    actorLink: false,
+    disposition: friendly,
+    texture: { src: actorSpec.tokenImg ?? actorImage }
+  }, { inplace: false });
+  data.flags = foundry.utils.mergeObject(data.flags ?? {}, {
+    [MODULE_ID]: {
+      ...forgeFlags,
+      sourceActorUuid: sourceActor.uuid ?? "",
+      sourceActorName: sourceActor.name ?? "",
+      engine: forgeFlags.engine ?? "unknown",
+      createdAt: new Date().toISOString()
+    }
+  }, { inplace: false });
+  return data;
+}
+
+async function runDungeonMastersForge(FORGE, ITEMS, { validateOnly = false, authorizeGeneratedAutomation = false } = {}) {
+  const midiQolAutomation = FORGE.midiQolAutomation === true;
+  const itemMacroAutomation = midiQolAutomation && FORGE.itemMacroAutomation === true;
+
   function makeIdentifier(name) {
     return name
       .toLowerCase()
@@ -192,6 +320,14 @@ async function runDungeonMastersForge(FORGE, ITEMS, { validateOnly = false } = {
     };
   }
 
+  function useCostForActivity(chargeCost, uses = {}) {
+    const explicit = Number(chargeCost);
+    if (Number.isFinite(explicit) && explicit > 0) return explicit;
+
+    const available = Number(uses?.max);
+    return Number.isFinite(available) && available > 0 ? 1 : 0;
+  }
+
   function durationData(duration = {}) {
     return {
       value: duration.value ?? null,
@@ -219,8 +355,8 @@ async function runDungeonMastersForge(FORGE, ITEMS, { validateOnly = false } = {
   }
 
   function targetData(target = {}) {
-    const template = target.template ?? {};
-    const affects = target.affects ?? {};
+    const template = target?.template ?? {};
+    const affects = target?.affects ?? {};
     const hasTemplate = Boolean(
       compactText(template.type)
       || template.size != null
@@ -250,13 +386,38 @@ async function runDungeonMastersForge(FORGE, ITEMS, { validateOnly = false } = {
         choice: Boolean(affects.choice ?? false),
         special: affects.special ?? ""
       },
-      override: Boolean(hasTemplate || hasAffects || target.override === true),
-      prompt: Boolean(target.prompt ?? false)
+      override: Boolean(hasTemplate || hasAffects || target?.override === true),
+      prompt: Boolean(target?.prompt ?? false)
     };
   }
 
-  function findAttackActivity(item) {
-    return Array.from(item.system.activities ?? []).find(activity => activity.type === "attack");
+  function findAttackActivity(item, preferredName = "") {
+    const attacks = Array.from(item.system.activities ?? []).filter(activity => activity.type === "attack");
+    const preferred = compactText(preferredName).toLowerCase();
+    return attacks.find(activity => compactText(activity.name).toLowerCase() === preferred)
+      ?? attacks.find(activity => /^attack with\b/i.test(compactText(activity.name)))
+      ?? attacks[0];
+  }
+
+  function removeRedundantBaseAttacks(created, primaryAttackId, updateData) {
+    for (const activity of Array.from(created.system.activities ?? [])) {
+      if (activity.type !== "attack" || activity.id === primaryAttackId) continue;
+      updateData[`-=system.activities.${activity.id}`] = null;
+    }
+  }
+
+  function baseAttackTarget(spec) {
+    if (spec.attackTarget) return spec.attackTarget;
+    if (!spec.conditionOnHit) return null;
+    return {
+      affects: { count: "1", type: "creature", special: "One creature" },
+      prompt: false,
+      override: true
+    };
+  }
+
+  function suppressBaseAttackTargetConfirmation(spec) {
+    return Boolean(spec.conditionOnHit && !spec.attackTarget);
   }
 
   async function createWorldItem(spec, data, folder) {
@@ -321,7 +482,7 @@ async function runDungeonMastersForge(FORGE, ITEMS, { validateOnly = false } = {
     }, folder);
 
     const created = game.items.get(item.id) ?? item;
-    const attack = findAttackActivity(created);
+    const attack = findAttackActivity(created, spec.attackName ?? `Attack with ${spec.name}`);
     const updateData = {};
     if (!attack) {
       ui.notifications.warn(`${spec.name} was created, but no attack activity was found to patch.`);
@@ -333,11 +494,14 @@ async function runDungeonMastersForge(FORGE, ITEMS, { validateOnly = false } = {
           includeBase: true,
           critical: { bonus: "" },
           parts: (spec.extraDamageParts ?? []).map(damageData)
-        }
+        },
+        ...(baseAttackTarget(spec) ? { target: targetData(baseAttackTarget(spec)) } : {}),
+        ...(suppressBaseAttackTargetConfirmation(spec) ? { midiProperties: { confirmTargets: "never" } } : {})
       }, { inplace: true });
       updateData[`system.activities.${attack.id}`] = itemHasExplicitActivityChoices(spec)
-        ? forceExplicitChoiceOnAttack(attackData)
+        ? forceExplicitChoiceOnAttack(attackData, { midiQol: midiQolAutomation })
         : attackData;
+      removeRedundantBaseAttacks(created, attack.id, updateData);
     }
 
     for (const activitySpec of spec.attackActivities ?? []) {
@@ -424,7 +588,7 @@ async function runDungeonMastersForge(FORGE, ITEMS, { validateOnly = false } = {
   function makeSaveActivity(item, spec) {
     const SaveActivity = CONFIG.DND5E.activityTypes.save.documentClass;
     const activity = new SaveActivity({}, { parent: item }).toObject();
-    return foundry.utils.mergeObject(activity, {
+    const activityData = foundry.utils.mergeObject(activity, {
       _id: assertActivityId(spec.activityId),
       type: "save",
       name: spec.activityName ?? `Use ${spec.name}`,
@@ -462,6 +626,11 @@ async function runDungeonMastersForge(FORGE, ITEMS, { validateOnly = false } = {
         requireMagic: true
       }
     }, { inplace: false });
+    return applyMidiQolActivityDefaults(activityData, {
+      enabled: midiQolAutomation,
+      target: spec.target,
+      useCost: spec.chargeCost ?? 1
+    });
   }
 
   async function createChargedSaveDamage(spec, folder) {
@@ -547,7 +716,15 @@ async function runDungeonMastersForge(FORGE, ITEMS, { validateOnly = false } = {
     return game.items.get(created.id) ?? created;
   }
 
-  async function createMultiActivityStaff(spec, folder) {
+  async function createMultiActivityStaff(spec, folder, actorFolder) {
+    const actorsByProfileId = new Map();
+    const createdActors = [];
+    for (const profile of allSummonProfiles(spec)) {
+      const actor = await createSummonProfileActor(spec, actorFolder, profile);
+      actorsByProfileId.set(profile.profileId, actor);
+      createdActors.push(actor);
+    }
+
     const item = await createWorldItem(spec, {
       name: spec.name,
       type: suiteItemType(spec),
@@ -571,7 +748,12 @@ async function runDungeonMastersForge(FORGE, ITEMS, { validateOnly = false } = {
           hp: null,
           speed: null
         }, { inplace: false }),
-      effects: []
+      effects: [],
+      flags: actorsByProfileId.size ? {
+        [MODULE_ID]: {
+          summonActorUuids: Object.fromEntries(Array.from(actorsByProfileId.entries()).map(([id, actor]) => [id, actor.uuid]))
+        }
+      } : {}
     }, folder);
 
     const created = game.items.get(item.id) ?? item;
@@ -583,7 +765,9 @@ async function runDungeonMastersForge(FORGE, ITEMS, { validateOnly = false } = {
       updateData[`system.activities.${activity._id}`] = activity;
     }
     for (const activitySpec of activityLists.utility) {
-      const activity = makeSuiteUtilityActivity(created, spec, activitySpec);
+      const activity = summonProfilesFromActivity(activitySpec).length
+        ? summonActivityDocument(created, spec, activitySpec, actorsByProfileId)
+        : makeSuiteUtilityActivity(created, spec, activitySpec);
       updateData[`system.activities.${activity._id}`] = activity;
     }
     for (const activitySpec of activityLists.save) {
@@ -595,22 +779,52 @@ async function runDungeonMastersForge(FORGE, ITEMS, { validateOnly = false } = {
       });
       updateData[`system.activities.${activity._id}`] = activity;
     }
+    if ((spec.summonProfiles ?? []).length) {
+      const activity = summonActivityDocument(created, spec, spec.summonActivity ?? spec, actorsByProfileId);
+      updateData[`system.activities.${activity._id}`] = activity;
+    }
     await created.update(updateData);
-    return game.items.get(created.id) ?? created;
+    const resolved = game.items.get(created.id) ?? created;
+    return createdActors.length ? { item: resolved, actors: createdActors } : resolved;
   }
 
   function enchantChange(change) {
     let value = change.value;
-    if (value && typeof value === "object" && value.damage) value = JSON.stringify(damageData(value.damage));
+    if (change.key === "system.damage.parts") {
+      const damage = value?.damage ?? value;
+      if (damage && typeof damage === "object") {
+        value = JSON.stringify(damageData(damage));
+      } else if (typeof damage === "string") {
+        const match = damage.match(/(\d+)\s*d\s*(\d+)(?:\s*([+-])\s*(\d+))?\s+([a-z]+)/i);
+        if (match) {
+          const [, number, denomination, sign = "", bonus = "", type] = match;
+          value = JSON.stringify(damageData({
+            number: Number(number),
+            denomination: Number(denomination),
+            bonus: bonus ? `${sign}${bonus}` : "",
+            types: [type.toLowerCase()]
+          }));
+        }
+      }
+    }
     return {
       key: change.key,
-      mode: modeValue(change.mode),
+      type: "add",
       value: String(value),
+      phase: change.phase ?? "initial",
       priority: change.priority ?? 20
     };
   }
 
-  async function createNativeEnchant(spec, folder) {
+  async function createNativeEnchant(spec, folder, actorFolder) {
+    const actorsByProfileId = new Map();
+    const createdActors = [];
+    for (const profile of allSummonProfiles(spec)) {
+      const actor = await createSummonProfileActor(spec, actorFolder, profile);
+      actorsByProfileId.set(profile.profileId, actor);
+      createdActors.push(actor);
+    }
+
     const item = await createWorldItem(spec, {
       name: spec.name,
       type: spec.itemType ?? "consumable",
@@ -633,22 +847,28 @@ async function runDungeonMastersForge(FORGE, ITEMS, { validateOnly = false } = {
           transfer: false,
           disabled: false,
           duration: spec.duration?.seconds ? { seconds: spec.duration.seconds } : {},
-          changes: (spec.enchantChanges ?? []).map(enchantChange),
+          system: { changes: (spec.enchantChanges ?? []).map(enchantChange) },
           flags: { [MODULE_ID]: { effect: "native-enchantment" } }
         }
-      ]
+      ],
+      flags: actorsByProfileId.size ? {
+        [MODULE_ID]: {
+          summonActorUuids: Object.fromEntries(Array.from(actorsByProfileId.entries()).map(([id, actor]) => [id, actor.uuid]))
+        }
+      } : {}
     }, folder);
 
     const created = game.items.get(item.id) ?? item;
     const EnchantActivity = CONFIG.DND5E.activityTypes.enchant.documentClass;
     const activity = new EnchantActivity({}, { parent: created }).toObject();
+    const useCost = useCostForActivity(spec.chargeCost, spec.uses);
     const activityData = foundry.utils.mergeObject(activity, {
       _id: assertActivityId(spec.activityId),
       type: "enchant",
       name: spec.activityName ?? `Apply ${spec.name}`,
       img: spec.activityImg ?? spec.img,
       activation: { type: spec.activationType ?? "action", value: null, condition: "", override: false },
-      consumption: activityConsumption(spec.chargeCost ?? 1, spec.chargeScaling),
+      consumption: useCost ? activityConsumption(useCost, spec.chargeScaling) : activityConsumptionNone(),
       description: { chatFlavor: spec.chatFlavor ?? "" },
       duration: durationData(spec.duration),
       effects: [
@@ -676,14 +896,29 @@ async function runDungeonMastersForge(FORGE, ITEMS, { validateOnly = false } = {
         requireMagic: false
       }
     }, { inplace: false });
-    await created.update({ [`system.activities.${activityData._id}`]: activityData });
-    return game.items.get(created.id) ?? created;
+    const updateData = { [`system.activities.${activityData._id}`]: activityData };
+    if ((spec.summonProfiles ?? []).length) {
+      const summon = summonActivityDocument(created, spec, spec.summonActivity ?? spec, actorsByProfileId);
+      updateData[`system.activities.${summon._id}`] = summon;
+    }
+    await created.update(updateData);
+    const resolved = game.items.get(created.id) ?? created;
+    return createdActors.length ? { item: resolved, actors: createdActors } : resolved;
   }
 
   async function createSummonActor(spec, folder) {
     const actorSpec = spec.summonActor;
     if (!actorSpec?.name) throw new Error(`${spec.name} is missing summonActor.name`);
     await deleteExistingWorldActor(actorSpec.name);
+
+    const sourceActor = await resolveSrdSummonActor(actorSpec);
+    if (sourceActor) {
+      const actor = await Actor.create(clonedSrdSummonActorData(sourceActor, actorSpec, folder, {
+        template: "srd-summon-actor",
+        engine: FORGE.engineVersion ?? "unknown"
+      }));
+      return game.actors.get(actor.id) ?? actor;
+    }
 
     const owner = CONST.DOCUMENT_OWNERSHIP_LEVELS?.OWNER ?? 3;
     const friendly = CONST.TOKEN_DISPOSITIONS?.FRIENDLY ?? 1;
@@ -719,10 +954,12 @@ async function runDungeonMastersForge(FORGE, ITEMS, { validateOnly = false } = {
             units: actorSpec.movement?.units ?? "ft"
           },
           senses: {
-            darkvision: actorSpec.darkvision ?? 0,
-            blindsight: 0,
-            tremorsense: 0,
-            truesight: 0,
+            ranges: {
+              darkvision: actorSpec.darkvision ?? 0,
+              blindsight: 0,
+              tremorsense: 0,
+              truesight: 0
+            },
             units: "ft",
             special: actorSpec.senses ?? ""
           }
@@ -806,13 +1043,14 @@ async function runDungeonMastersForge(FORGE, ITEMS, { validateOnly = false } = {
     const created = game.items.get(item.id) ?? item;
     const SummonActivity = CONFIG.DND5E.activityTypes.summon.documentClass;
     const activity = new SummonActivity({}, { parent: created }).toObject();
+    const useCost = useCostForActivity(spec.chargeCost, spec.uses);
     const activityData = foundry.utils.mergeObject(activity, {
       _id: assertActivityId(spec.activityId),
       type: "summon",
       name: spec.activityName ?? `Summon ${spec.profileName ?? summonActor.name}`,
-      img: spec.activityImg ?? spec.summonActor?.img ?? spec.img,
+      img: spec.activityImg ?? spec.summonActor?.img ?? summonActor.img ?? spec.img,
       activation: { type: spec.activationType ?? "action", value: null, condition: "", override: false },
-      consumption: activityConsumption(spec.chargeCost ?? 1, spec.chargeScaling),
+      consumption: useCost ? activityConsumption(useCost, spec.chargeScaling) : activityConsumptionNone(),
       description: { chatFlavor: spec.chatFlavor ?? "" },
       duration: durationData(spec.duration),
       effects: [],
@@ -822,8 +1060,8 @@ async function runDungeonMastersForge(FORGE, ITEMS, { validateOnly = false } = {
       }),
       uses: { spent: 0, max: "", recovery: [] },
       bonuses: { ac: "", hd: "", hp: "", attackDamage: "", saveDamage: "", healing: "" },
-      creatureSizes: [spec.summonActor?.size ?? "med"],
-      creatureTypes: [spec.summonActor?.type ?? "beast"],
+      creatureSizes: [summonActor.system?.traits?.size ?? spec.summonActor?.size ?? "med"],
+      creatureTypes: [summonActor.system?.details?.type?.value ?? spec.summonActor?.type ?? "beast"],
       match: {
         ability: "",
         attacks: false,
@@ -838,12 +1076,13 @@ async function runDungeonMastersForge(FORGE, ITEMS, { validateOnly = false } = {
           cr: "",
           level: { min: null, max: null },
           name: spec.profileName ?? summonActor.name,
-          types: [spec.summonActor?.type ?? "beast"],
+          types: [summonActor.system?.details?.type?.value ?? spec.summonActor?.type ?? "beast"],
           uuid: summonActor.uuid
         }
       ],
       summon: { mode: "specific", prompt: true },
       tempHP: "",
+      ...(midiQolAutomation && isFriendlySummon(spec) ? { friendlySummon: true } : {}),
       visibility: {
         identifier: "",
         level: { min: null, max: null },
@@ -865,6 +1104,7 @@ async function runDungeonMastersForge(FORGE, ITEMS, { validateOnly = false } = {
   }
 
   function activityMacroFlags(activityIds = []) {
+    if (!itemMacroAutomation) return {};
     const entries = Array.from(new Set(activityIds.filter(Boolean))).map(activityId =>
       `[postActiveEffects]ActivityMacro-${assertActivityId(activityId)}`
     );
@@ -1010,10 +1250,22 @@ ${activitySpec.macroCommand}
     };
   }
 
-  function suiteEffectDocuments(spec) {
-    const effects = (spec.effects ?? [])
+  function passiveEffectDocuments(spec) {
+    const seen = new Set();
+    return [...(spec.effects ?? []), ...(spec.passiveEffects ?? [])]
       .filter(effect => effect && typeof effect === "object")
+      .filter(effect => {
+        const key = String(effect.effectId ?? effect.id ?? "")
+          || `${String(effect.name ?? "")}|${JSON.stringify(effect.changes ?? [])}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
       .map(effect => transferEffectFromSpec(spec, effect));
+  }
+
+  function suiteEffectDocuments(spec) {
+    const effects = passiveEffectDocuments(spec);
     for (const activitySpec of spec.utilityActivities ?? []) {
       if (!Array.isArray(activitySpec?.enchantChanges) || !activitySpec.enchantChanges.length || !activitySpec.effectId) continue;
       effects.push({
@@ -1024,7 +1276,7 @@ ${activitySpec.macroCommand}
         transfer: false,
         disabled: false,
         duration: activitySpec.duration?.seconds ? { seconds: activitySpec.duration.seconds } : {},
-        changes: activitySpec.enchantChanges.map(enchantChange),
+        system: { changes: activitySpec.enchantChanges.map(enchantChange) },
         flags: { [MODULE_ID]: { effect: "suite-enchantment" } }
       });
     }
@@ -1034,7 +1286,7 @@ ${activitySpec.macroCommand}
   function makeUtilityActivity(item, spec, activitySpec) {
     const UtilityActivity = CONFIG.DND5E.activityTypes.utility.documentClass;
     const activity = new UtilityActivity({}, { parent: item }).toObject();
-    return foundry.utils.mergeObject(activity, {
+    const activityData = foundry.utils.mergeObject(activity, {
       _id: assertActivityId(activitySpec.activityId),
       type: "utility",
       name: activitySpec.activityName ?? `Use ${spec.name}`,
@@ -1068,12 +1320,18 @@ ${activitySpec.macroCommand}
         requireMagic: activitySpec.requireMagic ?? true
       }
     }, { inplace: false });
+    return applyMidiQolActivityDefaults(activityData, {
+      enabled: midiQolAutomation,
+      target: activitySpec.target,
+      useCost: activitySpec.chargeCost ?? 0,
+      suppressTargetConfirmation: suppressMidiTargetConfirmationForUtility(activitySpec)
+    });
   }
 
   function makeHealingActivity(item, spec, activitySpec) {
     const HealActivity = CONFIG.DND5E.activityTypes.heal.documentClass;
     const activity = new HealActivity({}, { parent: item }).toObject();
-    return foundry.utils.mergeObject(activity, {
+    const activityData = foundry.utils.mergeObject(activity, {
       _id: assertActivityId(activitySpec.activityId),
       type: "heal",
       name: activitySpec.activityName ?? `Use ${spec.name}`,
@@ -1101,12 +1359,17 @@ ${activitySpec.macroCommand}
         requireMagic: activitySpec.requireMagic ?? true
       }
     }, { inplace: false });
+    return applyMidiQolActivityDefaults(activityData, {
+      enabled: midiQolAutomation,
+      target: activitySpec.target,
+      useCost: activitySpec.chargeCost ?? 0
+    });
   }
 
   function makeEnchantActivity(item, spec, activitySpec) {
     const EnchantActivity = CONFIG.DND5E.activityTypes.enchant.documentClass;
     const activity = new EnchantActivity({}, { parent: item }).toObject();
-    return foundry.utils.mergeObject(activity, {
+    const activityData = foundry.utils.mergeObject(activity, {
       _id: assertActivityId(activitySpec.activityId),
       type: "enchant",
       name: activitySpec.activityName ?? `Apply ${spec.name}`,
@@ -1138,6 +1401,11 @@ ${activitySpec.macroCommand}
         requireMagic: activitySpec.requireMagic ?? true
       }
     }, { inplace: false });
+    return applyMidiQolActivityDefaults(activityData, {
+      enabled: midiQolAutomation,
+      target: activitySpec.target,
+      useCost: activitySpec.chargeCost ?? 0
+    });
   }
 
   function makeSuiteUtilityActivity(item, spec, activitySpec) {
@@ -1151,7 +1419,7 @@ ${activitySpec.macroCommand}
   function makeAttackActivity(item, spec, activitySpec) {
     const AttackActivity = CONFIG.DND5E.activityTypes.attack.documentClass;
     const activity = new AttackActivity({}, { parent: item }).toObject();
-    const activityData = foundry.utils.mergeObject(activity, {
+    const activityData = applyMidiQolActivityDefaults(foundry.utils.mergeObject(activity, {
       _id: assertActivityId(activitySpec.activityId),
       type: "attack",
       name: activitySpec.activityName ?? `Attack with ${spec.name}`,
@@ -1192,7 +1460,12 @@ ${activitySpec.macroCommand}
         requireIdentification: false,
         requireMagic: activitySpec.requireMagic ?? true
       }
-    }, { inplace: false });
+    }, { inplace: false }), {
+      enabled: midiQolAutomation,
+      target: activitySpec.target,
+      useCost: activitySpec.chargeCost ?? 0,
+      forceTargetConfirmation: true
+    });
     return itemHasExplicitActivityChoices({
       attackActivities: [activitySpec],
       saveActivities: spec.saveActivities,
@@ -1202,29 +1475,67 @@ ${activitySpec.macroCommand}
       summonProfiles: spec.summonProfiles,
       summonActivity: spec.summonActivity
     })
-      ? forceExplicitChoiceOnAttack(activityData)
+      ? forceExplicitChoiceOnAttack(activityData, { midiQol: midiQolAutomation })
       : activityData;
   }
 
   function patchWeaponBaseAttack(created, spec, updateData) {
     if (!suiteUsesWeaponBase(spec)) return;
-    const attack = findAttackActivity(created);
+    const attack = findAttackActivity(created, spec.attackName ?? `Attack with ${spec.name}`);
     if (!attack) {
       ui.notifications.warn(`${spec.name} was created, but no weapon attack activity was found to patch.`);
       return;
     }
+    const attackData = buildWeaponBaseAttackData(attack, spec);
+    updateData[`system.activities.${attack.id}`] = itemHasExplicitActivityChoices(spec)
+      ? forceExplicitChoiceOnAttack(attackData, { midiQol: midiQolAutomation })
+      : attackData;
+    removeRedundantBaseAttacks(created, attack.id, updateData);
+
+    Object.assign(updateData, conditionOnHitHookUpdate(created, spec, attack.id));
+  }
+
+  function buildWeaponBaseAttackData(attack, spec) {
     const attackData = attack.toObject ? attack.toObject() : foundry.utils.deepClone(attack);
+    const baseTarget = baseAttackTarget(spec);
     foundry.utils.mergeObject(attackData, {
       name: spec.attackName ?? `Attack with ${spec.name}`,
       damage: {
         includeBase: true,
         critical: { bonus: "" },
         parts: (spec.extraDamageParts ?? []).map(damageData)
-      }
+      },
+      target: targetData(baseTarget),
+      ...(spec.conditionOnHit ? {
+        macroData: {
+          name: spec.conditionOnHit.macroName ?? "Condition On Hit",
+          command: conditionMacroCommand(spec)
+        }
+      } : {})
     }, { inplace: true });
-    updateData[`system.activities.${attack.id}`] = itemHasExplicitActivityChoices(spec)
-      ? forceExplicitChoiceOnAttack(attackData)
-      : attackData;
+    const patched = applyMidiQolActivityDefaults(attackData, {
+      enabled: midiQolAutomation,
+      target: baseTarget ?? {},
+      suppressTargetConfirmation: suppressBaseAttackTargetConfirmation(spec)
+    });
+    if (suppressBaseAttackTargetConfirmation(spec)) {
+      patched.midiProperties = { ...(patched.midiProperties ?? {}), confirmTargets: "never" };
+    }
+    return patched;
+  }
+
+  function conditionOnHitHookUpdate(created, spec, activityId) {
+    if (!spec.conditionOnHit || !itemMacroAutomation) return {};
+    const existingHook = typeof created.getFlag === "function"
+      ? created.getFlag("midi-qol", "onUseMacroName")
+      : "";
+    const hooks = String(existingHook ?? "")
+      .split(",")
+      .map(value => value.trim())
+      .filter(Boolean);
+    const conditionHook = `[postActiveEffects]ActivityMacro-${activityId}`;
+    if (!hooks.includes(conditionHook)) hooks.push(conditionHook);
+    return { "flags.midi-qol.onUseMacroName": hooks.join(",") };
   }
 
   async function createCasterUtilityEquipment(spec, folder, actorFolder) {
@@ -1283,6 +1594,17 @@ ${activitySpec.macroCommand}
     if (!actorSpec?.name) throw new Error(`${parentSpec.name} summon profile ${profile.profileName ?? profile.profileId} is missing actor.name`);
     await deleteExistingWorldActor(actorSpec.name);
 
+    const sourceActor = await resolveSrdSummonActor(actorSpec);
+    if (sourceActor) {
+      const actor = await Actor.create(clonedSrdSummonActorData(sourceActor, actorSpec, folder, {
+        template: "srd-summon-actor",
+        profileId: profile.profileId,
+        profileName: profile.profileName ?? "",
+        engine: FORGE.engineVersion ?? "unknown"
+      }));
+      return game.actors.get(actor.id) ?? actor;
+    }
+
     const owner = CONST.DOCUMENT_OWNERSHIP_LEVELS?.OWNER ?? 3;
     const friendly = CONST.TOKEN_DISPOSITIONS?.FRIENDLY ?? 1;
     const abilities = actorSpec.abilities ?? {};
@@ -1324,10 +1646,12 @@ ${activitySpec.macroCommand}
             units: movement.units ?? "ft"
           },
           senses: {
-            darkvision: actorSpec.darkvision ?? 0,
-            blindsight: actorSpec.blindsight ?? 0,
-            tremorsense: actorSpec.tremorsense ?? 0,
-            truesight: actorSpec.truesight ?? 0,
+            ranges: {
+              darkvision: actorSpec.darkvision ?? 0,
+              blindsight: actorSpec.blindsight ?? 0,
+              tremorsense: actorSpec.tremorsense ?? 0,
+              truesight: actorSpec.truesight ?? 0
+            },
             units: "ft",
             special: actorSpec.senses ?? ""
           }
@@ -1418,12 +1742,15 @@ ${activitySpec.macroCommand}
   function summonActivityDocument(item, spec, activitySpec, actorsByProfileId) {
     const SummonActivity = CONFIG.DND5E.activityTypes.summon.documentClass;
     const baseActivity = new SummonActivity({}, { parent: item }).toObject();
+    const useCost = useCostForActivity(activitySpec.chargeCost, spec.uses);
+    const activityId = activitySpec.activityId
+      ?? generatedDocumentId(`${spec.name} ${activitySpec.activityName ?? "Summon"}`);
     const summonProfiles = summonProfilesFromActivity(activitySpec).length
       ? summonProfilesFromActivity(activitySpec)
       : (spec.summonProfiles ?? []);
     const profiles = summonProfiles.map(profile => {
       const actor = actorsByProfileId.get(profile.profileId);
-      const actorType = profile.actor?.type ?? "beast";
+      const actorType = actor?.system?.details?.type?.value ?? profile.actor?.type ?? "beast";
       return {
         _id: assertActivityId(profile.profileId),
         count: String(profile.count ?? "1"),
@@ -1434,15 +1761,15 @@ ${activitySpec.macroCommand}
         uuid: actor?.uuid ?? ""
       };
     });
-    const creatureSizes = Array.from(new Set(summonProfiles.map(profile => profile.actor?.size ?? "med")));
-    const creatureTypes = Array.from(new Set(summonProfiles.map(profile => profile.actor?.type ?? "beast")));
-    return foundry.utils.mergeObject(baseActivity, {
-      _id: assertActivityId(activitySpec.activityId),
+    const creatureSizes = Array.from(new Set(summonProfiles.map(profile => actorsByProfileId.get(profile.profileId)?.system?.traits?.size ?? profile.actor?.size ?? "med")));
+    const creatureTypes = Array.from(new Set(summonProfiles.map(profile => actorsByProfileId.get(profile.profileId)?.system?.details?.type?.value ?? profile.actor?.type ?? "beast")));
+    const activity = applyMidiQolActivityDefaults(foundry.utils.mergeObject(baseActivity, {
+      _id: assertActivityId(activityId),
       type: "summon",
       name: activitySpec.activityName ?? `Summon ${spec.name}`,
       img: activitySpec.activityImg ?? spec.img,
       activation: { type: activitySpec.activationType ?? "action", value: null, condition: activitySpec.activationCondition ?? "", override: false },
-      consumption: activitySpec.chargeCost ? activityConsumption(activitySpec.chargeCost, activitySpec.chargeScaling) : activityConsumptionNone(),
+      consumption: useCost ? activityConsumption(useCost, activitySpec.chargeScaling) : activityConsumptionNone(),
       description: { chatFlavor: activitySpec.chatFlavor ?? "" },
       duration: durationData(activitySpec.duration),
       effects: [],
@@ -1465,6 +1792,7 @@ ${activitySpec.macroCommand}
       profiles,
       summon: { mode: "specific", prompt: profiles.length > 1 },
       tempHP: "",
+      ...(midiQolAutomation && isFriendlySummon(spec, activitySpec) ? { friendlySummon: true } : {}),
       visibility: {
         identifier: "",
         level: { min: null, max: null },
@@ -1472,7 +1800,12 @@ ${activitySpec.macroCommand}
         requireIdentification: false,
         requireMagic: true
       }
-    }, { inplace: false });
+    }, { inplace: false }), {
+      enabled: midiQolAutomation,
+      target: activitySpec.target ?? { prompt: true },
+      useCost
+    });
+    return forceSummonUseConfirmation(activity, { midiQol: midiQolAutomation, profileCount: profiles.length, useCost });
   }
 
   async function createNativeMultiProfileSummon(spec, itemFolder, actorFolder) {
@@ -1673,6 +2006,7 @@ ui.notifications.info(ITEM_NAME + " light toggled on.");
   }
 
   function lightTriggerEffect(toggle) {
+    const macroAutomation = itemMacroAutomation && FORGE.daeAutomation === true;
     return {
       _id: assertDocumentId(toggle.effectId),
       name: toggle.effectName ?? "Light Toggle",
@@ -1682,7 +2016,7 @@ ui.notifications.info(ITEM_NAME + " light toggled on.");
       duration: {},
       type: "base",
       system: {
-        changes: [
+        changes: macroAutomation ? [
           {
             key: "flags.midi-qol.onUseMacroName",
             type: "custom",
@@ -1690,10 +2024,10 @@ ui.notifications.info(ITEM_NAME + " light toggled on.");
             phase: "final",
             priority: null
           }
-        ]
+        ] : []
       },
       flags: {
-        dae: {
+        ...(macroAutomation ? { dae: {
           enableCondition: "",
           disableCondition: "",
           stackable: "noneName",
@@ -1705,7 +2039,7 @@ ui.notifications.info(ITEM_NAME + " light toggled on.");
           selfTargetAlways: false,
           dontApply: false,
           specialDuration: []
-        },
+        } } : {}),
         core: { overlay: false }
       }
     };
@@ -1744,7 +2078,7 @@ ui.notifications.info(ITEM_NAME + " light toggled on.");
   }
 
   async function createArtifactWeaponHybrid(spec, folder, actorFolder) {
-    const effects = (spec.passiveEffects ?? []).map(effect => transferEffectFromSpec(spec, effect));
+    const effects = passiveEffectDocuments(spec);
     if (spec.toggleLight) effects.push(lightTriggerEffect(spec.toggleLight));
     const actorsByProfileId = new Map();
     const createdActors = [];
@@ -1777,22 +2111,15 @@ ui.notifications.info(ITEM_NAME + " light toggled on.");
     }, folder);
 
     const created = game.items.get(item.id) ?? item;
-    const attack = findAttackActivity(created);
+    const attack = findAttackActivity(created, spec.attackName ?? `Attack with ${spec.name}`);
     const updateData = {};
 
     if (attack) {
-      const attackData = attack.toObject ? attack.toObject() : foundry.utils.deepClone(attack);
-      foundry.utils.mergeObject(attackData, {
-        name: spec.attackName ?? `Attack with ${spec.name}`,
-        damage: {
-          includeBase: true,
-          critical: { bonus: "" },
-          parts: (spec.extraDamageParts ?? []).map(damageData)
-        }
-      }, { inplace: true });
+      const attackData = buildWeaponBaseAttackData(attack, spec);
       updateData[`system.activities.${attack.id}`] = itemHasExplicitActivityChoices(spec)
-        ? forceExplicitChoiceOnAttack(attackData)
+        ? forceExplicitChoiceOnAttack(attackData, { midiQol: midiQolAutomation })
         : attackData;
+      Object.assign(updateData, conditionOnHitHookUpdate(created, spec, attack.id));
     } else {
       ui.notifications.warn(`${spec.name} was created, but no weapon attack activity was found to patch.`);
     }
@@ -1887,16 +2214,25 @@ async function applyCondition(targetActor, targetToken) {
     if (effect.name === EFFECT_NAME) await effect.delete();
   }
 
+  const activeCombat = game.combat?.started ? game.combat : null;
+  const effectDuration = activeCombat
+    ? {
+      rounds: Math.max(1, Math.ceil(DURATION_SECONDS / 6)),
+      startRound: activeCombat.round,
+      startTurn: activeCombat.turn
+    }
+    : {
+      seconds: DURATION_SECONDS,
+      startTime: game.time.worldTime
+    };
+
   await targetActor.createEmbeddedDocuments("ActiveEffect", [{
     name: EFFECT_NAME,
     img: EFFECT_IMG,
     origin: macroItem?.uuid ?? "",
     transfer: false,
     disabled: false,
-    duration: {
-      seconds: DURATION_SECONDS,
-      startTime: game.time.worldTime
-    },
+    duration: effectDuration,
     statuses: [CONDITION],
     changes: [],
     description: CONDITION + " from " + (macroItem?.name ?? "weapon") + ".",
@@ -1933,6 +2269,38 @@ for (const target of targets) {
 `.trim();
   }
 
+  function generatedAutomationCode(specs) {
+    const entries = [];
+    for (const spec of specs ?? []) {
+      if (spec.conditionOnHit) {
+        entries.push({
+          itemName: spec.name,
+          activityName: spec.attackName ?? `Attack with ${spec.name}`,
+          source: "Condition on hit",
+          command: conditionMacroCommand(spec)
+        });
+      }
+      if (spec.toggleLight) {
+        entries.push({
+          itemName: spec.name,
+          activityName: spec.toggleLight.activityName ?? "Toggle Light",
+          source: "Light toggle",
+          command: toggleLightMacroCommand(spec.name, spec.toggleLight)
+        });
+      }
+      for (const activity of spec.utilityActivities ?? []) {
+        if (!activity?.macroCommand) continue;
+        entries.push({
+          itemName: spec.name,
+          activityName: activity.activityName ?? `Use ${spec.name}`,
+          source: "Utility activity",
+          command: guardedUtilityMacroCommand(activity)
+        });
+      }
+    }
+    return entries;
+  }
+
   async function createWeaponConditionOnHit(spec, folder) {
     const item = await createWorldItem(spec, {
       name: spec.name,
@@ -1943,29 +2311,21 @@ for (const target of targets) {
     }, folder);
 
     const created = game.items.get(item.id) ?? item;
-    const attack = findAttackActivity(created);
+    const attack = findAttackActivity(created, spec.attackName ?? `Attack with ${spec.name}`);
     if (!attack) {
       ui.notifications.warn(`${spec.name} was created, but no weapon attack activity was found to patch.`);
       return created;
     }
 
-    const attackData = attack.toObject ? attack.toObject() : foundry.utils.deepClone(attack);
-    foundry.utils.mergeObject(attackData, {
-      name: spec.attackName ?? `Attack with ${spec.name}`,
-      damage: {
-        includeBase: true,
-        critical: { bonus: "" },
-        parts: (spec.extraDamageParts ?? []).map(damageData)
-      },
-      macroData: {
-        name: spec.conditionOnHit?.macroName ?? "Condition On Hit",
-        command: conditionMacroCommand(spec)
-      }
-    }, { inplace: true });
-
+    const midiAttackData = buildWeaponBaseAttackData(attack, spec);
     await created.update({
-      [`system.activities.${attack.id}`]: attackData,
-      "flags.midi-qol.onUseMacroName": `[postActiveEffects]ActivityMacro-${attack.id}`
+      [`system.activities.${attack.id}`]: midiAttackData,
+      ...(() => {
+        const redundant = {};
+        removeRedundantBaseAttacks(created, attack.id, redundant);
+        return redundant;
+      })(),
+      ...conditionOnHitHookUpdate(created, spec, attack.id)
     });
 
     return game.items.get(created.id) ?? created;
@@ -2112,17 +2472,24 @@ for (const target of targets) {
     };
   }
 
-  validateSpecs(ITEMS);
+  const preparedItems = ITEMS.map(spec => sanitizeForgeSpec(spec).spec);
+  validateSpecs(preparedItems);
+  const automationCodePreview = generatedAutomationCode(preparedItems);
 
   if (validateOnly) {
     return {
       valid: true,
-      itemCount: ITEMS.length,
-      names: ITEMS.map(spec => spec.name),
-      kinds: ITEMS.map(spec => spec.kind),
-      unresolvedCounts: ITEMS.map(spec => spec.unresolvedMechanics?.length ?? 0),
-      unresolvedMechanicCount: ITEMS.reduce((total, spec) => total + (spec.unresolvedMechanics?.length ?? 0), 0)
+      itemCount: preparedItems.length,
+      names: preparedItems.map(spec => spec.name),
+      kinds: preparedItems.map(spec => spec.kind),
+      unresolvedCounts: preparedItems.map(spec => spec.unresolvedMechanics?.length ?? 0),
+      unresolvedMechanicCount: preparedItems.reduce((total, spec) => total + (spec.unresolvedMechanics?.length ?? 0), 0),
+      automationCodePreview
     };
+  }
+
+  if (automationCodePreview.length && authorizeGeneratedAutomation !== true) {
+    throw new Error("This item includes generated automation code. Review the code preview and explicitly authorize it before creation.");
   }
 
   const itemFolder = await ensureFolder(FORGE.itemFolderName, "Item", "#f07a38");
@@ -2130,9 +2497,9 @@ for (const target of targets) {
   const createdItems = [];
   const createdActors = [];
 
-  for (const spec of ITEMS) {
+  for (const spec of preparedItems) {
     const factory = FACTORIES[spec.kind];
-    const result = ["nativeSummon", "nativeMultiProfileSummon", "casterUtilityEquipment", "equipmentPowerSuite", "legendaryEquipmentSuite", "artifactWeaponHybrid"].includes(spec.kind)
+    const result = ["nativeSummon", "nativeMultiProfileSummon", "nativeEnchant", "casterUtilityEquipment", "equipmentPowerSuite", "legendaryEquipmentSuite", "artifactWeaponHybrid", "multiActivityStaff"].includes(spec.kind)
       ? await factory(spec, itemFolder, actorFolder)
       : await factory(spec, itemFolder);
 
@@ -2145,14 +2512,14 @@ for (const target of targets) {
   const itemSummary = createdItems.map(item => summarizeDocument(game.items.get(item.id) ?? item));
   const actorSummary = createdActors.map(actor => summarizeDocument(game.actors.get(actor.id) ?? actor));
 
-  console.log("Dungeon Master's Forge V2 created items:", createdItems);
+  console.log("Dungeon Master's Forge created items:", createdItems);
   console.table(itemSummary);
   if (actorSummary.length) {
-    console.log("Dungeon Master's Forge V2 created summon actors:", createdActors);
+    console.log("Dungeon Master's Forge created summon actors:", createdActors);
     console.table(actorSummary);
   }
 
-  ui.notifications.info(`Dungeon Master's Forge V2 created ${createdItems.length} item(s)${createdActors.length ? ` and ${createdActors.length} summon actor(s)` : ""}.`);
+  ui.notifications.info(`Dungeon Master's Forge created ${createdItems.length} item(s)${createdActors.length ? ` and ${createdActors.length} summon actor(s)` : ""}.`);
 
   return {
     items: createdItems,
@@ -2162,4 +2529,4 @@ for (const target of targets) {
   };
 }
 
-export { forceExplicitChoiceOnAttack, itemHasExplicitActivityChoices, multiActivityStaffActivityLists, runDungeonMastersForge };
+export { activityNeedsTargetConfirmation, applyMidiQolActivityDefaults, clonedSrdSummonActorData, forceExplicitChoiceOnAttack, forceSummonUseConfirmation, isFriendlySummon, itemHasExplicitActivityChoices, multiActivityStaffActivityLists, normalizeSrdActorLookupName, runDungeonMastersForge, suppressMidiTargetConfirmationForUtility };

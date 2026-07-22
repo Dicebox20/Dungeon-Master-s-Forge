@@ -44,6 +44,10 @@ function validateDamagePart(spec, part, field) {
 function validateUses(spec) {
   const uses = requireObject(spec, spec.uses, "uses");
   if (String(uses.max ?? "").trim() === "") fail(spec, "uses.max", "to be set");
+  if (uses.autoDestroy === true) {
+    if (!Array.isArray(uses.recovery)) uses.recovery = [];
+    return;
+  }
   requireArray(spec, uses.recovery, "uses.recovery");
 }
 
@@ -126,6 +130,10 @@ function validateSuite(spec) {
 function validateActor(spec, actor, field) {
   requireObject(spec, actor, field);
   requireString(spec, actor.name, `${field}.name`);
+  if (actor.requireSrdActor === true) {
+    requireString(spec, actor.srdActorName, `${field}.srdActorName`);
+    return;
+  }
   requireString(spec, actor.type, `${field}.type`);
   requireFinite(spec, actor.ac, `${field}.ac`);
   const hp = requireObject(spec, actor.hp, `${field}.hp`);
@@ -215,13 +223,18 @@ const validators = {
   },
   artifactWeaponHybrid(spec) {
     validateWeapon(spec, { requireExtraDamageParts: false });
-    const hybridFeatures = [spec.passiveEffects, spec.utilityActivities, spec.saveActivities]
+    const hybridFeatures = [spec.passiveEffects, spec.utilityActivities, spec.saveActivities, spec.attackActivities]
       .some(value => Array.isArray(value) && value.length) || isObject(spec.toggleLight);
     if (!hybridFeatures) fail(spec, "at least one passive effect, utility, save power, or light toggle");
     for (const [index, effect] of (spec.passiveEffects ?? []).entries()) validateEffect(spec, effect, `passiveEffects[${index}]`);
     for (const [index, activity] of (spec.saveActivities ?? []).entries()) {
       validateActivity(spec, activity, `saveActivities[${index}]`);
       validateSave(spec, activity.save, `saveActivities[${index}].save`);
+    }
+    for (const [index, activity] of (spec.attackActivities ?? []).entries()) {
+      validateActivity(spec, activity, `attackActivities[${index}]`);
+      requireArray(spec, activity.damageParts, `attackActivities[${index}].damageParts`);
+      activity.damageParts.forEach((part, partIndex) => validateDamagePart(spec, part, `attackActivities[${index}].damageParts[${partIndex}]`));
     }
     if (spec.toggleLight) {
       requireString(spec, spec.toggleLight.activityId, "toggleLight.activityId");

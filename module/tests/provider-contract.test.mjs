@@ -84,6 +84,7 @@ const validPayload = {
   schemaVersion: REMOTE_PROVIDER_SCHEMA_VERSION,
   compilerVersion: "remote-test",
   promptVersion: "1.0.0",
+  preparedSpecFingerprint: "SHA256:0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF",
   request: "Create a fire dagger",
   requestCount: 1,
   specs: [{ kind: "weaponExtraDamage", name: "Remote Ember Dagger" }],
@@ -95,6 +96,7 @@ const normalized = normalizeRemoteProviderResponse(validPayload, { id: "bring-yo
 assert.equal(normalized.provider, "bring-your-own");
 assert.equal(normalized.providerMode, "network");
 assert.equal(normalized.promptVersion, "1.0.0");
+assert.equal(normalized.preparedSpecFingerprint, "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
 assert.deepEqual(normalized.decisions, [{
   name: "Remote Ember Dagger",
   pattern: "weaponExtraDamage",
@@ -119,6 +121,12 @@ assert.equal(capturedRequest.init.headers.Authorization, "Bearer private-token")
 assert.equal(JSON.parse(capturedRequest.init.body).request, "Create a fire dagger");
 assert.equal(JSON.stringify(remoteResult).includes("private-token"), false);
 assert.equal(remoteResult.specs[0].name, "Remote Ember Dagger");
+
+const invalidFingerprint = normalizeRemoteProviderResponse({
+  ...validPayload,
+  preparedSpecFingerprint: "not-a-fingerprint"
+}, { id: "bring-your-own", label: "Bring Your Own API" });
+assert.equal(invalidFingerprint.preparedSpecFingerprint, undefined);
 
 const validCapabilities = {
   service: { name: "Test Forge", version: "1.0.0" },

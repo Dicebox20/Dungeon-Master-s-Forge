@@ -176,6 +176,7 @@ function normalizeErrorReport(payload, requestId, client) {
     ? {
         kind: cleanText(payload.feedback.kind, 80),
         userNote: cleanBlockText(payload.feedback.userNote, 4000),
+        desiredOutcome: cleanBlockText(payload.feedback.desiredOutcome, 4000),
         requestText: cleanBlockText(payload.feedback.requestText, 12000),
         generatedSpecsJson: cleanBlockText(payload.feedback.generatedSpecsJson, 60000),
         statusMessage: cleanText(payload.feedback.statusMessage, 500),
@@ -188,7 +189,6 @@ function normalizeErrorReport(payload, requestId, client) {
     source: cleanText(payload.source, 80),
     occurredAt: cleanText(payload.occurredAt, 80),
     receivedRequestId: requestId,
-    client,
     module: {
       id: moduleId,
       version: moduleVersion
@@ -244,7 +244,10 @@ function createForgeServer(options) {
       }))
     : null;
   const errorReportStore = config.errorReportsEnabled
-    ? (options.errorReportStore ?? createErrorReportStore({ path: config.errorReportPath }))
+    ? (options.errorReportStore ?? createErrorReportStore({
+        path: config.errorReportPath,
+        retentionDays: config.errorReportRetentionDays
+      }))
     : null;
   const ownsDailyQuotaStore = usesDailyQuota && !options.dailyQuotaStore;
 

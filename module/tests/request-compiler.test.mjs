@@ -37,16 +37,38 @@ assert.equal(wand.specs[0].target.template.type, "cube");
 assert.equal(wand.specs[0].target.template.size, 15);
 assert.equal(wand.specs[0].uses.recovery[0].formula, "1d6 + 1");
 
+const defaultChargeRecovery = compileItemRequest("Create a rare circlet called Poison Crown. It has 12 charges. As an action, spend 1 charge to make a ranged poison spell attack against one creature within 60 feet, dealing 1d6 poison damage.");
+assert.deepEqual(defaultChargeRecovery.specs[0].uses.recovery, [{ period: "lr", type: "recoverAll", formula: "" }]);
+
 const unspecifiedDcWand = compileItemRequest(`
 Stormglass Wand
 Rare wand requiring attunement. As an action, unleash a 15-foot cone that forces a Constitution save or takes 4d8 thunder damage.
 `);
-assert.equal(unspecifiedDcWand.specs[0].save?.dc, 15);
+assert.equal(unspecifiedDcWand.specs[0].save?.dc, 13);
+
+const deafeningMace = compileItemRequest("Create a rare magical mace that grants +1 to attack and damage rolls. On a hit, the target must succeed on a DC 13 Constitution saving throw or be deafened until the start of your next turn.");
+assert.equal(deafeningMace.specs[0].kind, "weaponConditionOnHit");
+assert.equal(deafeningMace.specs[0].conditionOnHit.condition, "deafened");
+assert.deepEqual(deafeningMace.specs[0].conditionOnHit.save, { ability: "con", dc: 13 });
 
 const summon = compileItemRequest("Create a rare item that summons a friendly wolf once per long rest.");
 assert.equal(summon.specs[0].kind, "nativeSummon");
 assert.match(summon.specs[0].activityId, /^[A-Za-z0-9]{16}$/);
 assert.match(summon.specs[0].profileId, /^[A-Za-z0-9]{16}$/);
+
+const dragonomicon = compileItemRequest("Create a Book named the Dragonomicon that can be used to summon a Pseudodragon as a companion. The book has 1 charge that recharges after a long rest.");
+assert.equal(dragonomicon.specs[0].kind, "nativeSummon");
+assert.equal(dragonomicon.specs[0].profileName, "Pseudodragon");
+assert.equal(dragonomicon.specs[0].summonActor.srdActorName, "Pseudodragon");
+assert.equal(dragonomicon.specs[0].summonActor.requireSrdActor, true);
+assert.equal("ac" in dragonomicon.specs[0].summonActor, false);
+assert.equal("items" in dragonomicon.specs[0].summonActor, false);
+
+const owlbearTalisman = compileItemRequest("Create a talisman that can summon an Owlbear in an unoccupied space within 30 feet for 1 hour.");
+assert.equal(owlbearTalisman.specs[0].kind, "nativeSummon");
+assert.equal(owlbearTalisman.specs[0].profileName, "Owlbear");
+assert.equal(owlbearTalisman.specs[0].summonActor.srdActorName, "Owlbear");
+assert.equal(owlbearTalisman.specs[0].summonActor.requireSrdActor, true);
 
 const deferred = compileItemRequest("Create a helm that restores 1 Ki point.");
 assert.ok(deferred.warnings.some(message => message.includes("Class-specific")));
@@ -123,7 +145,8 @@ Choose Demon, Devil, or Yugoloth. The summon lasts 1 hour and uses concentration
 assert.equal(fiendStone.specs[0].kind, "nativeMultiProfileSummon");
 assert.deepEqual(fiendStone.specs[0].summonProfiles.map(profile => profile.profileName), ["Demon", "Devil", "Yugoloth"]);
 assert.ok(fiendStone.specs[0].summonProfiles.every(profile => /^[A-Za-z0-9]{16}$/.test(profile.profileId)));
-assert.ok(fiendStone.specs[0].summonProfiles.every(profile => profile.actor.type === "fiend"));
+assert.deepEqual(fiendStone.specs[0].summonProfiles.map(profile => profile.actor.srdActorName), ["Quasit", "Imp", "Mezzoloth"]);
+assert.ok(fiendStone.specs[0].summonProfiles.every(profile => profile.actor.requireSrdActor));
 assert.equal(fiendStone.specs[0].uses.recovery[0].period, "lr");
 
 const emberOil = compileItemRequest(`
@@ -136,6 +159,12 @@ assert.equal(emberOil.specs[0].duration.seconds, 3600);
 assert.equal(emberOil.specs[0].restrictions.type, "weapon");
 assert.equal(emberOil.specs[0].uses.autoDestroy, true);
 assert.deepEqual(emberOil.specs[0].enchantChanges.map(change => change.key), ["system.properties", "system.damage.parts"]);
+assert.deepEqual(emberOil.specs[0].enchantChanges[1].value.damage, {
+  number: 1,
+  denomination: 4,
+  bonus: "",
+  types: ["fire"]
+});
 assert.match(emberOil.specs[0].activityId, /^[A-Za-z0-9]{16}$/);
 assert.match(emberOil.specs[0].effectId, /^[A-Za-z0-9]{16}$/);
 

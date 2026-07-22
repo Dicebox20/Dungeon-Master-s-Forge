@@ -98,6 +98,28 @@ function damagePartsText(parts) {
   return (parts ?? []).map(damagePartText).filter(Boolean).join(" + ");
 }
 
+function damageChangeText(value) {
+  const damage = value?.damage ?? value;
+  if (damage && typeof damage === "object") return damagePartText(damage);
+  if (typeof damage !== "string") return "";
+  try {
+    const parsed = JSON.parse(damage);
+    const normalized = parsed?.damage ?? parsed;
+    if (normalized && typeof normalized === "object") return damagePartText(normalized);
+  } catch {
+    // Plain-language damage values are normalized below.
+  }
+  const match = damage.match(/(\d+)\s*d\s*(\d+)(?:\s*([+-])\s*(\d+))?\s+([a-z]+)/i);
+  if (!match) return "";
+  const [, number, denomination, sign = "", bonus = "", type] = match;
+  return damagePartText({
+    number: Number(number),
+    denomination: Number(denomination),
+    bonus: bonus ? `${sign}${bonus}` : "",
+    types: [type.toLowerCase()]
+  });
+}
+
 function durationText(duration) {
   if (!duration?.value || !duration?.units) return "";
   const value = Number(duration.value);
@@ -148,10 +170,17 @@ function effectChangeText(change) {
     case "system.bonuses.abilities.save": return `${signedBonus(value)} saving throws`;
     case "system.bonuses.msak.attack":
     case "system.bonuses.rsak.attack": return `${signedBonus(value)} spell attacks`;
+    case "system.bonuses.mwak.attack":
+    case "system.bonuses.rwak.attack": return `${signedBonus(value)} weapon attacks`;
+    case "system.bonuses.mwak.damage":
+    case "system.bonuses.rwak.damage": return `${signedBonus(value)} weapon damage`;
     case "system.bonuses.spell.dc": return `${signedBonus(value)} spell save DC`;
     case "system.traits.dr.value": return `${titleCase(value)} resistance`;
     case "system.properties": return String(value).includes("mgc") ? "Magical" : `Property: ${words(value)}`;
-    case "system.damage.parts": return value?.damage ? `Adds ${damagePartText(value.damage)}` : "Adds damage";
+    case "system.damage.parts": {
+      const damage = damageChangeText(value);
+      return damage ? `Adds ${damage}` : "Adds damage";
+    }
     default: return change?.key ? `${change.key}: ${words(value)}` : "";
   }
 }
@@ -222,7 +251,7 @@ function compilationNotes(compilation, spec, itemName, itemCount) {
   if (!compilation) return [];
   const groups = [
     ["assumption", "Assumption", compilation.assumptions],
-    ["warning", "Warning", compilation.warnings],
+    ["notice", "Notice", compilation.warnings],
     ["deferred", "Manual", compilation.deferred]
   ];
   const notes = [];
@@ -236,6 +265,24 @@ function compilationNotes(compilation, spec, itemName, itemCount) {
     }
   }
   return notes;
+}
+
+function freeForgeBoundaryNotes(compilation, unresolved, compilationReviewNotes) {
+  if (!/^free forge$/i.test(String(compilation?.providerLabel ?? "").trim())) return [];
+  const deferred = compilationReviewNotes.filter(note => note.state === "deferred");
+  const affectedLabels = uniqueStrings([
+    ...unresolved.map(note => note.label),
+    ...deferred.map(note => note.message)
+  ]);
+  if (!affectedLabels.length) return [];
+
+  const mechanicCount = Math.max(unresolved.length, deferred.length);
+  return [{
+    state: "free-forge",
+    label: "Free Forge",
+    message: `Free Forge simplified this result and preserved ${mechanicCount} mechanic${mechanicCount === 1 ? "" : "s"} for review because the current safe automation boundary could not represent ${mechanicCount === 1 ? "it" : "them"} completely.`,
+    handling: "This is an intentional safe fallback, not a generation failure. Review the preserved mechanic text before approval or add optional automation manually."
+  }];
 }
 
 function tierReviewNotes(tierReview, itemName) {
@@ -340,8 +387,10 @@ function summarizeSpec(spec, context = {}) {
     message: reference.message || reference.name || "Resolved system content reference.",
     handling: reference.uuid || ""
   }));
+  const compilationReviewNotes = compilationNotes(context.compilation, spec, spec.name, context.itemCount ?? 1);
   const notes = [
-    ...compilationNotes(context.compilation, spec, spec.name, context.itemCount ?? 1),
+    ...compilationReviewNotes,
+    ...freeForgeBoundaryNotes(context.compilation, unresolved, compilationReviewNotes),
     ...tierReviewNotes(context.tierReview, spec.name),
     ...references,
     ...unresolved

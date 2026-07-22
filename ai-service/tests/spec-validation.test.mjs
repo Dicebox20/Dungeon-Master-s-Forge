@@ -5,8 +5,13 @@ import { actor, damage, ids, uses, validSpecs } from "./fixtures/valid-specs.mjs
 import { envelope } from "./helpers.mjs";
 
 test("all fourteen remote Forge families pass provider-side structure validation", () => {
-  const request = validateForgeRequest(envelope());
   for (const spec of validSpecs) {
+    const requestText = spec.kind === "nativeMultiProfileSummon"
+      ? "Create an item that can summon a friendly fiend; choose Demon, Devil, or Yugoloth."
+      : spec.kind === "nativeSummon"
+        ? "Create an item that can summon a friendly wolf."
+        : "";
+    const request = validateForgeRequest(requestText ? envelope({ request: requestText }) : envelope());
     const result = normalizeModelOutput({ specs: [spec] }, request, { makeId: ids() });
     assert.equal(result.specs[0].kind, spec.kind);
   }
@@ -26,15 +31,20 @@ test("empty complex suites cannot pass as functioning items", () => {
   }, request, { makeId: ids() }), /at least one effect/);
 });
 
-test("summon profiles require viable actor data", () => {
-  const request = validateForgeRequest(envelope());
-  assert.throws(() => normalizeModelOutput({
+test("generic summon profiles downgrade to a working single fallback companion", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a stone that can summon a companion."
+  }));
+  const result = normalizeModelOutput({
     specs: [{
       kind: "nativeMultiProfileSummon",
       name: "Broken Stone",
       description: "Broken summon.",
       uses: uses(),
-      summonProfiles: [{ profileName: "One", actor: actor("One") }, { profileName: "Two", actor: { name: "Two" } }]
+      summonProfiles: [{ profileName: "One", actor: actor("One") }]
     }]
-  }, request, { makeId: ids() }), /summonProfiles\[1\]\.actor\.type/);
+  }, request, { makeId: ids() });
+  assert.equal(result.specs[0].kind, "nativeSummon");
+  assert.equal(result.specs[0].summonActor.name, "One");
+  assert.equal(result.specs[0].summonActor.requireSrdActor, false);
 });

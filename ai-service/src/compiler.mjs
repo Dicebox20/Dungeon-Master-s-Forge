@@ -7,6 +7,7 @@ const RETRYABLE_MODEL_OUTPUT_CODES = new Set([
   "invalid_model_json",
   "invalid_openai_response",
   "invalid_model_output",
+  "item_count_mismatch",
   "unsupported_generated_kind",
   "unsafe_model_output"
 ]);

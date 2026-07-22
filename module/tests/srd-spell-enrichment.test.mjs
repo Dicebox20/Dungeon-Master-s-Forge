@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
-import { applyDefaultLeveledSpellCharges, applyForgeSpecDefaults, autoSelectSrdChoiceSpells, dedupeRecognizedSpellActivities, reconcilePlannedSrdSpellActivities, repairNamedSrdSpellActivities, requestedSpellChoiceCount } from "../scripts/srd-spell-enrichment.js";
+import { SPELL_LIBRARY, applyDefaultLeveledSpellCharges, applyForgeSpecDefaults, autoSelectSrdChoiceSpells, dedupeRecognizedSpellActivities, reconcilePlannedSrdSpellActivities, repairNamedSrdSpellActivities, requestedSpellChoiceCount } from "../scripts/srd-spell-enrichment.js";
 
 assert.equal(requestedSpellChoiceCount("It has 10 charges with 3 spells of your choice."), 3);
+
+const detectThoughtsProfile = SPELL_LIBRARY.find(profile => profile.name === "Detect Thoughts");
+assert.equal(detectThoughtsProfile.duration.concentration, true);
+assert.equal(detectThoughtsProfile.range.units, "self");
+assert.equal(SPELL_LIBRARY.find(profile => profile.name === "Poison Spray").level, 0);
+assert.equal(SPELL_LIBRARY.find(profile => profile.name === "Ray of Sickness").damageParts[0].denomination, 8);
+assert.equal(SPELL_LIBRARY.find(profile => profile.name === "Cloudkill").duration.value, 10);
 
 const compatibleSpell = name => ({
   status: "compatible",
@@ -411,6 +418,7 @@ const repairedStaffActivity = await repairNamedSrdSpellActivities({
   activities: [{
     activityId: "StaffFireball001",
     activityName: "Cast Fireball",
+    chargeCost: 5,
     damageParts: [{ number: 8, denomination: 6, bonus: "", types: ["fire"] }],
     save: { ability: "dex", dc: 15 }
   }]
@@ -420,6 +428,8 @@ const repairedStaffActivity = await repairNamedSrdSpellActivities({
 });
 
 assert.equal(repairedStaffActivity.applied, true);
+assert.equal(repairedStaffActivity.spec.activities[0].save.dc, 13, "A stale generated DC must not override the unspecified-DC baseline.");
+assert.equal(repairedStaffActivity.spec.activities[0].chargeCost, 1, "A non-charge spell use must not retain a stale spell-level cost.");
 assert.equal(repairedStaffActivity.spec.activities[0].target.template.type, "sphere");
 assert.equal(repairedStaffActivity.spec.activities[0].target.template.size, 20);
 assert.equal(repairedStaffActivity.spec.activities[0].range.value, 150);
@@ -571,6 +581,31 @@ assert.equal(defaultCharges.spec.saveActivities[0].chargeCost, 3);
 assert.equal(defaultCharges.spec.saveActivities[0].chargeScaling.allowed, true);
 assert.equal(defaultCharges.spec.saveActivities[0].chargeScaling.max, "@item.uses.value");
 
+const distinctExplicitCharges = await applyDefaultLeveledSpellCharges({
+  kind: "casterUtilityEquipment",
+  name: "Cinderweb Rod",
+  uses: { max: "8", recovery: [] },
+  saveActivities: [{
+    activityId: "CinderwebWeb0001",
+    activityName: "Cast Web",
+    chargeCost: 1,
+    damageParts: [],
+    save: { ability: "dex", dc: 15 }
+  }],
+  attackActivities: [{
+    activityId: "CinderwebRay0001",
+    activityName: "Cast Scorching Ray",
+    chargeCost: 2,
+    damageParts: [{ number: 2, denomination: 6, bonus: "", types: ["fire"] }]
+  }]
+}, "Spend 2 charges to cast Web at DC 15 or 3 charges to cast Scorching Ray.", {
+  resolveSpell: async name => compatibleSpell(name),
+  resolveSpellDocument
+});
+
+assert.equal(distinctExplicitCharges.spec.saveActivities[0].chargeCost, 2);
+assert.equal(distinctExplicitCharges.spec.attackActivities[0].chargeCost, 3);
+
 const defaultAttackSpellCharges = await applyDefaultLeveledSpellCharges({
   kind: "artifactWeaponHybrid",
   name: "Venom Bow",
@@ -631,7 +666,7 @@ const defaultedSpec = applyForgeSpecDefaults({
 
 assert.equal(defaultedSpec.applied, true);
 assert.equal(defaultedSpec.spec.magicalBonus, "1");
-assert.equal(defaultedSpec.spec.saveActivities[0].save.dc, 15);
+assert.equal(defaultedSpec.spec.saveActivities[0].save.dc, 13);
 
 const sanitizedArmorBonus = applyForgeSpecDefaults({
   kind: "shieldArmorBonus",
@@ -665,6 +700,19 @@ const dedupedAliasedMistyStep = dedupeRecognizedSpellActivities(aliasedMistyStep
 assert.equal(dedupedAliasedMistyStep.applied, true);
 assert.equal(dedupedAliasedMistyStep.spec.utilityActivities.length, 1);
 assert.equal(dedupedAliasedMistyStep.spec.utilityActivities[0].activityName, "Wind Step");
+
+const splitSpellChoiceLabel = dedupeRecognizedSpellActivities({
+  kind: "casterUtilityEquipment",
+  utilityActivities: [
+    { activityId: "FarSightClairvoy", activityName: "Clairvoyance or Fog Cloud" },
+    { activityId: "FarSightFogCloud1", activityName: "Cast Fog Cloud" }
+  ]
+}, "Once per long rest, cast Clairvoyance or Fog Cloud.");
+assert.equal(splitSpellChoiceLabel.applied, true);
+assert.deepEqual(
+  splitSpellChoiceLabel.spec.utilityActivities.map(activity => activity.activityName),
+  ["Cast Clairvoyance", "Cast Fog Cloud"]
+);
 
 const repairedHealingAndUtility = await repairNamedSrdSpellActivities({
   kind: "artifactWeaponHybrid",
@@ -700,4 +748,4 @@ assert.equal(repairedSleetStorm.applied, true);
 assert.equal(repairedSleetStorm.spec.utilityActivities[0].target.template.type, "cylinder");
 assert.equal(repairedSleetStorm.spec.utilityActivities[0].range.value, 150);
 
-export const testedSrdSpellEnrichmentCases = 33;
+export const testedSrdSpellEnrichmentCases = 34;

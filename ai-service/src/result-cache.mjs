@@ -67,4 +67,4 @@ function createCachedCompiler(compile, options = {}) {
   };
 }
 
-export { cacheKey, createCachedCompiler };
+export { cacheKey, canonicalize, createCachedCompiler };

@@ -62,6 +62,9 @@ function recoveryFromRequest(request) {
     const formula = /\bregains?\s+([^.;\n]+?)\s+charges?\b/i.exec(request)?.[1]?.trim() ?? "";
     return [{ period: "dawn", type: formula ? "formula" : "recoverAll", formula }];
   }
+  if (/\b\d+\s+charges?\b/i.test(request)) {
+    return [{ period: "lr", type: "recoverAll", formula: "" }];
+  }
   return [];
 }
 

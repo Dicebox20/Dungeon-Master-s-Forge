@@ -24,6 +24,12 @@ const BASE_CHASSIS_ART = Object.freeze({
   wand: "icons/weapons/wands/wand-gem-red.webp"
 });
 
+const CATEGORY_ITEM_ART = Object.freeze({
+  cloak: "icons/equipment/back/cloak-hooded-blue.webp",
+  potion: "icons/consumables/potions/potion-bottle-corked-blue.webp",
+  ring: "icons/equipment/finger/ring-band-engraved-silver.webp"
+});
+
 function compact(value) {
   return String(value ?? "").trim();
 }
@@ -78,6 +84,23 @@ function applyConsumableProjectileFallbackArt(spec = {}, requestText = "") {
     img,
     spec: { ...spec, img }
   };
+}
+
+function categoryItemFallbackImage(spec = {}, requestText = "") {
+  const source = [spec.name, spec.description, spec.baseItem, spec.itemType, requestText]
+    .filter(Boolean)
+    .join(" ");
+  if (/\b(?:cloak|cape|mantle)\b/i.test(source)) return CATEGORY_ITEM_ART.cloak;
+  if (/\b(?:ring|signet)\b/i.test(source)) return CATEGORY_ITEM_ART.ring;
+  if (spec.itemType === "consumable" && /\b(?:potion|draught|elixir|philter)\b/i.test(source)) return CATEGORY_ITEM_ART.potion;
+  return "";
+}
+
+function applyCategoryItemFallbackArt(spec = {}, requestText = "") {
+  if (!needsFallbackItemArt(spec?.img)) return { applied: false, status: "existing", spec };
+  const img = categoryItemFallbackImage(spec, requestText);
+  if (!img) return { applied: false, status: "missing", spec };
+  return { applied: true, status: "fallback", img, spec: { ...spec, img } };
 }
 
 function applyBaseChassisFallbackArt(spec = {}, requestText = "") {
@@ -160,13 +183,16 @@ function applyFallbackActivityArt(spec) {
 
 export {
   BASE_CHASSIS_ART,
+  CATEGORY_ITEM_ART,
   CONSUMABLE_PROJECTILE_ART,
   SYSTEM_EQUIPMENT_ART_FAMILIES,
   applyBaseChassisFallbackArt,
+  applyCategoryItemFallbackArt,
   applyConsumableProjectileFallbackArt,
   applySpellActivityArt,
   applyFallbackActivityArt,
   applySystemEquipmentArt,
+  categoryItemFallbackImage,
   consumableProjectileFallbackImage,
   hasImage,
   needsFallbackItemArt,

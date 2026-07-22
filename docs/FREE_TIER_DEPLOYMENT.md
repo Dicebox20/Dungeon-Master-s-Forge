@@ -4,10 +4,10 @@ The current testing service can become the engine for a downloader-accessible fr
 
 ## Prepared Service Mode
 
-AI service `1.6.0` provides an explicit `DMF_PUBLIC_FREE_TIER=true` mode. It:
+AI service `1.6.1` provides an explicit `DMF_PUBLIC_FREE_TIER=true` mode. It:
 
 - keeps the OpenAI key only on the server;
-- accepts anonymous Forge requests without distributing a shared token;
+- accepts tokenless public Forge requests without distributing a shared token;
 - permits Foundry installations from arbitrary origins;
 - enforces per-minute, per-client calendar-month, and global daily limits;
 - persists monthly client and global daily usage in a transactional SQLite ledger;
@@ -16,6 +16,10 @@ AI service `1.6.0` provides an explicit `DMF_PUBLIC_FREE_TIER=true` mode. It:
 - retains bounded concurrency, queueing, request size, batch size, caching, model allowlisting, and declarative-output validation;
 - retries malformed or contract-invalid model output once while leaving operational failures non-retryable;
 - advertises public free-tier status through health and capabilities responses.
+
+## Summon Content Boundary
+
+Free Forge treats the requested creature or role as a suggestion. The service prefers a matching actor supplied by the installed DND5e system's SRD content and the module clones that actor into the world with Forge ownership and friendly-token defaults. When no matching SRD actor is installed, the item keeps a reviewed declarative fallback actor with a basic type, AC, hit points, and movement so the summon remains usable. Free Forge never accepts model-generated macros, scripts, or executable actor behavior.
 
 Use `ai-service/.env.free-tier.example` as the deployment template. Do not place a real key in the repository.
 
@@ -31,7 +35,7 @@ For host-admin maintenance during tester validation, `npm run quota:admin -- sum
 4. Set conservative OpenAI project spending controls independently of the service quotas.
 5. Place `DMF_QUOTA_DATABASE_PATH` on persistent local storage and set a private, random `DMF_QUOTA_HASH_SECRET` of at least 32 characters.
 6. Back up the quota database and monitor disk availability, service errors, quota denials, and OpenAI project spending.
-7. Run health, capabilities, anonymous compile, restart-persistence, quota, and cross-origin smoke tests against the public URL.
+7. Run health, capabilities, tokenless compile, restart-persistence, quota, and cross-origin smoke tests against the public URL.
 8. Only then enable the module's Hosted/Free Forge provider and bake the public compile URL into the release.
 
 ## Deployment Boundary
