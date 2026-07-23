@@ -6,8 +6,13 @@ function buildSystemPrompt(envelope) {
   const kinds = envelope.context.supportedKinds;
   const capabilities = envelope.context.supportedCapabilities ?? [];
   const automationRecipes = envelope.context.automationCapabilities?.supportedRecipes ?? [];
+  const automationRoutes = envelope.context.automationCapabilities?.routes ?? [];
+  const routeText = automationRoutes
+    .filter(route => route.available === true)
+    .map(route => `${route.recipe} -> ${route.selectedLayer} (required: ${route.dependencies.length ? route.dependencies.join(", ") : "none"})`)
+    .join("; ");
   const automationGuidance = automationRecipes.length
-    ? `The local Forge runtime advertises these trusted declarative automation recipes: ${automationRecipes.join(", ")}. Use only these recipes and only the dependency/settings data advertised by the runtime.`
+    ? `The local Forge runtime advertises these trusted declarative automation recipes: ${automationRecipes.join(", ")}. Available layer routes: ${routeText || "none listed"}. Use only these recipes and only the dependency/settings data advertised by the runtime.`
     : "The local Forge runtime did not advertise an advanced automation recipe; use core declarative activities and effects only.";
   const intent = analyzeRequestIntent(envelope.request);
   const names = intent.hasCompleteExplicitNames

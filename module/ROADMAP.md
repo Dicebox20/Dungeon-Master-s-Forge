@@ -3,7 +3,7 @@
 ## Stable Baseline
 
 - Foundry VTT v14 / DND5e v5.3.3 module integration.
-- Prefer native Foundry VTT and DND5e documents, activities, effects, summons, and Scene Region Behaviors before optional module integrations.
+- Route each mechanic by capability: use native Foundry VTT and DND5e data when it fully expresses the request and remains reliable; prefer verified Midi-QOL, DAE, Item Macro, or related layers when they provide the needed timing, targeting, reaction, condition, concentration, or workflow behavior; fall back to portable core data with a clear review note when the preferred layer is unavailable or unverified.
 - JSON specification validation, preview, and item creation.
 - Weapons, equipment, consumables, effects, charges, attacks, saves, healing, enchantments, summons, conditions, and scripted token-light powers.
 - GM-only Items directory launcher and reusable module API.
@@ -145,6 +145,8 @@ The module and private service already implement the reviewed repair flow, but t
 
 The prompt and capability matrix is recorded in `docs/research/advanced-automation-failure-matrix-2026-07-22.md`, with copy/paste prompts in `testing/BETA_V1_ADVANCED_AUTOMATION_PROMPTS_2026-07-22.txt`.
 
+- Replace the native-only preference with capability-based routing: use native DND5e when it fully expresses the mechanic, prefer verified Midi-QOL, DAE, or Item Macro behavior when those layers provide better timing, targeting, reaction, condition, concentration, or workflow support, and fall back to portable core data with an explicit review note when the preferred layer is unavailable or unverified.
+- Show the selected automation layer, required modules, settings assumptions, and fallback behavior in the preview and review notes before approval.
 - Do not add a new automation-only item renderer until three passing cases prove that the existing suite/hybrid renderers cannot preserve the item chassis and reviewed automation metadata.
 - Add structured, capability-gated contracts for reaction context, damage-bonus timing, overtime effects, aura membership, allowlisted document links, Region behavior plans, and trusted macro context.
 - Keep provider output declarative and reject arbitrary JavaScript, scripts, flags, and invented UUIDs. Generate executable code only from trusted engine templates and show it in the existing automation review surface.
@@ -173,15 +175,17 @@ The prompt and capability matrix is recorded in `docs/research/advanced-automati
 - Keep forced movement automation as a reviewed/manual mechanic until a reliable and safe automation path is proven.
 - Improve single charged save/damage routing so one-power wands do not get misclassified as multi-activity staves requiring multiple activities.
 
-## Planned: Midi-QOL Compatibility
+## Planned: Capability-Based Automation Routing
 
-- Keep core DND5e activities, uses, effects, saves, damage, summons, and enchantments as the portable baseline.
-- An optional world setting now enables basic Midi-QOL compatibility only when Midi-QOL is active: generated attacks and targeted saves confirm targets, while charged and summon activities confirm resource use.
-- With Item Macro active, supported condition riders apply standard DND5e conditions after failed saves and expire through combat-round Active Effect durations; outside combat they use elapsed seconds.
+- Use native DND5e activities, uses, effects, saves, damage, summons, and enchantments whenever they fully express the requested mechanic and remain reliable.
+- Prefer the verified Midi-QOL, DAE, or Item Macro route when the mechanic needs workflow timing, target confirmation, reactions, condition application, concentration, or other behavior that core data cannot express reliably.
+- Advertise the selected automation layer, required modules, settings assumptions, and fallback before approval. Recipes that truly need a combination, such as the current condition-on-hit hook, must list every dependency rather than silently coupling unrelated settings.
+- Preserve portable core data when an advanced route is unavailable or unverified, and add a review note that names the missing layer and the remaining manual step.
+- With the required layers active, supported condition riders apply standard DND5e conditions after failed saves and expire through combat-round Active Effect durations; outside combat they use elapsed seconds.
 - Add optional summon-creature scaling from the summoner's character level, with the level-derived AC, hit points, attacks, and save values visible for GM review before creation.
 - Generate reviewed Midi-QOL hooks for proven patterns such as post-hit conditions, post-active-effects workflows, save/damage riders, and separate Item Macro activities.
 - Detect and report required companion modules such as DAE and Item Macro instead of silently creating incomplete automation.
-- Preserve clean core-DND5e items with no Midi-QOL flags when Midi-QOL is absent, disabled, unsupported, or not requested.
+- Keep core data valid when a module layer is absent, disabled, unsupported, or not requested; do not treat that fallback as proof that the advanced behavior was implemented.
 - Add enabled/disabled compatibility fixtures, non-destructive diagnostics, and regression tests against the supported Foundry v14 / DND5e v5.3.3 / Midi-QOL version matrix.
 - Add migration and validation warnings for deprecated Midi-QOL flags or hooks before generated items are written.
 - Keep ally auras outside this track until a compatible aura engine is available and separately verified.
@@ -212,7 +216,7 @@ The prompt and capability matrix is recorded in `docs/research/advanced-automati
 - Treat UUIDs as user-owned references or post-creation results, never as AI-invented identifiers. Foundry assigns the created item's final UUID only after creation, so the workflow must bind the returned item UUID to the behavior artifact after approval or use a clearly marked placeholder.
 - Show every referenced UUID, resolved document name/type, permission check, affected Scene/Region, and proposed relationship in the preview before either write occurs.
 - Keep item creation and Region/world mutation as separate approvals. Creating the item must remain possible without applying the Region behavior.
-- Prefer native allowlisted Region Behaviors and reviewed document links. If a macro is necessary, generate it as a separate reviewed artifact with a distinct acknowledgement, bounded UUID inputs, no arbitrary model code, and no automatic execution.
+- Prefer the most reliable allowlisted Region capability and reviewed document links. Use native Region Behaviors when they fully express the mechanic; use a verified module route when it supplies required behavior; otherwise preserve the portable result with a review note. If a macro is necessary, generate it as a separate reviewed artifact with a distinct acknowledgement, bounded UUID inputs, no arbitrary model code, and no automatic execution.
 - Present the reviewed macro in the Forge preview window with an `Execute Macro` button, a separate `Reviewed` acknowledgement checkbox, and a compact `</>` button that expands the complete macro code for inspection. Keep `Execute Macro` disabled until the GM expands or otherwise views the code, checks `Reviewed`, and confirms the target UUIDs, resolved documents, and proposed behavior in the final confirmation prompt.
 - Require reversible provenance, explicit GM ownership, tagged cleanup, and a clear confirmation before adding behavior to the selected Region. Never alter unrelated campaign documents or silently follow UUIDs embedded in untrusted model output.
 - Add tests for UUID validation, document-type and permission boundaries, post-creation UUID binding, selected-Region scope, separate approval, macro restrictions, rollback, and cross-world or stale-UUID failures.

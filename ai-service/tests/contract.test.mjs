@@ -3,7 +3,7 @@ import test from "node:test";
 import { normalizeModelOutput, validateForgeRequest } from "../src/contract.mjs";
 import { actor } from "./fixtures/valid-specs.mjs";
 import { envelope } from "./helpers.mjs";
-import { normalizeAutomationCapabilities, normalizeAutomationContract } from "../src/automation-contract.mjs";
+import { applyAutomationCapabilityRoute, normalizeAutomationCapabilities, normalizeAutomationContract } from "../src/automation-contract.mjs";
 
 function ids() {
   let value = 0;
@@ -25,14 +25,68 @@ test("automation capability context is bounded and declarative", () => {
         version: "1.0",
         supportedRecipes: ["conditionOnHit", "selfTargetLight"],
         activeModules: ["midi-qol", "itemacro"],
-        settings: { midiQolAutomation: true, itemMacroAutomation: true }
+        settings: { midiQolAutomation: true, itemMacroAutomation: true },
+        routes: [{
+          recipe: "conditionOnHit",
+          layer: "Midi-QOL + Item Macro",
+          selectedLayer: "Midi-QOL + Item Macro",
+          dependencies: ["midi-qol", "itemacro"],
+          available: true,
+          status: "available",
+          fallback: "DND5e core attack and review note"
+        }]
       }
     }
   }));
   assert.deepEqual(result.context.automationCapabilities.supportedRecipes, ["conditionOnHit", "selfTargetLight"]);
+  assert.equal(result.context.automationCapabilities.routes[0].selectedLayer, "Midi-QOL + Item Macro");
   assert.deepEqual(normalizeAutomationContract({ recipe: "selfTargetLight", targetSource: "self" }).targetSource, "self");
   assert.throws(() => normalizeAutomationContract({ recipe: "selfTargetLight", script: "return 1" }), /unsupported field/);
   assert.throws(() => normalizeAutomationCapabilities({ version: "1.0", supportedRecipes: ["arbitraryMacro"] }), /unknown recipe/);
+});
+
+test("automation output receives the negotiated dependency route and rejects unavailable routes", () => {
+  const available = normalizeAutomationCapabilities({
+    version: "1.0",
+    supportedRecipes: ["selfTargetLight"],
+    activeModules: ["itemacro"],
+    settings: { itemMacroAutomation: true },
+    routes: [{
+      recipe: "selfTargetLight",
+      layer: "Item Macro",
+      selectedLayer: "Item Macro",
+      dependencies: ["itemacro"],
+      available: true,
+      status: "available",
+      fallback: "DND5e core item and manual light review"
+    }]
+  });
+  const normalized = applyAutomationCapabilityRoute(
+    normalizeAutomationContract({ recipe: "selfTargetLight" }),
+    available,
+    "specs[0].automation"
+  );
+  assert.deepEqual(normalized.requires, ["itemacro"]);
+
+  const unavailable = normalizeAutomationCapabilities({
+    version: "1.0",
+    supportedRecipes: [],
+    activeModules: [],
+    settings: {},
+    routes: [{
+      recipe: "selfTargetLight",
+      layer: "Item Macro",
+      selectedLayer: "DND5e core (fallback)",
+      dependencies: ["itemacro"],
+      available: false,
+      status: "fallback",
+      fallback: "DND5e core item and manual light review"
+    }]
+  });
+  assert.throws(
+    () => applyAutomationCapabilityRoute(normalizeAutomationContract({ recipe: "selfTargetLight" }), unavailable, "specs[0].automation"),
+    /was not advertised|unavailable/
+  );
 });
 
 test("model automation metadata survives normalization without executable payloads", () => {

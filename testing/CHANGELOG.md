@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `2.23.1-test.53` adds capability-routed automation metadata to the preview and hosted capabilities response, shows the selected layer and required modules before approval, and removes the duplicate per-item review-notes card.
 - `2.23.1-test.52` prevents malformed no-save aura damage from becoming a provider 502, preserves it as explicit manual review, and anchors aura activation to the wielder's actor token. The public Free Forge lane now uses a `500,000` metered-unit monthly allowance calibrated to roughly 50 prompts from the prior prompt-count baseline.
 - The repair consent checkbox now sits in the footer with a visible checked state and hover tooltip. Repair reruns now send the user's original request instead of the internal layered brief.
 - `2.23.1-test.51` removes the evidence panels from the repair confirmation so the single retry text box is immediately reachable. The dialog now reports request progress/errors before closing.

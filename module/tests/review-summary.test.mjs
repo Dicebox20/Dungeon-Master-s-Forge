@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { compileItemRequest } from "../scripts/request-compiler.js";
 import { buildReviewSummaries } from "../scripts/review-summary.js";
+import { buildAutomationCapabilitySnapshot } from "../scripts/automation-capabilities.js";
 
 function review(request) {
   const compilation = compileItemRequest(request);
@@ -55,6 +56,24 @@ const automationReview = buildReviewSummaries([{
 }], null)[0];
 assert.equal(automationReview.unresolvedCount, 0);
 assert.ok(automationReview.notes.some(note => note.label === "Automation contract" && /trusted postActiveEffects/i.test(note.message)));
+
+const routeReview = buildReviewSummaries([{
+  kind: "weaponConditionOnHit",
+  name: "Route Test Blade",
+  conditionOnHit: { condition: "poisoned", save: { ability: "con", dc: 13 } },
+  automation: { recipe: "conditionOnHit", requires: ["midi-qol", "itemacro"] }
+}], null, null, buildAutomationCapabilitySnapshot({
+  game: {
+    version: "14.365",
+    modules: new Map([
+      ["midi-qol", { active: true, version: "14.0.11" }],
+      ["itemacro", { active: true, version: "3.0.1" }]
+    ])
+  },
+  config: { midiQolAutomation: true, itemMacroAutomation: true }
+}))[0];
+assert.equal(routeReview.automationRoute.selectedLayer, "Midi-QOL + Item Macro");
+assert.ok(routeReview.notes.some(note => note.label === "Automation layer" && /Required modules: Midi-QOL, Item Macro/.test(note.handling)));
 
 const lightWarningReconciled = buildReviewSummaries([{
   kind: "artifactWeaponHybrid",

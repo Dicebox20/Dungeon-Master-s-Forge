@@ -54,7 +54,7 @@ import { buildLayeredItemBlueprint } from "./item-blueprint.js";
 import { applyDefaultLeveledSpellCharges, applyForgeSpecDefaults, autoSelectSrdChoiceSpells, dedupeRecognizedSpellActivities, reconcilePlannedSrdSpellActivities, repairNamedSrdSpellActivities } from "./srd-spell-enrichment.js";
 import { applyBaseChassisFallbackArt, applyCategoryItemFallbackArt, applyConsumableProjectileFallbackArt, applyFallbackActivityArt, applySpellActivityArt, applySystemEquipmentArt, needsFallbackItemArt } from "./system-art-enrichment.js";
 import { openSceneRegionForge } from "./scene-region-forge.js";
-import { buildAutomationCapabilitySnapshot } from "./automation-capabilities.js";
+import { buildAutomationCapabilitySnapshot, resolveAutomationRoute } from "./automation-capabilities.js";
 import {
   PREVIOUS_PACKAGE_ID,
   MODULE_ID,
@@ -195,7 +195,7 @@ function registerSettings() {
 
   registerSetting("enableMidiQolAutomation", {
     name: "Apply basic conditions and effects automatically",
-    hint: "When Midi-QOL and Item Macro are active, apply supported condition riders after failed saves and remove them automatically by combat duration. Generated attacks and charged powers also confirm targets and resource use. Core DND5e item data is always preserved.",
+    hint: "Use the best verified automation layer for each mechanic. Midi-QOL, DAE, and Item Macro add timing, targeting, condition, concentration, and workflow behavior when available; portable DND5e data and a review note remain the fallback.",
     scope: "world",
     config: true,
     type: Boolean,
@@ -517,14 +517,30 @@ function dependencyWarnings(specs) {
   const warnings = [];
   const usesConditionMacro = specs.some(spec => spec.kind === "weaponConditionOnHit");
   const usesUtilityMacro = specs.some(spec => spec.utilityActivities?.some(activity => activity.macroCommand));
-  const usesItemMacro = usesConditionMacro || usesUtilityMacro || specs.some(spec => spec.toggleLight);
-  const midiEnabled = midiQolAutomationEnabled();
-
-  if ((usesConditionMacro || usesUtilityMacro) && !midiEnabled) {
-    warnings.push("Enable the Forge Midi-QOL automation setting to automate condition riders and supported utility powers.");
+  const capabilities = currentConfig().automationCapabilities;
+  const routes = [];
+  if (usesConditionMacro) routes.push(resolveAutomationRoute("conditionOnHit", capabilities));
+  if (specs.some(spec => spec.toggleLight)) routes.push(resolveAutomationRoute("selfTargetLight", capabilities));
+  if (usesUtilityMacro) routes.push({
+    recipe: "utilityMacro",
+    selectedLayer: "Midi-QOL + Item Macro",
+    dependencyLabels: ["Midi-QOL", "Item Macro"],
+    available: midiQolAutomationEnabled() && moduleIsActive("itemacro"),
+    reason: "The utility activity uses the trusted Item Macro hook exposed through Midi-QOL.",
+    fallback: "DND5e core utility activity with manual review"
+  });
+  for (const spec of specs) {
+    if (!spec.automation) continue;
+    const route = resolveAutomationRoute(spec.automation, capabilities);
+    if (route) routes.push(route);
   }
-  if (usesItemMacro && !moduleIsActive("itemacro")) {
-    warnings.push("This spec expects Item Macro.");
+  const seen = new Set();
+  for (const route of routes.filter(Boolean)) {
+    const key = `${route.recipe}|${route.selectedLayer}|${route.reason}`;
+    if (seen.has(key) || route.available) continue;
+    seen.add(key);
+    const required = route.dependencyLabels?.length ? route.dependencyLabels.join(", ") : "none";
+    warnings.push(`${route.recipe} is using the ${route.selectedLayer} fallback. Required modules: ${required}. ${route.reason} ${route.fallback}.`);
   }
 
   return warnings;
@@ -1253,6 +1269,7 @@ function reviewOverviewHTML(summaries = []) {
 
 function reviewItemHTML(summary) {
   const itemIcon = safeItemIcon(summary.img);
+  const automationRoute = summary.automationRoute;
   return `
     <article class="dm_forge-item-summary dm_forge-item-sheet" data-state="${summary.unresolvedCount ? "unresolved" : "ready"}">
       <header class="dm_forge-item-sheet-header">
@@ -1272,6 +1289,13 @@ function reviewItemHTML(summary) {
               <span>${escapeHTML(summary.reviewStateLabel ?? (summary.unresolvedCount ? "Manual review needed" : "Forge-ready"))}</span>
             </span>
           </div>
+          ${automationRoute ? `
+            <div class="dm_forge-automation-route" data-state="${automationRoute.available ? "available" : "fallback"}">
+              <strong><i class="fa-solid fa-route"></i> ${escapeHTML(automationRoute.available ? "Automation layer" : "Automation fallback")}</strong>
+              <span>${escapeHTML(automationRoute.selectedLayer)}</span>
+              <small>Required modules: ${escapeHTML(automationRoute.dependencyLabels?.join(", ") || "none")}</small>
+            </div>
+          ` : ""}
         </div>
       </header>
       <div class="dm_forge-item-sheet-tabs" aria-hidden="true">
@@ -1322,7 +1346,6 @@ function reviewItemHTML(summary) {
             `
           }
         </section>
-        ${itemNoteBadgesHTML(summary.notes)}
       </div>
     </article>
   `;
@@ -1822,7 +1845,7 @@ async function renderPreview(dialog, validation, compilation = dialog._dm_forgeC
   const preview = dialog.element?.querySelector("[data-forge-preview]");
   if (!preview) return;
 
-  const summaries = buildReviewSummaries(validation.specs, compilation);
+  const summaries = buildReviewSummaries(validation.specs, compilation, null, currentConfig().automationCapabilities);
   setReviewValidated(dialog, true);
   preview.hidden = false;
   preview.innerHTML = `
@@ -2109,6 +2132,12 @@ function summaryItemNotes(summary) {
     name: summary.name,
     kind: summary.kind,
     reviewState: summary.reviewState,
+    automationRoute: summary.automationRoute ? {
+      selectedLayer: summary.automationRoute.selectedLayer,
+      dependencies: summary.automationRoute.dependencyLabels,
+      available: summary.automationRoute.available,
+      fallback: summary.automationRoute.fallback
+    } : null,
     notes: (summary.notes ?? []).map(note => ({
       state: note.state,
       label: note.label,
@@ -2129,7 +2158,7 @@ function reviewSummariesForDialog(dialog) {
   } catch {
     specs = [];
   }
-  return buildReviewSummaries(specs, compilation).map(summaryItemNotes);
+  return buildReviewSummaries(specs, compilation, null, currentConfig().automationCapabilities).map(summaryItemNotes);
 }
 
 function dialogRequestFor(dialog) {

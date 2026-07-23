@@ -187,7 +187,9 @@ function clonedSrdSummonActorData(sourceActor, actorSpec, folder, forgeFlags = {
 
 async function runDungeonMastersForge(FORGE, ITEMS, { validateOnly = false, authorizeGeneratedAutomation = false } = {}) {
   const midiQolAutomation = FORGE.midiQolAutomation === true;
-  const itemMacroAutomation = midiQolAutomation && FORGE.itemMacroAutomation === true;
+  // Item Macro is its own capability. Recipes that also need Midi-QOL declare
+  // that combination in the negotiated automation route.
+  const itemMacroAutomation = FORGE.itemMacroAutomation === true;
 
   function makeIdentifier(name) {
     return name
@@ -1124,7 +1126,7 @@ async function runDungeonMastersForge(FORGE, ITEMS, { validateOnly = false, auth
   }
 
   function activityMacroFlags(activityIds = []) {
-    if (!itemMacroAutomation) return {};
+    if (!itemMacroAutomation || !midiQolAutomation) return {};
     const entries = Array.from(new Set(activityIds.filter(Boolean))).map(activityId =>
       `[postActiveEffects]ActivityMacro-${assertActivityId(activityId)}`
     );
@@ -1546,7 +1548,7 @@ ${activitySpec.macroCommand}
   }
 
   function conditionOnHitHookUpdate(created, spec, activityId) {
-    if (!spec.conditionOnHit || !itemMacroAutomation) return {};
+    if (!spec.conditionOnHit || !itemMacroAutomation || !midiQolAutomation) return {};
     const existingHook = typeof created.getFlag === "function"
       ? created.getFlag("midi-qol", "onUseMacroName")
       : "";
@@ -2037,7 +2039,7 @@ ui.notifications.info(ITEM_NAME + " light toggled on.");
   }
 
   function lightTriggerEffect(toggle) {
-    const macroAutomation = itemMacroAutomation && FORGE.daeAutomation === true;
+    const macroAutomation = itemMacroAutomation && midiQolAutomation && FORGE.daeAutomation === true;
     return {
       _id: assertDocumentId(toggle.effectId),
       name: toggle.effectName ?? "Light Toggle",

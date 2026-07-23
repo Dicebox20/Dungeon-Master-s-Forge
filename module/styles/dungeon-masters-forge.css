@@ -1352,6 +1352,46 @@
   gap: 8px;
 }
 
+.dm_forge-automation-route {
+  display: grid;
+  gap: 2px;
+  padding: 7px 9px;
+  border: 1px solid rgb(104 199 151 / 30%);
+  border-radius: 4px;
+  background: rgb(40 96 74 / 14%);
+  color: #dcefe5;
+  font-size: var(--font-size-11);
+}
+
+.dm_forge-automation-route[data-state="fallback"] {
+  border-color: rgb(229 161 93 / 35%);
+  background: rgb(109 63 27 / 16%);
+  color: #f3dfc8;
+}
+
+.dm_forge-automation-route strong {
+  color: #f4f0ea;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.dm_forge-automation-route strong i {
+  color: #79d6a3;
+}
+
+.dm_forge-automation-route[data-state="fallback"] strong i {
+  color: #e5a15d;
+}
+
+.dm_forge-automation-route span,
+.dm_forge-automation-route small {
+  color: inherit;
+}
+
+.dm_forge-automation-route small {
+  opacity: 0.82;
+}
+
 .dm_forge-item-sheet-tabs {
   display: flex;
   align-items: center;

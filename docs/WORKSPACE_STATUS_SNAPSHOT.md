@@ -126,5 +126,5 @@ Updated: 2026-07-01
 1. Configure a server-side provider key only when the first real AI interpretation test is approved; keep provider secrets out of Foundry.
 2. Improve provider-side compile error handling and diagnostics for live `HTTP 502` bridge failures so the Forge can distinguish upstream generation outages from local configuration issues.
 3. Replace the weak local testing token before exposing the service beyond this trusted development machine or LAN.
-4. Add the planned opt-in Midi-QOL compatibility track while preserving core DND5e output as the portable baseline.
+4. Replace the former native-first compatibility rule with capability-based routing: select complete reliable DND5e data, verified Midi-QOL/DAE/Item Macro behavior where it supplies the needed workflow, or portable core data plus a review note when the advanced route is unavailable.
 5. Keep Hosted Forge disabled until authentication, durable rate limiting, accounting, logging controls, and abuse protection are ready.

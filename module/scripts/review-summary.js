@@ -1,6 +1,7 @@
 import { inferArmorProfile, normalizeMagicalBonus, safeItemIcon } from "./equipment-normalization.js";
 
 import { automationReviewNote } from "./automation-contract.js";
+import { resolveAutomationRoute } from "./automation-capabilities.js";
 
 const KIND_LABELS = Object.freeze({
   artifactWeaponHybrid: "Hybrid artifact",
@@ -417,7 +418,8 @@ function summarizeSpec(spec, context = {}) {
     ...references,
     ...unresolved
   ];
-  const automationNote = automationReviewNote(spec.automation);
+  const automationRoute = resolveAutomationRoute(spec.automation, context.automationCapabilities);
+  const automationNote = automationReviewNote(spec.automation, automationRoute);
   if (automationNote) notes.push(automationNote);
   const hasActivePowers = [
     ...(spec.activities ?? []),
@@ -455,6 +457,7 @@ function summarizeSpec(spec, context = {}) {
     notes,
     unresolvedCount: unresolved.length,
     unresolvedLabels,
+    automationRoute,
     reviewState: unresolved.length ? "manual-review" : "forge-ready",
     reviewStateLabel: unresolved.length
       ? `${unresolved.length} manual review ${unresolved.length === 1 ? "note" : "notes"}`
@@ -462,9 +465,10 @@ function summarizeSpec(spec, context = {}) {
   };
 }
 
-function buildReviewSummaries(specs, compilation = null, tierReview = null) {
+function buildReviewSummaries(specs, compilation = null, tierReview = null, automationCapabilities = null) {
   const items = Array.isArray(specs) ? specs : [];
-  return items.map(spec => summarizeSpec(spec, { compilation, itemCount: items.length, tierReview }));
+  const capabilities = automationCapabilities ?? compilation?.automationCapabilities ?? null;
+  return items.map(spec => summarizeSpec(spec, { compilation, itemCount: items.length, tierReview, automationCapabilities: capabilities }));
 }
 
 export { buildReviewSummaries, summarizeSpec };

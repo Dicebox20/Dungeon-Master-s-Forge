@@ -6,7 +6,7 @@ import {
   SERVICE_NAME,
   SERVICE_VERSION
 } from "./constants.mjs";
-import { AUTOMATION_CONTRACT_VERSION, AUTOMATION_RECIPES } from "./automation-contract.mjs";
+import { AUTOMATION_CONTRACT_VERSION, AUTOMATION_RECIPES, AUTOMATION_ROUTES } from "./automation-contract.mjs";
 
 function serviceCapabilities(config) {
   return {
@@ -24,6 +24,7 @@ function serviceCapabilities(config) {
         version: AUTOMATION_CONTRACT_VERSION,
         declarativeOnly: true,
         recipes: [...AUTOMATION_RECIPES],
+        routes: AUTOMATION_ROUTES.map(route => ({ ...route })),
         workflowPasses: ["postActiveEffects", "activity"],
         targetSources: ["hitTargets", "failedSaves", "self", "selectedTargets"]
       },

@@ -134,11 +134,21 @@ function automationDependencies(recipe) {
   return [...(AUTOMATION_DEPENDENCIES[recipe] ?? [])];
 }
 
-function automationReviewNote(contract) {
+function automationReviewNote(contract, route = null) {
   const normalized = normalizeAutomationContract(contract);
   if (!normalized) return null;
   const target = normalized.targetFilter?.creatureType ? `; filters to ${normalized.targetFilter.creatureType} targets` : "";
   const dependencies = normalized.requires?.length ? `; dependencies: ${normalized.requires.join(", ")}` : "";
+  if (route) {
+    const required = route.dependencyLabels?.length ? route.dependencyLabels.join(", ") : "none";
+    const status = route.available ? "Selected" : "Fallback";
+    return {
+      state: route.available ? "note" : "review",
+      label: "Automation layer",
+      message: `${status} ${route.selectedLayer} layer for ${normalized.recipe} via the trusted ${normalized.workflowPass} path with ${normalized.targetSource} as its target source${target}.`,
+      handling: `Required modules: ${required}. ${route.available ? "This layer is available in the current world." : `${route.reason} ${route.fallback}.`} Authority: ${normalized.authority}; fallback: ${normalized.fallback}.`
+    };
+  }
   return {
     state: "note",
     label: "Automation contract",

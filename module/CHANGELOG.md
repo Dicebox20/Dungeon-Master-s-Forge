@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Prepared tester build `2.23.1-test.53` with capability-routed automation metadata in the preview and service capabilities response, and removed the duplicate per-item review-notes card.
 - Moved repair consent into the dialog footer with a visible checked state and hover explanation, and preserved the user's original request text for repair provenance.
 - Focused the SEND IT AGAIN!? window on one reachable repair text box and kept it open until the confirmed request succeeds or reports an error.
 - Preserved the Advanced Specification Editor control during preview resets so the first Preview action can update the generated JSON instead of failing with a missing `specs` control.

@@ -11,13 +11,13 @@ Updated: 2026-07-23
 ## Current Local Snapshot
 
 - Stable source candidate: `2.23.1`; the existing stable ZIP has not been rebuilt after the current compliance edits.
-- Tester source candidate: `2.23.1-test.52`, with its manifest and download prepared for `dm_forge/tester`.
+- Tester source candidate: `2.23.1-test.53`, with its manifest and download prepared for `dm_forge/tester`.
 - Hosted service: `1.6.1`; the public client allowance is now `500,000` metered usage units per calendar month, calibrated to roughly 50 prompts from the previous prompt-count baseline. The `10/minute` safeguard and separate `1,000,000,000` global daily ceiling remain in place; the private testing lane remains outside the public ledger.
 - Private testing candidate: safe compositional capabilities are advertised separately from the fourteen compatibility renderer routes. Prompt-count quotas have been replaced with provider-token or deterministic data-size usage metering. Cache hits and client-funded provider requests are uncharged.
 - Last completed verification suites passed `51/51` module tests and `215/215` AI-service tests locally. Tester `.52` is installed locally, and both Droplet services remain healthy after the public repair rollout and requested allowance change.
 - The source patch adds a capability-gated `SEND IT AGAIN!?` repair confirmation flow, fresh approval gating, and bounded report provenance. The public service now advertises `features.repairRerun` and `request.cacheControlRefresh`; a live smoke verified `200` then duplicate `409 repair_already_attempted`. The UUID capture design remains roadmap-only.
 - The local compliance audit covers AI-content classification, runtime approval, executable-output boundaries, token handling, diagnostics consent, external-provider disclosure, branding, and package contents.
-- The Dice Box Group selected MIT licensing. The notice and manifest references are present, and isolated stable/tester candidate archives were inspected locally. The existing stable repository release ZIP was not replaced. Tester build `2.23.1-test.52` is the local tester candidate; publication remains separate. The public and private Droplet processes were restarted from the verified source, with the public monthly allowance set to `500,000` metered usage units.
+- The Dice Box Group selected MIT licensing. The notice and manifest references are present, and isolated stable/tester candidate archives were inspected locally. The existing stable repository release ZIP was not replaced. Tester build `2.23.1-test.53` is the local tester candidate; the previous `.52` archive remains preserved. The public and private Droplet processes were restarted from the verified source, with the public monthly allowance set to `500,000` metered usage units.
 - The stable `main` lane still requires a separate approved release synchronization; do not treat the tester build as the stable public release.
 
 ## Beta V1 Sweep 004
@@ -47,7 +47,7 @@ Updated: 2026-07-23
 ## Publish Candidate
 
 - Stable release candidate: `2.23.1`
-- Current tester release: `2.23.1-test.52`
+- Current tester release: `2.23.1-test.53`
 - Module manifest target: `module/module.json`
 - Release ZIP: `releases/dungeon-masters-forge-v2-2.23.1.zip`
 - Existing stable ZIP SHA-256: `C597701CD56224D925B3270D6AAC26417E6E2FD94F5774E826BDD68529EC25C4` (not rebuilt during the current compliance audit)
@@ -116,7 +116,8 @@ Historical validation notes below still mention earlier `2.23.0-test.*` smoke pa
 - The reference AI service supports private server-key, personal client-key, and bounded public free-tier deployments. Service `1.6.1` is live on the official Droplet with the temporary Dice Box Group rollout and one bounded invalid-output retry; Hosted Forge remains disabled in the stable public module until the final release review is complete.
 - Cauldron of Plentiful Resources remains optional and deferred because its current release is incompatible with this Foundry version.
 - The roadmap now tracks charge-scaled multi-spell items where spell level is the default charge cost and extra charge spend can upcast supported SRD spells.
-- Exact-name SRD spell requests should prefer system-native spell activity provenance before falling back to synthesized activities when the Foundry DND5e schema allows it.
+- Exact-name SRD spell requests should use system-native spell activity provenance when it fully expresses the requested spell and remains reliable; otherwise use the best verified compatibility route and leave the fallback visible in review notes.
+- Automation routing is capability-based: native DND5e is selected for complete reliable mechanics, verified Midi-QOL/DAE/Item Macro layers are preferred when they supply missing workflow behavior, and portable core data is the explicit fallback when an advanced layer is unavailable or unverified.
 - Opt-in remote error report uploads are implemented with redaction, consent, rate limiting, and a configurable 30-day default retention window. They remain disabled unless the connected service explicitly enables the route.
 
 ## Validation
@@ -125,7 +126,7 @@ Historical validation notes below still mention earlier `2.23.0-test.*` smoke pa
 - The current workspace AI service suite passes `198` tests.
 - Public export module tests pass after the filename-surface sync to `dungeon-masters-forge.js`.
 - Public export AI service tests remain covered by the current workspace suite.
-- The current local tester candidate is `2.23.1-test.52`, installed locally after the aura-contract repair and allowance update.
+- The current local tester candidate is `2.23.1-test.53`, installed locally after capability routing and duplicate review-card removal.
 - The installed module manifest on disk matches the tester manifest target for `dungeon-masters-forge`.
 - Foundry Check Connection succeeds against `http://localhost:8788/v1/forge/compile`, and the saved Bring Your Own API selection survives a cold page reload.
 - A true remote compile succeeds in Foundry against service `1.3.0`: Live Ember Dagger returned as a validated `weaponExtraDamage` spec with the requested base and fire damage. No world document was created during the smoke test.

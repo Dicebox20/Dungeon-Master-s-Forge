@@ -2,6 +2,13 @@ import { ServiceError } from "./errors.mjs";
 
 const AUTOMATION_CONTRACT_VERSION = "1.0";
 const AUTOMATION_RECIPES = Object.freeze(["conditionOnHit", "selfTargetLight", "multiActivityResource", "daeTransferEffect", "animationVisual"]);
+const AUTOMATION_ROUTES = Object.freeze([
+  Object.freeze({ recipe: "conditionOnHit", layer: "Midi-QOL + Item Macro", dependencies: ["midi-qol", "itemacro"], fallback: "Core attack workflow with review" }),
+  Object.freeze({ recipe: "selfTargetLight", layer: "Item Macro", dependencies: ["itemacro"], fallback: "Portable light metadata with review" }),
+  Object.freeze({ recipe: "multiActivityResource", layer: "DND5e core", dependencies: [], fallback: "Core activities with review" }),
+  Object.freeze({ recipe: "daeTransferEffect", layer: "Dynamic Active Effects", dependencies: ["dae"], fallback: "Portable effect data with review" }),
+  Object.freeze({ recipe: "animationVisual", layer: "Automated Animations + Sequencer", dependencies: ["autoanimations", "sequencer"], fallback: "No animation with review" })
+]);
 const AUTOMATION_WORKFLOW_PASSES = Object.freeze(["postActiveEffects", "activity"]);
 const AUTOMATION_TARGET_SOURCES = Object.freeze(["hitTargets", "failedSaves", "self", "selectedTargets"]);
 const AUTOMATION_AUTHORITIES = Object.freeze(["workflow-roller", "gm", "local-trusted-engine"]);
@@ -92,7 +99,41 @@ function normalizeAutomationCapabilities(value) {
     daeAutomation: value.settings.daeAutomation === true,
     authorizeGeneratedAutomation: value.settings.authorizeGeneratedAutomation === true
   } : {};
-  return { version, supportedRecipes, activeModules, settings };
+  const routes = Array.isArray(value.routes)
+    ? value.routes.slice(0, AUTOMATION_RECIPES.length).map((route, index) => {
+      if (!object(route)) throw new ServiceError(400, "invalid_automation_capabilities", `context.automationCapabilities.routes[${index}] must be an object.`);
+      const recipe = String(route.recipe ?? "").trim();
+      if (!AUTOMATION_RECIPES.includes(recipe)) throw new ServiceError(400, "unknown_automation_recipe", "context.automationCapabilities.routes contains an unknown recipe.");
+      const dependencies = Array.isArray(route.dependencies) ? [...new Set(route.dependencies.map(String))] : [];
+      if (dependencies.some(entry => !AUTOMATION_DEPENDENCIES.includes(entry))) throw new ServiceError(400, "invalid_automation_capabilities", `context.automationCapabilities.routes.${recipe} contains an unsupported dependency.`);
+      return {
+        recipe,
+        layer: text(route.layer, "layer", 100, "context.automationCapabilities.routes"),
+        selectedLayer: text(route.selectedLayer ?? route.layer, "selectedLayer", 100, "context.automationCapabilities.routes"),
+        dependencies,
+        available: route.available === true,
+        status: route.status === "available" ? "available" : "fallback",
+        fallback: text(route.fallback ?? "Manual review", "fallback", 140, "context.automationCapabilities.routes"),
+        missingModules: Array.isArray(route.missingModules) ? [...new Set(route.missingModules.map(String))] : [],
+        missingSettings: Array.isArray(route.missingSettings) ? [...new Set(route.missingSettings.map(String))] : []
+      };
+    })
+    : [];
+  return { version, supportedRecipes, activeModules, settings, routes };
 }
 
-export { AUTOMATION_CONTRACT_VERSION, AUTOMATION_DEPENDENCIES, AUTOMATION_RECIPES, normalizeAutomationCapabilities, normalizeAutomationContract };
+function applyAutomationCapabilityRoute(contract, capabilities, path = "automation") {
+  if (!contract || !capabilities) return contract;
+  if (!capabilities.supportedRecipes.includes(contract.recipe)) {
+    throw new ServiceError(502, "invalid_model_output", `${path}.recipe "${contract.recipe}" was not advertised by the active Forge runtime.`);
+  }
+  const route = capabilities.routes?.find(candidate => candidate.recipe === contract.recipe);
+  if (!route) return contract;
+  if (route.available !== true) {
+    throw new ServiceError(502, "invalid_model_output", `${path}.recipe "${contract.recipe}" selected an unavailable ${route.layer} layer.`);
+  }
+  const requires = [...new Set([...(contract.requires ?? []), ...route.dependencies])];
+  return requires.length ? { ...contract, requires } : contract;
+}
+
+export { AUTOMATION_CONTRACT_VERSION, AUTOMATION_DEPENDENCIES, AUTOMATION_RECIPES, AUTOMATION_ROUTES, applyAutomationCapabilityRoute, normalizeAutomationCapabilities, normalizeAutomationContract };

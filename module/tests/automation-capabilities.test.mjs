@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildAutomationCapabilitySnapshot } from "../scripts/automation-capabilities.js";
+import { buildAutomationCapabilitySnapshot, resolveAutomationRoute } from "../scripts/automation-capabilities.js";
 
 function fakeGame() {
   const modules = new Map([
@@ -30,9 +30,34 @@ test("capability snapshots expose supported recipes and v14 compatibility warnin
   });
   assert.equal(snapshot.warnings.length, 2);
   assert.deepEqual(snapshot.modules.find(module => module.id === "midi-qol"), { id: "midi-qol", active: true, version: "14.0.11" });
+  assert.deepEqual(resolveAutomationRoute("conditionOnHit", snapshot), {
+    recipe: "conditionOnHit",
+    layer: "Midi-QOL + Item Macro",
+    selectedLayer: "Midi-QOL + Item Macro",
+    dependencies: ["midi-qol", "itemacro"],
+    dependencyLabels: ["Midi-QOL", "Item Macro"],
+    available: true,
+    status: "available",
+    fallback: "DND5e core attack and review note",
+    missingModules: [],
+    missingSettings: [],
+    reason: "The advertised layer is available in this world."
+  });
+  assert.equal(snapshot.providerContext.routes.find(route => route.recipe === "conditionOnHit").selectedLayer, "Midi-QOL + Item Macro");
 });
 
 test("capability snapshots do not advertise dependency-bound recipes when disabled", () => {
   const snapshot = buildAutomationCapabilitySnapshot({ game: fakeGame(), config: {} });
   assert.deepEqual(snapshot.supportedRecipes, ["multiActivityResource", "animationVisual"]);
+});
+
+test("capability routing can select Item Macro independently while preserving combined dependencies", () => {
+  const snapshot = buildAutomationCapabilitySnapshot({
+    game: fakeGame(),
+    config: { itemMacroAutomation: true }
+  });
+  assert.equal(snapshot.supportedRecipes.includes("conditionOnHit"), false);
+  assert.equal(snapshot.supportedRecipes.includes("selfTargetLight"), true);
+  assert.equal(resolveAutomationRoute("conditionOnHit", snapshot).selectedLayer, "DND5e core (fallback)");
+  assert.equal(resolveAutomationRoute("selfTargetLight", snapshot).selectedLayer, "Item Macro");
 });

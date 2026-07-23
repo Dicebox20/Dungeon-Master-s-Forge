@@ -5,7 +5,7 @@ import { validateRemoteContent } from "./remote-content-policy.mjs";
 import { analyzeRequestIntent } from "./request-intent.mjs";
 import { canonicalize } from "./result-cache.mjs";
 import { validateSpecStructure } from "./spec-validation.mjs";
-import { normalizeAutomationCapabilities, normalizeAutomationContract } from "./automation-contract.mjs";
+import { applyAutomationCapabilityRoute, normalizeAutomationCapabilities, normalizeAutomationContract } from "./automation-contract.mjs";
 
 const ID_PATTERN = /^[A-Za-z0-9]{16}$/;
 
@@ -3241,7 +3241,13 @@ function normalizeModelOutput(modelOutput, envelope, options = {}) {
         ? remoteSpec.description
         : envelope.request
     }, requestChunk), requestChunk, warnings, deferred), makeId);
-    if (spec.automation != null) spec.automation = normalizeAutomationContract(spec.automation, `$specs[${index}].automation`);
+    if (spec.automation != null) {
+      spec.automation = applyAutomationCapabilityRoute(
+        normalizeAutomationContract(spec.automation, `$specs[${index}].automation`),
+        envelope.context.automationCapabilities,
+        `$specs[${index}].automation`
+      );
+    }
     validateRemoteContent(spec, { path: `$specs[${index}]` });
     validateUnresolved(spec);
     validateSpecStructure(spec);
