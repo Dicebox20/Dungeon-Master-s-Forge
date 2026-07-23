@@ -104,8 +104,17 @@ const PROVIDERS = Object.freeze([
     label: HOSTED_RELEASE.label,
     mode: "network",
     available: HOSTED_RELEASE.enabled,
-    connection: Object.freeze({ endpoint: HOSTED_RELEASE.endpoint, model: HOSTED_RELEASE.model, apiToken: "" }),
+    connection: Object.freeze({ endpoint: HOSTED_RELEASE.endpoint, model: HOSTED_RELEASE.model, apiToken: "", membershipToken: "" }),
     configuration: Object.freeze([
+      Object.freeze({
+        id: "membershipToken",
+        label: "Forge membership token",
+        type: "password",
+        default: "",
+        persistence: "session",
+        secret: true,
+        required: false
+      }),
       Object.freeze({
         id: "unresolvedPolicy",
         label: "Unresolved mechanics",
@@ -203,6 +212,7 @@ function networkProviderConfiguration(providerId, configuration = {}) {
     endpoint: provider.connection?.endpoint ?? "",
     model: provider.connection?.model ?? "",
     apiToken: provider.connection?.apiToken ?? "",
+    membershipToken: normalized.membershipToken ?? "",
     unresolvedPolicy: normalized.unresolvedPolicy
   };
 }
@@ -230,6 +240,7 @@ async function compileWithProvider(request, options = {}) {
       ? await requestRemoteCapabilities({
         endpoint: connection.endpoint,
         token: connection.apiToken,
+        membershipToken: connection.membershipToken,
         supportedKinds: requestedKinds,
         fetchImpl: options.fetchImpl,
         timeoutMs: options.timeoutMs
@@ -239,6 +250,7 @@ async function compileWithProvider(request, options = {}) {
       endpoint: connection.endpoint,
       model: connection.model,
       token: connection.apiToken,
+      membershipToken: connection.membershipToken,
       unresolvedPolicy: connection.unresolvedPolicy,
       request: compileRequest,
       requestMode: options.requestMode,

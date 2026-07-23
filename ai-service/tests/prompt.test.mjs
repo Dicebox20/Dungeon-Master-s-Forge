@@ -90,6 +90,24 @@ test("prompt advertises only the local runtime's trusted automation recipes", ()
   assert.match(result, /must never contain executable code/);
 });
 
+test("prompt advertises only the local runtime's production automation templates", () => {
+  const result = buildSystemPrompt(validateForgeRequest(envelope({
+    context: {
+      ...envelope().context,
+      automationCapabilities: {
+        version: "1.0",
+        supportedRecipes: ["conditionOnHit"],
+        supportedTemplates: ["workflow-condition-rider"],
+        activeModules: ["midi-qol", "itemacro"],
+        settings: { midiQolAutomation: true, itemMacroAutomation: true }
+      }
+    }
+  })));
+  assert.match(result, /workflow-condition-rider: Workflow condition rider/);
+  assert.match(result, /include its templateId beside the matching recipe/);
+  assert.doesNotMatch(result, /actor-sourced-concentration-aura/);
+});
+
 test("repair prompt carries reviewed context without permitting executable behavior", () => {
   const request = "Create a rare torch called Ashen Mercy with a toggleable 20-foot bright light.";
   const result = validateForgeRequest(envelope({

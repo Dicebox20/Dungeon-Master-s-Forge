@@ -1,0 +1,103 @@
+Dungeon Master's Forge Automation Template Catalog
+
+These are automation templates, not item-family templates. An item-family template answers “what Foundry document is this?” An automation template answers “what behavior is this, when does it run, who does it affect, what does it spend, and how do we prove it worked?”
+
+PRODUCTION TEMPLATES
+
+1. workflow-condition-rider
+Category: workflow-rider
+Capability IDs: C04, C05
+Recipe: conditionOnHit
+Trigger: attack-hit
+Target model: hit targets, optionally filtered by creature type
+Required fields: condition, save, duration, targetFilter
+Route: Midi-QOL + Item Macro when advertised; core attack workflow with review otherwise
+Proof: save is an object; condition reaches only eligible targets; duration is preserved and expires
+
+2. self-token-light-toggle
+Category: stateful-self-effect
+Capability IDs: C03, C10, C14
+Recipe: selfTargetLight
+Trigger: utility activation
+Target model: wielder's actor token
+Required fields: bright light, dim light, duration, toggle state
+Route: Item Macro when advertised; portable light metadata with review otherwise
+Proof: the actor token is the source; the toggle is reversible; no unrelated target dialog appears
+
+3. shared-charge-activity-set
+Category: resource-and-activity
+Capability IDs: C01, C02, C11
+Recipe: multiActivityResource
+Trigger: named activity activation
+Target model: defined by each activity
+Required fields: named activities, charge cost, shared uses, recovery
+Route: native DND5e
+Proof: every named power has its own activity; the intended charge pool is spent once; recovery is stored once
+
+4. attunement-effect-transfer
+Category: passive-transfer
+Capability IDs: C06, C08, C13
+Recipe: daeTransferEffect
+Trigger: effect application
+Target model: equipped item or actor
+Required fields: effect changes, duration, transfer target, attunement gate
+Route: DAE when advertised; native effect data with review otherwise
+Proof: approved system paths are used; attunement controls transfer; removal is idempotent
+
+PLANNED TEMPLATE
+
+5. animation-presentation
+Category: presentation
+Capability IDs: C14
+Recipe: animationVisual
+Trigger: activity activation
+Target model: activity-defined source and target
+Required fields: animation name, source, target, fallback presentation
+Route: Automated Animations + Sequencer when advertised; no animation with review otherwise
+Promotion blockers: the module has no trusted animation renderer handoff yet; visual metadata, source/target mapping, asset fallback, and no-state-change behavior need a focused renderer and harness proof
+
+PLANNED TEMPLATES
+
+6. actor-sourced-concentration-aura
+Category: area-and-duration
+Capability IDs: C03, C08, C09
+Trigger: hostile creature starts its turn inside the area
+Target model: hostile creatures inside a radius; the actor token is the origin
+Required fields: origin token, radius, target filter, damage, concentration, end condition
+Promotion blockers: once-per-turn tick, wielder immunity, concentration termination, and source-token behavior need a trusted route and harness proof
+
+7. reaction-damage-protection
+Category: reaction-and-interrupt
+Capability IDs: C03, C07, C19
+Trigger: ally takes damage
+Target model: selected ally within range
+Required fields: reaction, range, reduction formula, uses, target prompt
+Promotion blockers: reaction window, target selection, use recovery, and damage interception must be verified together
+
+8. linked-uuid-activation
+Category: world-linkage
+Capability IDs: C16, C19
+Trigger: item activation
+Target model: declared Actor, Token, Tile, Wall, Door, Lock, Region, or other supported document
+Required fields: UUID, document type, ownership, missing-document fallback
+Promotion blockers: UUID capture, type validation, ownership checks, GM confirmation, and no-write-on-missing-link behavior
+
+9. profile-selection-branch
+Category: branching-and-choice
+Capability IDs: C11, C12
+Trigger: activity activation
+Target model: user-selected profile
+Required fields: profiles, selection prompt, profile resources, cancel behavior
+Promotion blockers: explicit selection, independent profile validation, and no resource spend on cancel
+
+10. reviewed-trusted-action
+Category: trusted-execution
+Capability IDs: C17, C20
+Trigger: explicit user confirmation
+Target model: declared world document
+Required fields: reviewed code, unchecked review box, permissions, confirmation copy
+Promotion blockers: this remains a reviewed GM action; provider output must never execute automatically
+
+QUESTIONNAIRE RULE
+
+For every prompt containing more than one mechanic, record one block per capability. Include the automation template ID when a production template is selected, the route and required modules, the target/source, resource owner, lifecycle, structural result, live result, review-note result, and final status.

@@ -418,9 +418,16 @@ function summarizeSpec(spec, context = {}) {
     ...references,
     ...unresolved
   ];
-  const automationRoute = resolveAutomationRoute(spec.automation, context.automationCapabilities);
-  const automationNote = automationReviewNote(spec.automation, automationRoute);
-  if (automationNote) notes.push(automationNote);
+  const automationContracts = [
+    ...(spec.automation ? [spec.automation] : []),
+    ...(Array.isArray(spec.automationRoutes) ? spec.automationRoutes : [])
+  ].filter((contract, index, all) => contract?.recipe && all.findIndex(candidate => candidate?.recipe === contract.recipe) === index);
+  const resolvedAutomationRoutes = automationContracts
+    .map(contract => resolveAutomationRoute(contract, context.automationCapabilities));
+  for (let index = 0; index < automationContracts.length; index += 1) {
+    const automationNote = automationReviewNote(automationContracts[index], resolvedAutomationRoutes[index] ?? null);
+    if (automationNote) notes.push(automationNote);
+  }
   const hasActivePowers = [
     ...(spec.activities ?? []),
     ...(spec.attackActivities ?? []),
@@ -457,7 +464,8 @@ function summarizeSpec(spec, context = {}) {
     notes,
     unresolvedCount: unresolved.length,
     unresolvedLabels,
-    automationRoute,
+    automationRoute: resolvedAutomationRoutes.find(Boolean) ?? null,
+    automationRoutes: resolvedAutomationRoutes.filter(Boolean),
     reviewState: unresolved.length ? "manual-review" : "forge-ready",
     reviewStateLabel: unresolved.length
       ? `${unresolved.length} manual review ${unresolved.length === 1 ? "note" : "notes"}`

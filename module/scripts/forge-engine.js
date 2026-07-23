@@ -9,7 +9,8 @@ import { MODULE_ID, readForgeFlags } from "./package-identity.js";
 import { armorBonusValue, inferArmorProfile, isImplementCategory, normalizeItemDocumentType, normalizeMagicalBonus, normalizeWeight, safeItemIcon } from "./equipment-normalization.js";
 import { resolveActorByName, resolveDocumentFromMatch } from "./content-resolver.js";
 import { sanitizeForgeSpec } from "./forge-spec-integrity.js";
-import { normalizeAutomationContract } from "./automation-contract.js";
+import { normalizeAutomationMetadata } from "./automation-contract.js";
+import { automationExecutionEntry, buildAutomationExecutionPlan } from "./automation-execution.js";
 import { assertPreflight, preflightDocumentSource, preflightDocumentUpdate } from "./document-preflight.js";
 
 const CHOOSER_ACTIVITY_LISTS = Object.freeze(["attackActivities", "saveActivities", "utilityActivities", "activities"]);
@@ -512,6 +513,7 @@ async function runDungeonMastersForge(FORGE, ITEMS, { validateOnly = false, auth
             unresolvedMechanics: foundry.utils.deepClone(spec.unresolvedMechanics)
           } : {}),
           ...(spec.automation ? { automation: foundry.utils.deepClone(spec.automation) } : {}),
+          ...(Array.isArray(spec.automationRoutes) ? { automationRoutes: foundry.utils.deepClone(spec.automationRoutes) } : {}),
           createdAt: new Date().toISOString()
         }
       }, { inplace: false })
@@ -1381,7 +1383,7 @@ ${activitySpec.macroCommand}
       target: targetData(activitySpec.target),
       uses: { spent: 0, max: "", recovery: [] },
       roll: { prompt: false, visible: false, name: "", formula: "" },
-      ...(activitySpec.macroCommand ? {
+      ...(activitySpec.macroCommand && itemMacroAutomation ? {
         macroData: {
           name: activitySpec.macroName ?? activitySpec.activityName ?? `Use ${spec.name}`,
           command: guardedUtilityMacroCommand(activitySpec)
@@ -1582,7 +1584,7 @@ ${activitySpec.macroCommand}
         parts: (spec.extraDamageParts ?? []).map(damageData)
       },
       target: targetData(baseTarget),
-      ...(spec.conditionOnHit ? {
+      ...(spec.conditionOnHit && automationExecutionEntry(buildAutomationExecutionPlan(spec, FORGE), "conditionOnHit", spec.attackName ?? `Attack with ${spec.name}`) ? {
         macroData: {
           name: spec.conditionOnHit.macroName ?? "Condition On Hit",
           command: conditionMacroCommand(spec)
@@ -2149,10 +2151,12 @@ ui.notifications.info(ITEM_NAME + " light toggled on.");
       target: targetData(toggle.target ?? { affects: { count: "1", type: "self" }, prompt: false }),
       uses: { spent: 0, max: "", recovery: [] },
       roll: { prompt: false, visible: false, name: "", formula: "" },
-      macroData: {
-        name: toggle.macroName ?? toggle.activityName ?? "Toggle Light",
-        command: toggleLightMacroCommand(spec.name, toggle)
-      },
+      ...(automationExecutionEntry(buildAutomationExecutionPlan(spec, FORGE), "selfTargetLight", toggle.activityName ?? "Toggle Light") ? {
+        macroData: {
+          name: toggle.macroName ?? toggle.activityName ?? "Toggle Light",
+          command: toggleLightMacroCommand(spec.name, toggle)
+        }
+      } : {}),
       visibility: {
         identifier: "",
         level: { min: null, max: null },
@@ -2369,7 +2373,8 @@ if (TARGET_CREATURE_TYPE && matchingTargets === 0) {
   function generatedAutomationCode(specs) {
     const entries = [];
     for (const spec of specs ?? []) {
-      if (spec.conditionOnHit) {
+      const plan = buildAutomationExecutionPlan(spec, FORGE);
+      if (automationExecutionEntry(plan, "conditionOnHit", spec.attackName ?? `Attack with ${spec.name}`)) {
         entries.push({
           itemName: spec.name,
           activityName: spec.attackName ?? `Attack with ${spec.name}`,
@@ -2377,7 +2382,7 @@ if (TARGET_CREATURE_TYPE && matchingTargets === 0) {
           command: conditionMacroCommand(spec)
         });
       }
-      if (spec.toggleLight) {
+      if (automationExecutionEntry(plan, "selfTargetLight", spec.toggleLight?.activityName ?? "Toggle Light")) {
         entries.push({
           itemName: spec.name,
           activityName: spec.toggleLight.activityName ?? "Toggle Light",
@@ -2386,7 +2391,7 @@ if (TARGET_CREATURE_TYPE && matchingTargets === 0) {
         });
       }
       for (const activity of spec.utilityActivities ?? []) {
-        if (!activity?.macroCommand) continue;
+        if (!activity?.macroCommand || !automationExecutionEntry(plan, "utilityMacro", activity.activityName ?? `Use ${spec.name}`)) continue;
         entries.push({
           itemName: spec.name,
           activityName: activity.activityName ?? `Use ${spec.name}`,
@@ -2569,11 +2574,7 @@ if (TARGET_CREATURE_TYPE && matchingTargets === 0) {
     };
   }
 
-  const preparedItems = ITEMS.map(spec => {
-    const sanitized = sanitizeForgeSpec(spec).spec;
-    const automation = normalizeAutomationContract(sanitized.automation);
-    return automation ? { ...sanitized, automation } : sanitized;
-  });
+  const preparedItems = ITEMS.map(spec => normalizeAutomationMetadata(sanitizeForgeSpec(spec).spec));
   validateSpecs(preparedItems);
   const automationCodePreview = generatedAutomationCode(preparedItems);
 

@@ -4,7 +4,7 @@ Welcome, and thank you for helping us test Dungeon Master's Forge. This is a tem
 
 See the [public tester list](testers.md) for the people currently helping with testing.
 
-The current public tester build is **2.23.1-test.56**. This is a review-first tool: it prepares Foundry data for you to inspect, but it does not replace your rules judgment or create anything until you approve it.
+The current public tester build is **2.23.1-test.62**. This is a review-first tool: it prepares Foundry data for you to inspect, but it does not replace your rules judgment or create anything until you approve it.
 
 ## Contents
 
@@ -12,6 +12,7 @@ The current public tester build is **2.23.1-test.56**. This is a review-first to
 - [Install the Tester Build](#install-the-tester-build)
 - [Run Your First Test](#run-your-first-test)
 - [Prompt Guidelines](#prompt-guidelines)
+- [Feature Menu](DMF_FEATURE_MENU_FOR_TESTERS.md)
 - [What Free Forge Can Do](#what-free-forge-can-do)
 - [Current Free Forge Limits](#current-free-forge-limits)
 - [What We Need From Testers](#what-we-need-from-testers)
@@ -46,9 +47,11 @@ Our goal is to make Foundry item creation easier for people who are not comforta
 7. Confirm that the provider is **Free Forge**.
 8. Click **Check Connection** before your first live test.
 
-The current tester build is `2.23.1-test.56`. Free Forge does not require a personal endpoint, API token, or OpenAI key.
+The current tester build is `2.23.1-test.62`. Free Forge does not require a personal endpoint, API token, or OpenAI key.
 
 For a first session, run one simple item, one item with charges or healing, and one more complicated item with a mechanic you are comfortable checking in Foundry. Stop and review whenever the Forge marks a mechanic for manual review.
+
+Use the [Dungeon Master's Forge Feature Menu](DMF_FEATURE_MENU_FOR_TESTERS.md) when you want to choose a specific item feature or automation behavior.
 
 ## Run Your First Test
 
@@ -130,7 +133,7 @@ The service also has temporary safety limits:
 - fresh model work can use allowance even when the result needs review; cached results do not
 - complex, unsupported, or ambiguous mechanics may be preserved as a warning, Free Forge limitation, or manual-review note
 - exact SRD summons require an installed DND5e SRD actor with the expected name
-- the service does not create macros, scripts, automatic migrations, campaign content, or unsafe executable data
+- the service does not create macros, scripts, automatic migrations, campaign content, or unsafe executable data; supported trusted automation is materialized locally only when the current world has the required modules and settings
 
 If you have your own compatible API setup, **Bring Your Own API** does not use the hosted Free Forge allowance. Your provider's own billing, usage limits, and terms still apply. A ChatGPT or Claude subscription does not automatically become API credit.
 
@@ -148,6 +151,19 @@ Please try both straightforward prompts and prompts with unusual wording, typos,
 
 For each test, please look at the preview before creation. When possible, open the created item and try the relevant activity safely. We are especially interested in whether the item looks right in Foundry and whether the activity behaves as expected.
 
+## Automation Questionnaires
+
+For focused automation testing, use the [one-at-a-time automation sweep and questionnaires](AUTOMATION_ONE_AT_A_TIME_SWEEP_2026-07-23.md). Run one prompt at a time with a fresh item name and run tag. Answer every question with `PASS`, `PARTIAL`, `MANUAL`, `FAIL`, or `NOT TESTED` so results can be compared across testers.
+
+The questionnaires check four stages separately:
+
+- Preview: item name, item type, activities, effects, review notes, selected automation layer, and required modules.
+- Foundry document: imported fields, resources, targeting, saving throws, effects, and other stored data.
+- Live behavior: what the activity actually does when used safely in Foundry.
+- Review quality: whether the Forge accurately identifies supported behavior, assumptions, fallbacks, and real blockers.
+
+Do not mark an item `PASS` because it imported successfully. Use `PARTIAL` when the base item works but an automation is missing or manual, and use `FAIL` when the result is unusable or contradicts the prompt.
+
 ## Repair a Result
 
 Use **Retry** when the reviewed result is close to the original request but one or more mechanics are wrong, missing, or mapped incorrectly. Retry is not approval, it is not an automatic hidden retry, and it is not for starting a different item.
@@ -162,6 +178,42 @@ Use **Retry** when the reviewed result is close to the original request but one 
 8. When the repaired result returns to preview, read its review notes and validation findings again. Check **Approve** only after the repaired result is correct, then click **Create Items** if you want to create it.
 
 The repair request uses the hosted allowance like other fresh model work. A failed repair does not create or execute anything automatically. If the dialog reports an error, record the visible message and request ID, take the immediate structured snapshot, and do not keep resending the same repair for that preview. Never include passwords, API keys, or private campaign details in repair notes.
+
+### Retry Questionnaire
+
+Complete this after a result is wrong or incomplete, before and after sending one repair request:
+
+```text
+Item name and run tag:
+
+Original requested behavior:
+
+What the preview or Foundry document did:
+
+What should it have done:
+
+Which stage failed? Preview / Foundry document / Live behavior / Review notes
+
+Did the original item name remain unchanged? PASS / PARTIAL / FAIL / NOT TESTED
+Did the base item import or create successfully? PASS / PARTIAL / FAIL / NOT TESTED
+Did the affected activity, effect, resource, target, or trigger appear? PASS / PARTIAL / FAIL / NOT TESTED
+Did the affected behavior work in Foundry? PASS / PARTIAL / FAIL / NOT TESTED
+Did the preview identify the correct automation layer and required modules? PASS / PARTIAL / FAIL / NOT TESTED
+Did the review notes describe the actual problem without unrelated blockers? PASS / PARTIAL / FAIL / NOT TESTED
+
+Repair note sent:
+
+Did the repaired result return for fresh review? PASS / FAIL / NOT TESTED
+Did the repaired result preserve the correct name and base item? PASS / PARTIAL / FAIL / NOT TESTED
+Did the repaired behavior work after fresh review? PASS / PARTIAL / MANUAL / FAIL / NOT TESTED
+Was a new error, mismatch, or regression introduced? YES / NO
+Request ID or visible error:
+
+Final status: PASS / PARTIAL / MANUAL / FAIL / NOT TESTED
+Evidence or failure details:
+```
+
+Send only one repair request for a reviewed result. If it still fails, stop and report the result rather than repeatedly resending the same prompt.
 
 ### Anonymous Error Reports
 

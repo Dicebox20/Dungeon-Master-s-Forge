@@ -76,6 +76,8 @@ assert.match(leadingTitle.normalizedRequest, /Item name: Wand of Searing Hail/);
 
 const quotedNamedItem = normalizeItemRequest('Create a legendary trident named "Frostwave Trident" with 12 charges that regains 1d8 + 4 charges daily at dawn.');
 assert.match(quotedNamedItem.normalizedRequest, /Item name: Frostwave Trident/);
+const smartQuotedField = normalizeItemRequest('Item name: “Winterwake Staff [API-TEST-01]”\nBase item: Staff\nRarity: Rare');
+assert.match(smartQuotedField.normalizedRequest, /Item name: Winterwake Staff \[API-TEST-01\]/);
 
 const slang = normalizeItemRequest("Make an uncommon ring called Skipstone. The wearer can bamf with Misty Step once a day. It has 4 charges and at dawn, roll 1d4 and put that many charges back. While worn, it lets the user shrug off fire damage.");
 assert.match(slang.normalizedRequest, /Spell: Misty Step/);

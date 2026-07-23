@@ -1,0 +1,173 @@
+const AUTOMATION_TEMPLATE_VERSION = "1.0";
+
+// Templates describe behavior contracts, not executable code. A template may
+// be advertised only when its recipe already has a trusted renderer route.
+const AUTOMATION_TEMPLATES = Object.freeze([
+  Object.freeze({
+    id: "workflow-condition-rider",
+    label: "Workflow condition rider",
+    category: "workflow-rider",
+    capabilityIds: ["C04", "C05"],
+    recipes: ["conditionOnHit"],
+    status: "production",
+    trigger: "attack-hit",
+    targetModel: "hitTargets",
+    fields: ["condition", "save", "duration", "targetFilter"],
+    requiredModules: ["midi-qol", "itemacro"],
+    fallback: "Core attack workflow with review",
+    reviewChecks: ["save is an object", "condition is applied only to eligible hit targets", "duration is preserved"]
+  }),
+  Object.freeze({
+    id: "self-token-light-toggle",
+    label: "Self-token light toggle",
+    category: "stateful-self-effect",
+    capabilityIds: ["C03", "C10", "C14"],
+    recipes: ["selfTargetLight"],
+    status: "production",
+    trigger: "utility-activation",
+    targetModel: "self",
+    fields: ["brightLight", "dimLight", "duration", "toggleState"],
+    requiredModules: ["itemacro"],
+    fallback: "Portable light metadata with review",
+    reviewChecks: ["source is the actor token", "toggle is reversible", "no extra target dialog is introduced"]
+  }),
+  Object.freeze({
+    id: "shared-charge-activity-set",
+    label: "Shared-charge activity set",
+    category: "resource-and-activity",
+    capabilityIds: ["C01", "C02", "C11"],
+    recipes: ["multiActivityResource"],
+    status: "production",
+    trigger: "activity-activation",
+    targetModel: "activity-defined",
+    fields: ["namedActivities", "chargeCost", "sharedUses", "recovery"],
+    requiredModules: [],
+    fallback: "DND5e core",
+    reviewChecks: ["each named power has its own activity", "all activities draw from the intended pool", "recovery is stored once on the shared pool"]
+  }),
+  Object.freeze({
+    id: "attunement-effect-transfer",
+    label: "Attunement effect transfer",
+    category: "passive-transfer",
+    capabilityIds: ["C06", "C08", "C13"],
+    recipes: ["daeTransferEffect"],
+    status: "production",
+    trigger: "effect-application",
+    targetModel: "equipped-item-or-actor",
+    fields: ["changes", "duration", "transferTarget", "attunementGate"],
+    requiredModules: ["dae"],
+    fallback: "DND5e core effect with manual review",
+    reviewChecks: ["effect changes use approved system paths", "attunement controls transfer", "effect removal is idempotent"]
+  }),
+  Object.freeze({
+    id: "animation-presentation",
+    label: "Animation presentation",
+    category: "presentation",
+    capabilityIds: ["C14"],
+    recipes: ["animationVisual"],
+    status: "planned",
+    trigger: "activity-activation",
+    targetModel: "activity-defined",
+    fields: ["animationName", "source", "target", "fallbackPresentation"],
+    requiredModules: ["autoanimations", "sequencer"],
+    fallback: "No animation with review",
+    reviewChecks: ["visual effect never changes game state", "missing assets fall back cleanly", "activity still works without the visual layer"]
+  }),
+  Object.freeze({
+    id: "actor-sourced-concentration-aura",
+    label: "Actor-sourced concentration aura",
+    category: "area-and-duration",
+    capabilityIds: ["C03", "C08", "C09"],
+    recipes: [],
+    status: "planned",
+    trigger: "turn-start-inside-area",
+    targetModel: "hostile-creatures-in-radius",
+    fields: ["originToken", "radius", "targetFilter", "damage", "concentration", "endCondition"],
+    requiredModules: ["dae"],
+    fallback: "Area activity with manual aura review",
+    reviewChecks: ["origin is the actor token", "wielder immunity is explicit", "damage applies once per turn", "aura ends with concentration"]
+  }),
+  Object.freeze({
+    id: "reaction-damage-protection",
+    label: "Reaction damage protection",
+    category: "reaction-and-interrupt",
+    capabilityIds: ["C03", "C07", "C19"],
+    recipes: [],
+    status: "planned",
+    trigger: "ally-damage-taken",
+    targetModel: "selected-ally-within-range",
+    fields: ["reaction", "range", "damageReduction", "uses", "targetPrompt"],
+    requiredModules: ["midi-qol"],
+    fallback: "Reaction activity with manual target and use tracking review",
+    reviewChecks: ["reaction window is offered", "ally target is selected before reduction", "uses recover correctly"]
+  }),
+  Object.freeze({
+    id: "linked-uuid-activation",
+    label: "Linked UUID activation",
+    category: "world-linkage",
+    capabilityIds: ["C16", "C19"],
+    recipes: [],
+    status: "planned",
+    trigger: "item-activation",
+    targetModel: "declared-world-document",
+    fields: ["uuid", "documentType", "ownership", "missingDocumentFallback"],
+    requiredModules: [],
+    fallback: "Show the UUID and require GM confirmation",
+    reviewChecks: ["UUID resolves to the declared document type", "ownership is checked", "missing links do not write to the world"]
+  }),
+  Object.freeze({
+    id: "profile-selection-branch",
+    label: "Profile selection branch",
+    category: "branching-and-choice",
+    capabilityIds: ["C11", "C12"],
+    recipes: [],
+    status: "planned",
+    trigger: "activity-activation",
+    targetModel: "user-selected-profile",
+    fields: ["profiles", "selectionPrompt", "profileResources", "cancelBehavior"],
+    requiredModules: [],
+    fallback: "Separate reviewed activities for each profile",
+    reviewChecks: ["selection is explicit", "each profile is independently valid", "cancel does not spend resources"]
+  }),
+  Object.freeze({
+    id: "reviewed-trusted-action",
+    label: "Reviewed trusted action",
+    category: "trusted-execution",
+    capabilityIds: ["C17", "C20"],
+    recipes: [],
+    status: "planned",
+    trigger: "explicit-user-confirmation",
+    targetModel: "declared-world-document",
+    fields: ["reviewedCode", "reviewedCheckbox", "requiredPermissions", "confirmationCopy"],
+    requiredModules: [],
+    fallback: "Keep the action as a visible macro preview for GM execution",
+    reviewChecks: ["code is shown before execution", "review checkbox is not preselected", "execution requires explicit confirmation", "no provider code executes automatically"]
+  })
+]);
+
+const AUTOMATION_PRODUCTION_TEMPLATES = Object.freeze(
+  AUTOMATION_TEMPLATES.filter(template => template.status === "production")
+);
+
+function automationTemplateById(id) {
+  return AUTOMATION_TEMPLATES.find(template => template.id === String(id ?? "").trim()) ?? null;
+}
+
+function automationTemplateForRecipe(recipe) {
+  return AUTOMATION_PRODUCTION_TEMPLATES.find(template => template.recipes.includes(recipe)) ?? null;
+}
+
+function automationTemplatePromptText(templates = AUTOMATION_PRODUCTION_TEMPLATES) {
+  return templates.map(template =>
+    `${template.id}: ${template.label}; category=${template.category}; capabilities=${template.capabilityIds.join(",")}; trigger=${template.trigger}; target=${template.targetModel}; fields=${template.fields.join(",")}`
+  ).join("\n");
+}
+
+export {
+  AUTOMATION_PRODUCTION_TEMPLATES,
+  AUTOMATION_TEMPLATE_VERSION,
+  AUTOMATION_TEMPLATES,
+  automationTemplateById,
+  automationTemplateForRecipe,
+  automationTemplatePromptText
+};

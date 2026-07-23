@@ -74,6 +74,13 @@ test("explicit item names cannot be silently rewritten", () => {
     error.code === "item_name_mismatch" && /Ember Edge/.test(error.message));
 });
 
+test("smart quotes around an explicit item name are presentation-only", () => {
+  const payload = envelope({ request: "Item name: “Winterwake Staff [API-TEST-01]”\nBase item: Staff" });
+  const request = validateForgeRequest(payload);
+  const result = normalizeModelOutput({ specs: [weapon("Winterwake Staff [API-TEST-01]")] }, request);
+  assert.equal(result.specs[0].name, "Winterwake Staff [API-TEST-01]");
+});
+
 test("mock mode returns one valid fixture per requested item", async () => {
   const request = validateForgeRequest(envelope({
     request: "Item name: Ember Edge\nDamage: fire\n\nItem name: Winter Edge\nDamage: cold"

@@ -45,15 +45,25 @@ function applyDocumentUpdate(source, updateData, runtime = globalThis) {
   return next;
 }
 
-function normalizeValidationFailures(failures) {
+function normalizeValidationFailures(failures, prefix = "") {
   if (!failures) return [];
-  if (failures instanceof Map) return [...failures.entries()].map(([path, message]) => ({ path, message: String(message) }));
-  if (Array.isArray(failures)) return failures.map((failure, index) => ({
-    path: String(failure?.path ?? failure?.key ?? index),
-    message: String(failure?.message ?? failure?.error ?? failure)
-  }));
-  if (typeof failures === "object") return Object.entries(failures).map(([path, message]) => ({ path, message: String(message) }));
-  return [{ path: "document", message: String(failures) }];
+  if (failures instanceof Map) {
+    return [...failures.entries()].flatMap(([path, message]) => normalizeValidationFailures(message, joinPath(prefix, path)));
+  }
+  if (Array.isArray(failures)) {
+    return failures.flatMap((failure, index) => normalizeValidationFailures(failure, joinPath(prefix, failure?.path ?? failure?.key ?? index)));
+  }
+  if (typeof failures === "object") {
+    return Object.entries(failures).flatMap(([path, message]) => normalizeValidationFailures(message, joinPath(prefix, path)));
+  }
+  return [{ path: prefix || "document", message: String(failures) }];
+}
+
+function joinPath(prefix, path) {
+  const next = String(path ?? "").trim();
+  if (!prefix) return next;
+  if (!next) return prefix;
+  return `${prefix}.${next}`;
 }
 
 function preflightDocumentSource({ DocumentClass, source, parent = null, strict = true, runtime = globalThis } = {}) {

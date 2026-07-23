@@ -55,6 +55,8 @@ import { applyDefaultLeveledSpellCharges, applyForgeSpecDefaults, autoSelectSrdC
 import { applyBaseChassisFallbackArt, applyCategoryItemFallbackArt, applyConsumableProjectileFallbackArt, applyFallbackActivityArt, applySpellActivityArt, applySystemEquipmentArt, needsFallbackItemArt } from "./system-art-enrichment.js";
 import { openSceneRegionForge } from "./scene-region-forge.js";
 import { buildAutomationCapabilitySnapshot, resolveAutomationRoute } from "./automation-capabilities.js";
+import { normalizeAutomationMetadata } from "./automation-contract.js";
+import { buildAutomationExecutionPlan } from "./automation-execution.js";
 import {
   PREVIOUS_PACKAGE_ID,
   MODULE_ID,
@@ -213,7 +215,7 @@ function registerSettings() {
 
   registerSetting("enableVerificationHarness", {
     name: "Enable isolated Beta verification harness",
-    hint: "Allows a GM to create tagged disposable test copies only in the configured test world. It never runs item activities, macros, Scenes, or Regions automatically.",
+    hint: "Allows a GM to create tagged disposable test copies and explicitly run a named test macro only in the configured test world. It never auto-selects targets, places tokens, or runs anything without a GM request.",
     scope: "world",
     config: true,
     type: Boolean,
@@ -292,6 +294,13 @@ function registerSettings() {
     default: ""
   });
 
+  registerSetting("providerMembershipToken", {
+    scope: "client",
+    config: false,
+    type: String,
+    default: ""
+  });
+
   registerSetting("anonymousErrorReports", {
     scope: "client",
     config: false,
@@ -317,6 +326,12 @@ function currentProviderToken({ rememberProviderToken } = {}) {
   return providerSessionConfiguration.get("bring-your-own")?.apiToken || rememberedProviderToken;
 }
 
+function currentProviderMembershipToken() {
+  return providerSessionConfiguration.get(HOSTED_PROVIDER_ID)?.membershipToken
+    || game.settings.get(MODULE_ID, "providerMembershipToken")
+    || "";
+}
+
 function currentAnonymousErrorReportsEnabled() {
   return game.settings.get(MODULE_ID, "anonymousErrorReports") === true;
 }
@@ -328,6 +343,7 @@ function configuredProviderState(overrides = {}) {
     endpoint: (overrides.endpoint ?? game.settings.get(MODULE_ID, "providerEndpoint")) || "",
     model: (overrides.model ?? game.settings.get(MODULE_ID, "providerModel")) || "",
     apiToken: overrides.apiToken ?? currentProviderToken({ rememberProviderToken: rememberApiToken }),
+    membershipToken: overrides.membershipToken ?? currentProviderMembershipToken(),
     unresolvedPolicy: overrides.unresolvedPolicy ?? currentUnresolvedPolicy()
   };
   return {
@@ -416,7 +432,7 @@ function repairSpecsForValidation(specs, requestText = "") {
 
 async function prepareSpecsForForge(input, requestText = "") {
   const repairedSpecs = repairSpecsForValidation(normalizeSpecs(input), requestText);
-  return enrichSpecsWithSystemReferences(repairedSpecs, requestText);
+  return enrichSpecsWithSystemReferences(repairedSpecs, requestText).map(normalizeAutomationMetadata);
 }
 
 function currentConfig(overrides = {}) {
@@ -468,6 +484,15 @@ async function setupIsolatedVerificationHarness(overrides = {}) {
   return harness.setupVerificationHarness(verificationHarnessEnvironment(overrides));
 }
 
+async function setupIsolatedVerificationActors(runTag, overrides = {}) {
+  assertEnvironment({ requireGM: true });
+  const harness = await loadVerificationHarness();
+  return harness.createVerificationFixtureActors({
+    ...verificationHarnessEnvironment(overrides),
+    runTag
+  });
+}
+
 async function runIsolatedVerificationHarness(specs, { runTag, ...overrides } = {}) {
   assertEnvironment({ requireGM: true });
   const harness = await loadVerificationHarness();
@@ -493,6 +518,17 @@ async function runIsolatedVerificationHarness(specs, { runTag, ...overrides } = 
       // The isolated harness only creates tagged documents and never executes activities.
       authorizeGeneratedAutomation: true
     })
+  });
+}
+
+async function executeIsolatedVerificationMacro({ macroId, macroName, args = {}, ...overrides } = {}) {
+  assertEnvironment({ requireGM: true });
+  const harness = await loadVerificationHarness();
+  return harness.executeVerificationMacro({
+    ...verificationHarnessEnvironment(overrides),
+    macroId,
+    macroName,
+    args
   });
 }
 
@@ -531,9 +567,22 @@ function dependencyWarnings(specs) {
     fallback: "DND5e core utility activity with manual review"
   });
   for (const spec of specs) {
-    if (!spec.automation) continue;
-    const route = resolveAutomationRoute(spec.automation, capabilities);
-    if (route) routes.push(route);
+    const automationRoutes = [
+      ...(spec.automation ? [spec.automation] : []),
+      ...(Array.isArray(spec.automationRoutes) ? spec.automationRoutes : [])
+    ];
+    for (const automation of automationRoutes) {
+      const route = resolveAutomationRoute(automation, capabilities);
+      if (route) routes.push(route);
+    }
+    const executionPlan = buildAutomationExecutionPlan(spec, {
+      midiQolAutomation: midiQolAutomationEnabled(),
+      itemMacroAutomation: moduleIsActive("itemacro")
+    });
+    for (const fallback of executionPlan.fallbacks ?? []) {
+      if (!fallback.missingFields?.length) continue;
+      warnings.push(`${spec.name} requested ${fallback.recipe} automation, but the declarative ${fallback.missingFields.join(", ")} payload was not supplied. No executable code was generated; review the specification before creation.`);
+    }
   }
   const seen = new Set();
   for (const route of routes.filter(Boolean)) {
@@ -650,6 +699,7 @@ function forgeCapacitySnapshot(usage = {}) {
         : `Forge Capacity: ${percent}% remaining`;
   return {
     percent,
+    tier: String(usage?.tier ?? "free") === "paid-capacity" ? "paid-capacity" : "free",
     state: percent <= 25 ? "warning" : "ready",
     message
   };
@@ -662,8 +712,11 @@ function renderForgeCapacity(dialog, usage = {}) {
   output.hidden = !snapshot;
   if (!snapshot) return;
   output.dataset.state = snapshot.state;
+  output.dataset.tier = snapshot.tier;
   output.textContent = snapshot.message;
-  output.title = "Hosted Forge Capacity is based on the current allowance. Complexity, batches, and repairs use different amounts.";
+  output.title = snapshot.tier === "paid-capacity"
+    ? "Member Forge Capacity is based on the current paid allowance. Complexity, batches, and repairs use different amounts."
+    : "Free Forge Capacity is based on the current tester allowance. Complexity, batches, and repairs use different amounts.";
 }
 
 function forgeContent() {
@@ -777,6 +830,11 @@ async function persistProviderState(provider) {
     else providerSessionConfiguration.delete(provider.id);
 
     partitioned.session.apiToken = apiToken;
+  } else if (provider.id === HOSTED_PROVIDER_ID) {
+    const membershipToken = String(partitioned.session.membershipToken ?? "").trim();
+    if (membershipToken) providerSessionConfiguration.set(provider.id, { membershipToken });
+    else providerSessionConfiguration.delete(provider.id);
+    partitioned.session.membershipToken = membershipToken;
   }
 
   const writes = [
@@ -791,6 +849,9 @@ async function persistProviderState(provider) {
       game.settings.set(MODULE_ID, "rememberProviderApiToken", rememberApiToken),
       game.settings.set(MODULE_ID, "providerApiToken", rememberApiToken ? partitioned.session.apiToken : "")
     );
+  } else if (provider.id === HOSTED_PROVIDER_ID) {
+    // Membership tokens are intentionally session-only; never write them to a world setting.
+    writes.push(game.settings.set(MODULE_ID, "providerMembershipToken", ""));
   }
   await Promise.all(writes);
 }
@@ -890,6 +951,7 @@ async function checkProviderConnection(providerState) {
   const status = await requestRemoteServiceStatus({
     endpoint: connection.endpoint,
     token: connection.apiToken,
+    membershipToken: connection.membershipToken,
     supportedKinds: SUPPORTED_SPEC_KINDS
   });
   return {
@@ -2494,11 +2556,13 @@ function settingsFormProviderState(form, overrides = {}) {
   const apiToken = enteredApiToken || (providerId === "bring-your-own" && rememberApiToken
     ? currentProviderToken({ rememberProviderToken: true })
     : "");
+  const membershipToken = formControl(form, "providerMembershipToken").value.trim() || currentProviderMembershipToken();
   return configuredProviderState({
     providerId,
     endpoint: formControl(form, "providerEndpoint").value.trim(),
     model: formControl(form, "providerModel").value.trim(),
     apiToken,
+    membershipToken,
     rememberApiToken,
     unresolvedPolicy: overrides.unresolvedPolicy ?? currentUnresolvedPolicy()
   });
@@ -2519,12 +2583,14 @@ function syncSettingsProviderPanel(app) {
   const provider = settingsFormProviderState(form);
   const snapshot = providerStatusSnapshot(provider.id, provider.configuration, app._dm_forgeProviderConnection);
   const configurationPanel = root.querySelector('[data-provider-configuration="bring-your-own"]');
+  const hostedConfigurationPanel = root.querySelector('[data-provider-configuration="hosted-forge"]');
   const status = root.querySelector("[data-forge-settings-provider-status]");
   const icon = status?.querySelector("i");
   const label = status?.querySelector("span");
   const checkButton = root.querySelector('[data-action="check-provider"]');
 
   if (configurationPanel) configurationPanel.hidden = provider.id !== "bring-your-own";
+  if (hostedConfigurationPanel) hostedConfigurationPanel.hidden = provider.id !== HOSTED_PROVIDER_ID;
   if (status) status.dataset.state = snapshot.state;
   if (icon) icon.className = `fa-solid ${snapshot.icon}`;
   if (label) label.textContent = snapshot.message;
@@ -2636,6 +2702,8 @@ class ForgeSettingsApplication extends FormApplication {
       providerEndpoint: provider.configuration.endpoint,
       providerModel: provider.configuration.model,
       providerToken: provider.configuration.apiToken,
+      providerMembershipToken: provider.configuration.membershipToken,
+      isHostedForge: provider.id === HOSTED_PROVIDER_ID,
       rememberProviderToken,
       anonymousErrorReports: currentAnonymousErrorReportsEnabled(),
       itemFolderName: game.settings.get(MODULE_ID, "itemFolderName"),
@@ -2666,6 +2734,7 @@ class ForgeSettingsApplication extends FormApplication {
       formControl(form, "providerEndpoint"),
       formControl(form, "providerModel"),
       formControl(form, "providerApiToken"),
+      formControl(form, "providerMembershipToken"),
       formControl(form, "rememberProviderApiToken")
     ];
 
@@ -3219,7 +3288,9 @@ Hooks.once("ready", async () => {
     verification: Object.freeze({
       status: () => verificationHarnessStatusSnapshot(currentVerificationHarnessOptions()),
       setup: setupIsolatedVerificationHarness,
+      setupActors: setupIsolatedVerificationActors,
       run: runIsolatedVerificationHarness,
+      executeMacro: executeIsolatedVerificationMacro,
       cleanup: cleanupIsolatedVerificationHarness
     }),
     version: BUILD_VERSION,
@@ -3249,4 +3320,4 @@ Hooks.on("changeSidebarTab", tabName => {
   if (tabName === "items") scheduleItemsSidebarLauncherRefresh();
 });
 
-export { cleanupIsolatedVerificationHarness, compileItemRequest, createFromSpecs, openForge, openSceneRegionForge, runIsolatedVerificationHarness, setupIsolatedVerificationHarness, validateSpecs };
+export { cleanupIsolatedVerificationHarness, compileItemRequest, createFromSpecs, executeIsolatedVerificationMacro, openForge, openSceneRegionForge, runIsolatedVerificationHarness, setupIsolatedVerificationHarness, validateSpecs };

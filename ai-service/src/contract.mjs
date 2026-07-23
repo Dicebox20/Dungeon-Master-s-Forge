@@ -5,7 +5,7 @@ import { validateRemoteContent } from "./remote-content-policy.mjs";
 import { analyzeRequestIntent } from "./request-intent.mjs";
 import { canonicalize } from "./result-cache.mjs";
 import { validateSpecStructure } from "./spec-validation.mjs";
-import { applyAutomationCapabilityRoute, normalizeAutomationCapabilities, normalizeAutomationContract } from "./automation-contract.mjs";
+import { applyAutomationCapabilityRoute, inferredAutomationContracts, normalizeAutomationCapabilities, normalizeAutomationContract } from "./automation-contract.mjs";
 
 const ID_PATTERN = /^[A-Za-z0-9]{16}$/;
 
@@ -243,6 +243,17 @@ function compactText(value) {
   return String(value ?? "").replace(/\s+/g, " ").trim();
 }
 
+function unwrapNameQuotes(value) {
+  const text = compactText(value);
+  const pairs = [["\"", "\""], ["'", "'"], ["“", "”"], ["‘", "’"]];
+  for (const [opening, closing] of pairs) {
+    if (text.startsWith(opening) && text.endsWith(closing) && text.length > opening.length + closing.length) {
+      return compactText(text.slice(opening.length, -closing.length));
+    }
+  }
+  return text;
+}
+
 function comparableText(value) {
   return compactText(value).toLowerCase().replace(/[.,!?;:]+$/g, "");
 }
@@ -319,7 +330,7 @@ function looksLikePromptCopy(name, request) {
 }
 
 function normalizeGeneratedName(rawName, intent, index) {
-  const name = compactText(rawName);
+  const name = unwrapNameQuotes(rawName);
   const explicitName = intent.explicitNames[index];
   if (explicitName) return name;
 
@@ -3233,7 +3244,7 @@ function normalizeModelOutput(modelOutput, envelope, options = {}) {
       throw new ServiceError(502, "unsupported_generated_kind", `${name} uses unsupported Forge kind ${kind || "(missing)"}.`);
     }
     names.add(name.toLowerCase());
-    const spec = normalizeSpecIds(appendRequestDerivedUnresolved(alignAttunementToRequest({
+    let spec = normalizeSpecIds(appendRequestDerivedUnresolved(alignAttunementToRequest({
       ...remoteSpec,
       name,
       kind,
@@ -3241,12 +3252,37 @@ function normalizeModelOutput(modelOutput, envelope, options = {}) {
         ? remoteSpec.description
         : envelope.request
     }, requestChunk), requestChunk, warnings, deferred), makeId);
-    if (spec.automation != null) {
-      spec.automation = applyAutomationCapabilityRoute(
-        normalizeAutomationContract(spec.automation, `$specs[${index}].automation`),
+    const declaredAutomation = [
+      ...(spec.automation != null ? [spec.automation] : []),
+      ...(spec.automationRoutes == null
+        ? []
+        : (() => {
+          if (!Array.isArray(spec.automationRoutes)) throw new ServiceError(502, "invalid_model_output", `$specs[${index}].automationRoutes must be an array.`);
+          return spec.automationRoutes;
+        })())
+    ];
+    const inferredAutomation = inferredAutomationContracts(spec).filter(contract => {
+      const capabilities = envelope.context.automationCapabilities;
+      if (!capabilities?.supportedRecipes?.includes(contract.recipe)) return false;
+      const route = capabilities.routes?.find(candidate => candidate.recipe === contract.recipe);
+      return !route || route.available === true;
+    });
+    const normalizedAutomation = [...declaredAutomation, ...inferredAutomation]
+      .map((contract, routeIndex) => applyAutomationCapabilityRoute(
+        normalizeAutomationContract(contract, `$specs[${index}].automation${routeIndex ? `Routes[${routeIndex - 1}]` : ""}`),
         envelope.context.automationCapabilities,
-        `$specs[${index}].automation`
-      );
+        `$specs[${index}].automation${routeIndex ? `Routes[${routeIndex - 1}]` : ""}`
+      ))
+      .filter((contract, routeIndex, all) => all.findIndex(candidate => candidate.recipe === contract.recipe) === routeIndex);
+    if (normalizedAutomation.length) {
+      spec = {
+        ...spec,
+        automation: normalizedAutomation[0],
+        ...(normalizedAutomation.length > 1 ? { automationRoutes: normalizedAutomation } : {})
+      };
+    } else if ("automationRoutes" in spec) {
+      const { automationRoutes, ...withoutAutomationRoutes } = spec;
+      spec = withoutAutomationRoutes;
     }
     validateRemoteContent(spec, { path: `$specs[${index}]` });
     validateUnresolved(spec);

@@ -1,11 +1,13 @@
 import { COMMON_GUIDANCE, guidanceForKinds } from "./catalog.mjs";
 import { PROMPT_VERSION } from "./constants.mjs";
 import { analyzeRequestIntent } from "./request-intent.mjs";
+import { automationTemplateById, automationTemplatePromptText } from "./automation-templates.mjs";
 
 function buildSystemPrompt(envelope) {
   const kinds = envelope.context.supportedKinds;
   const capabilities = envelope.context.supportedCapabilities ?? [];
   const automationRecipes = envelope.context.automationCapabilities?.supportedRecipes ?? [];
+  const automationTemplates = envelope.context.automationCapabilities?.supportedTemplates ?? [];
   const automationRoutes = envelope.context.automationCapabilities?.routes ?? [];
   const routeText = automationRoutes
     .filter(route => route.available === true)
@@ -14,6 +16,9 @@ function buildSystemPrompt(envelope) {
   const automationGuidance = automationRecipes.length
     ? `The local Forge runtime advertises these trusted declarative automation recipes: ${automationRecipes.join(", ")}. Available layer routes: ${routeText || "none listed"}. Use only these recipes and only the dependency/settings data advertised by the runtime.`
     : "The local Forge runtime did not advertise an advanced automation recipe; use core declarative activities and effects only.";
+  const templateGuidance = automationTemplates.length
+    ? `Production automation templates currently advertised by the runtime:\n${automationTemplatePromptText(automationTemplates.map(automationTemplateById).filter(Boolean))}\nWhen using one, include its templateId beside the matching recipe. Do not use planned or unknown template IDs.`
+    : "No production automation templates were advertised by the runtime.";
   const intent = analyzeRequestIntent(envelope.request);
   const names = intent.hasCompleteExplicitNames
     ? ` Requested names in order: ${intent.explicitNames.map(name => JSON.stringify(name)).join(", ")}.`
@@ -44,7 +49,9 @@ ${kinds.join(", ")}
 The renderer kind is not a feature ceiling. Compose every compatible requested mechanic using these declarative capabilities:
 ${capabilities.join(", ")}
 
-${automationGuidance} Automation metadata describes a trusted local renderer path and must never contain executable code.
+${automationGuidance}
+${templateGuidance}
+Automation metadata describes a trusted local renderer path and must never contain executable code.
 
 This request contains exactly ${intent.count} item${intent.count === 1 ? "" : "s"}. Return exactly ${intent.count} spec object${intent.count === 1 ? "" : "s"} in request order.${names}
 

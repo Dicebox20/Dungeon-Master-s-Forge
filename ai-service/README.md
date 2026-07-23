@@ -5,7 +5,7 @@ This is the reference Forge-compatible service for Dungeon Master's Forge. Found
 The service currently supports two module lanes:
 
 - stable module lane `2.23.1`, which expects a reachable Forge-compatible endpoint
-- tester lane `2.23.1-test.45`, which can connect invited testers to the hosted Free Forge service
+- tester lane `2.23.1-test.62`, which can connect invited testers to the hosted Free Forge service
 
 The service requires Node.js 22.13 or newer and has no package dependencies.
 
@@ -181,4 +181,4 @@ For the current hardened workspace build, a direct local smoke proof was verifie
 
 ## Production Boundary
 
-Service `1.6.1` includes bounded public Free Forge mode with a durable SQLite usage ledger and one controlled retry for malformed or contract-invalid model output. Authentication, usage-limit, timeout, network, and generic upstream failures are never retried. See `docs/FREE_TIER_DEPLOYMENT.md` and `.env.free-tier.example`. The per-minute abuse limiter and result cache remain in memory by design, while configured client and global usage allowances survive restarts. Cache hits and requests funded with a client-provided key are not charged to Free Forge. The service is intended for one persistent host; horizontally scaled deployments need a shared transactional usage backend.
+Service `1.6.6` includes bounded public Free Forge mode with a durable SQLite usage ledger, one controlled retry for malformed or contract-invalid model output, the versioned declarative automation-template catalog, and allowlisted normalization of observed human-facing automation labels, trigger wording, target wording, and bounded template metadata. Authentication, usage-limit, timeout, network, and generic upstream failures are never retried. See `docs/FREE_TIER_DEPLOYMENT.md` and `.env.free-tier.example`. The per-minute abuse limiter and result cache remain in memory by design, while configured client and global usage allowances survive restarts. Cache hits and requests funded with a client-provided key are not charged to Free Forge. The service is intended for one persistent host; horizontally scaled deployments need a shared transactional usage backend.

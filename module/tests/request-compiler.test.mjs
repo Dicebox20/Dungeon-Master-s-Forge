@@ -1,11 +1,30 @@
 import assert from "node:assert/strict";
 import { compileItemRequest } from "../scripts/request-compiler.js";
+import { normalizeItemRequest } from "../scripts/request-normalization.js";
 
 const rifle = compileItemRequest("Make a rifle that does fire damage");
 assert.equal(rifle.specs[0].kind, "weaponExtraDamage");
 assert.equal(rifle.specs[0].extraDamageParts[0].denomination, 4);
 assert.deepEqual(rifle.specs[0].extraDamageParts[0].types, ["fire"]);
 assert.equal(rifle.specs[0].magicalBonus, "1");
+
+const normalizedRider = normalizeItemRequest("Create a rare spear called Thorn of the Mire. It is a +1 spear that deals an extra 1d4 poison damage on a hit. Any creature struck must make a DC 14 Constitution saving throw or be poisoned for 1 minute.");
+const rider = compileItemRequest(normalizedRider.normalizedRequest).specs[0];
+assert.equal(rider.extraDamageParts.length, 1, "The layered brief must not duplicate damage from its appended original request.");
+
+const normalizedSave = normalizeItemRequest("Create a rare wand called Wand of Searing Hail. It has 6 charges and regains 1d6 charges daily at dawn. As an action, spend 1 charge to force creatures in a 15-foot cone to make a DC 14 Dexterity saving throw, taking 4d6 fire damage on a failed save or half on a success.");
+const save = compileItemRequest(normalizedSave.normalizedRequest).specs[0];
+assert.equal(save.damageParts.length, 1, "A single save damage formula must remain one damage part after normalization.");
+
+const normalizedArtifact = normalizeItemRequest("Create an artifact greatsword called Dawnrend. It is a +3 greatsword that deals an extra 1d6 radiant damage and 1d6 fire damage on every hit. As a bonus action, the blade can ignite, shedding 20 feet of bright light and another 20 feet of dim light. Once per dawn, it can cast Flame Strike with a DC 18 Dexterity save, dealing 4d6 fire and 4d6 radiant damage, half on a success.");
+const artifact = compileItemRequest(normalizedArtifact.normalizedRequest).specs[0];
+assert.equal(artifact.kind, "artifactWeaponHybrid");
+assert.equal(artifact.baseItem, "greatsword");
+assert.equal(artifact.damage.base.denomination, 6);
+assert.equal(artifact.uses.max, "1");
+assert.equal(artifact.extraDamageParts.length, 2);
+assert.equal(artifact.saveActivities[0].damageParts.length, 2);
+assert.ok(artifact.toggleLight);
 
 const ring = compileItemRequest(`
 Ring of Steadfast Warding

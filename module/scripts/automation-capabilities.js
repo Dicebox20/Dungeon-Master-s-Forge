@@ -1,5 +1,6 @@
 import { MODULE_ID } from "./package-identity.js";
 import { AUTOMATION_RECIPES } from "./automation-contract.js";
+import { AUTOMATION_PRODUCTION_TEMPLATES } from "./automation-templates.js";
 
 const AUTOMATION_CAPABILITY_SCHEMA_VERSION = "1.0";
 const KNOWN_MODULES = Object.freeze([
@@ -204,10 +205,17 @@ function buildAutomationCapabilitySnapshot({ game = globalThis.game, moduleId = 
   };
   const capabilitySeed = { modules, activeModules, settings };
   const routes = AUTOMATION_RECIPES.map(recipe => resolveAutomationRoute(recipe, capabilitySeed));
-  const supportedRecipes = routes.filter(route => route.available).map(route => route.recipe);
+  const productionRecipes = new Set(AUTOMATION_PRODUCTION_TEMPLATES.flatMap(template => template.recipes));
+  const supportedRecipes = routes
+    .filter(route => route.available && productionRecipes.has(route.recipe))
+    .map(route => route.recipe);
+  const supportedTemplates = AUTOMATION_PRODUCTION_TEMPLATES
+    .filter(template => template.recipes.every(recipe => supportedRecipes.includes(recipe)))
+    .map(template => template.id);
   const context = {
     version: AUTOMATION_CAPABILITY_SCHEMA_VERSION,
     supportedRecipes,
+    supportedTemplates,
     activeModules,
     settings,
     routes
@@ -225,6 +233,7 @@ function buildAutomationCapabilitySnapshot({ game = globalThis.game, moduleId = 
     moduleVersion: String(moduleVersion),
     modules,
     supportedRecipes,
+    supportedTemplates,
     routes,
     activeModules,
     settings,

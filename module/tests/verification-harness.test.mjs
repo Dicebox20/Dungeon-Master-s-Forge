@@ -7,6 +7,8 @@ import {
   buildVerificationExpectation,
   cleanupVerificationRun,
   compareDocumentToExpectation,
+  createVerificationFixtureActors,
+  executeVerificationMacro,
   normalizeRunTag,
   runVerificationHarness,
   verificationHarnessStatus
@@ -106,6 +108,68 @@ test("the expectation card verifies safe automation metadata without executing i
   );
 });
 
+test("the expectation card checks sanitized activity kinds and Active Effect keys", () => {
+  const expectation = buildVerificationExpectation({
+    kind: "baselineStructureFixture",
+    name: "Imported Shape Fixture",
+    documentType: "equipment",
+    expectedActivityTypes: ["attack", "save", "utility"],
+    expectedEffectKeys: ["system.traits.dr.value", "system.attributes.init.roll.mode"]
+  });
+  const document = {
+    name: "Imported Shape Fixture",
+    type: "equipment",
+    flags: { "dungeon-masters-forge": { kind: "baselineStructureFixture" } },
+    system: {
+      activities: new Map([
+        ["attack", { type: "attack" }],
+        ["save", { type: "save" }],
+        ["utility", { type: "utility" }]
+      ]),
+      uses: { max: "" }
+    },
+    effects: [
+      { changes: [{ key: "system.traits.dr.value", value: "cold" }] },
+      { changes: [{ key: "system.attributes.init.roll.mode", value: "-1" }] }
+    ]
+  };
+  assert.equal(compareDocumentToExpectation(document, expectation).passed, true);
+  const missing = compareDocumentToExpectation({
+    ...document,
+    system: { ...document.system, activities: new Map([["attack", { type: "attack" }]]) },
+    effects: []
+  }, expectation);
+  assert.equal(missing.passed, false);
+  assert.equal(missing.failures.length, 4);
+});
+
+test("the expectation card preserves every declared automation route", () => {
+  const expectation = buildVerificationExpectation({
+    kind: "artifactWeaponHybrid",
+    name: "Ashen Mercy",
+    automationRoutes: [
+      { recipe: "conditionOnHit" },
+      { recipe: "selfTargetLight" }
+    ]
+  });
+  const document = {
+    name: "Ashen Mercy",
+    type: "weapon",
+    flags: {
+      "dungeon-masters-forge": {
+        kind: "artifactWeaponHybrid",
+        automation: { recipe: "conditionOnHit" },
+        automationRoutes: [{ recipe: "conditionOnHit" }, { recipe: "selfTargetLight" }]
+      }
+    },
+    system: { activities: new Map(), uses: { max: "" } },
+    effects: []
+  };
+  const result = compareDocumentToExpectation(document, expectation);
+  assert.equal(result.passed, true, result.failures.join("; "));
+  assert.deepEqual(result.actual.automationRecipes, ["conditionOnHit", "selfTargetLight"]);
+});
+
 test("status remains false outside the exact enabled GM boundary", () => {
   assert.deepEqual(verificationHarnessStatus({
     game: { world: { id: "campaign-world" }, user: { isGM: true } },
@@ -118,6 +182,112 @@ test("status remains false outside the exact enabled GM boundary", () => {
     isolated: false,
     ready: false
   });
+});
+
+test("explicit macro execution is limited to the enabled GM test world and runs once", async () => {
+  let executions = 0;
+  const macro = {
+    id: "macro-1",
+    uuid: "Macro.macro-1",
+    name: "DMF Macro [TEST-01]",
+    folder: { name: "DMF Verification Macros" },
+    async execute(args) {
+      executions += 1;
+      assert.deepEqual(args, { scope: "test" });
+      return "executed";
+    }
+  };
+  const game = {
+    world: { id: "dmf-test-world" },
+    user: { isGM: true },
+    macros: [macro]
+  };
+
+  const report = await executeVerificationMacro({
+    game,
+    enabled: true,
+    expectedWorldId: "dmf-test-world",
+    macroName: macro.name,
+    args: { scope: "test" }
+  });
+  assert.equal(executions, 1);
+  assert.deepEqual(report, {
+    executed: true,
+    worldId: "dmf-test-world",
+    macro: {
+      id: "macro-1",
+      uuid: "Macro.macro-1",
+      name: "DMF Macro [TEST-01]",
+      folder: "DMF Verification Macros"
+    },
+    result: "executed"
+  });
+  await assert.rejects(
+    () => executeVerificationMacro({ game, enabled: false, expectedWorldId: "dmf-test-world", macroId: macro.id }),
+    /Enable the isolated verification harness/
+  );
+});
+
+test("fixture setup creates and then reuses only tagged SRD-backed test actors", async () => {
+  const game = { world: { id: "dmf-test-world" }, user: { isGM: true }, folders: [], actors: [], items: [], packs: [] };
+  const sourceNames = ["Priest", "Guard", "Goblin", "Wolf", "Ogre"];
+  const sourceActors = new Map(sourceNames.map((name, index) => [name, {
+    name,
+    uuid: `Compendium.dnd5e.actors24.Actor.${index}`,
+    toObject() { return { name: this.name, type: "npc", system: {}, flags: {}, ownership: {} }; }
+  }]));
+  game.packs.push({
+    collection: "dnd5e.actors24",
+    documentName: "Actor",
+    metadata: { id: "dnd5e.actors24", type: "Actor" },
+    async getIndex() { return sourceNames.map((name, index) => ({ name, _id: String(index) })); },
+    async getDocument(id) { return sourceActors.get(sourceNames[Number(id)]); }
+  });
+  const folderFactory = {
+    create: async data => {
+      const folder = { ...data, id: `folder-${game.folders.length}` };
+      game.folders.push(folder);
+      return folder;
+    }
+  };
+  const actorFactory = {
+    create: async data => {
+      const actor = {
+        ...data,
+        id: `actor-${game.actors.length}`,
+        uuid: `Actor.actor-${game.actors.length}`,
+        async setFlag(scope, key, value) { this.flags ??= {}; this.flags[scope] ??= {}; this.flags[scope][key] = value; },
+        async delete() { const index = game.actors.indexOf(this); if (index >= 0) game.actors.splice(index, 1); }
+      };
+      game.actors.push(actor);
+      return actor;
+    }
+  };
+
+  const first = await createVerificationFixtureActors({
+    game,
+    Actor: actorFactory,
+    Folder: folderFactory,
+    enabled: true,
+    expectedWorldId: "dmf-test-world",
+    runTag: "ACTORS-01"
+  });
+  assert.equal(first.actors.length, 5);
+  assert.equal(first.results.filter(result => result.status === "created").length, 5);
+  assert.equal(game.actors.length, 6);
+  assert.ok(first.actors.every(actor => actor.flags["dungeon-masters-forge"].verification.fixture === true));
+
+  const second = await createVerificationFixtureActors({
+    game,
+    Actor: actorFactory,
+    Folder: folderFactory,
+    enabled: true,
+    expectedWorldId: "dmf-test-world",
+    runTag: "ACTORS-01"
+  });
+  assert.equal(second.actors.length, 5);
+  assert.equal(second.results.filter(result => result.status === "reused").length, 5);
+  assert.equal(game.actors.length, 6);
 });
 
 test("a run creates only tagged test copies and cleanup removes only the matching tag", async () => {

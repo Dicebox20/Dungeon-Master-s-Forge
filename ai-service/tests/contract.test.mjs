@@ -4,6 +4,7 @@ import { normalizeModelOutput, validateForgeRequest } from "../src/contract.mjs"
 import { actor } from "./fixtures/valid-specs.mjs";
 import { envelope } from "./helpers.mjs";
 import { applyAutomationCapabilityRoute, normalizeAutomationCapabilities, normalizeAutomationContract } from "../src/automation-contract.mjs";
+import { AUTOMATION_PRODUCTION_TEMPLATES, AUTOMATION_TEMPLATES } from "../src/automation-templates.mjs";
 
 function ids() {
   let value = 0;
@@ -107,6 +108,142 @@ test("model automation metadata survives normalization without executable payloa
   assert.equal(result.specs[0].automation.recipe, "conditionOnHit");
   assert.equal(result.specs[0].automation.targetFilter.creatureType, "undead");
   assert.equal(result.specs[0].automation.script, undefined);
+});
+
+test("legacy condition and light payloads receive negotiated automation metadata", () => {
+  const request = "Create an artifact longsword called Ashen Mercy. On a hit, the target makes a DC 13 Constitution save or is stunned for 1 round. As a bonus action, it sheds bright light for 20 feet and dim light for 40 feet.";
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "artifactWeaponHybrid",
+      name: "Ashen Mercy",
+      description: request,
+      weaponType: "martialM",
+      baseItem: "longsword",
+      damage: { base: { number: 1, denomination: 8, bonus: "@mod", types: ["slashing"] } },
+      passiveEffects: [],
+      utilityActivities: [],
+      saveActivities: [],
+      conditionOnHit: { condition: "stunned", save: { ability: "con", dc: 13 }, durationSeconds: 6 },
+      toggleLight: { bright: 20, dim: 40 }
+    }]
+  }, validateForgeRequest(envelope({
+    request,
+    context: {
+      ...envelope().context,
+      automationCapabilities: {
+        version: "1.0",
+        supportedRecipes: ["conditionOnHit", "selfTargetLight"],
+        supportedTemplates: ["workflow-condition-rider", "self-token-light-toggle"],
+        activeModules: ["midi-qol", "itemacro"],
+        settings: { midiQolAutomation: true, itemMacroAutomation: true },
+        routes: [
+          { recipe: "conditionOnHit", layer: "Midi-QOL + Item Macro", selectedLayer: "Midi-QOL + Item Macro", dependencies: ["midi-qol", "itemacro"], available: true, status: "available", fallback: "Core attack workflow with review" },
+          { recipe: "selfTargetLight", layer: "Item Macro", selectedLayer: "Item Macro", dependencies: ["itemacro"], available: true, status: "available", fallback: "Portable light metadata with review" }
+        ]
+      }
+    }
+  })), { makeId: ids() });
+  assert.deepEqual(result.specs[0].automationRoutes.map(route => route.recipe), ["conditionOnHit", "selfTargetLight"]);
+  assert.equal(result.specs[0].automationRoutes[0].targetSource, "hitTargets");
+  assert.equal(result.specs[0].automationRoutes[1].targetSource, "self");
+});
+
+test("automation templates are production-gated and must match their recipe", () => {
+  assert.equal(normalizeAutomationContract({ templateId: "workflow-condition-rider", recipe: "conditionOnHit" }).templateId, "workflow-condition-rider");
+  assert.throws(
+    () => normalizeAutomationContract({ templateId: "actor-sourced-concentration-aura", recipe: "conditionOnHit" }),
+    /not a production template/
+  );
+  assert.throws(
+    () => normalizeAutomationContract({ templateId: "self-token-light-toggle", recipe: "conditionOnHit" }),
+    /does not match recipe/
+  );
+});
+
+test("model automation labels normalize to the canonical production contract", () => {
+  const normalized = normalizeAutomationContract({
+    recipe: "workflow-condition-rider",
+    workflowPass: "on-hit",
+    authority: "trusted-local",
+    fallback: "Use the core attack workflow if the trusted automation layer is unavailable."
+  });
+  assert.equal(normalized.templateId, "workflow-condition-rider");
+  assert.equal(normalized.recipe, "conditionOnHit");
+  assert.equal(normalized.workflowPass, "postActiveEffects");
+  assert.equal(normalized.authority, "local-trusted-engine");
+  assert.equal(normalized.fallback, "core-only");
+});
+
+test("template description fields are bounded metadata and do not enter the runtime contract", () => {
+  const normalized = normalizeAutomationContract({
+    recipe: "conditionOnHit",
+    fields: ["condition", "save", "duration", "targetFilter"]
+  });
+  assert.equal(normalized.fields, undefined);
+  assert.throws(
+    () => normalizeAutomationContract({ recipe: "conditionOnHit", fields: ["x".repeat(61)] }),
+    /metadata array|short printable string/
+  );
+});
+
+for (const template of AUTOMATION_PRODUCTION_TEMPLATES) {
+  test(`every production automation template normalizes its model labels: ${template.id}`, () => {
+    const recipe = template.recipes[0];
+    const normalized = normalizeAutomationContract({
+      recipe: template.id,
+      trigger: template.trigger.replaceAll("-", " "),
+      targetSource: recipe === "conditionOnHit" ? "hit targets" : "self target",
+      workflowPass: recipe === "conditionOnHit" ? "on-hit" : "activity",
+      authority: "trusted-local",
+      fallback: "Use the core route with manual review if needed.",
+      fields: template.fields,
+      ...(template.requiredModules.length ? { requires: template.requiredModules } : {})
+    });
+
+    assert.equal(normalized.templateId, template.id);
+    assert.equal(normalized.recipe, recipe);
+    assert.equal(normalized.trigger, template.trigger);
+    assert.equal(normalized.targetSource, recipe === "conditionOnHit" ? "hitTargets" : "self");
+    assert.equal(normalized.workflowPass, recipe === "conditionOnHit" ? "postActiveEffects" : "activity");
+    assert.equal(normalized.authority, "local-trusted-engine");
+    assert.equal(normalized.fallback, "core-only");
+    assert.deepEqual(normalized.requires, template.requiredModules.length ? template.requiredModules : undefined);
+    assert.equal(normalized.fields, undefined);
+  });
+}
+
+for (const template of AUTOMATION_TEMPLATES.filter(candidate => candidate.status === "planned")) {
+  test(`planned automation remains deferred: ${template.id}`, () => {
+    assert.throws(
+      () => normalizeAutomationContract({ recipe: template.id }),
+      /not a production template/
+    );
+  });
+}
+
+test("advertised automation templates are required before a template can be applied", () => {
+  const contract = normalizeAutomationContract({ templateId: "workflow-condition-rider", recipe: "conditionOnHit" });
+  const capabilities = normalizeAutomationCapabilities({
+    version: "1.0",
+    supportedRecipes: ["conditionOnHit"],
+    supportedTemplates: ["workflow-condition-rider"],
+    activeModules: ["midi-qol", "itemacro"],
+    settings: { midiQolAutomation: true, itemMacroAutomation: true },
+    routes: [{
+      recipe: "conditionOnHit",
+      layer: "Midi-QOL + Item Macro",
+      selectedLayer: "Midi-QOL + Item Macro",
+      dependencies: ["midi-qol", "itemacro"],
+      available: true,
+      status: "available",
+      fallback: "DND5e core attack and review note"
+    }]
+  });
+  assert.equal(applyAutomationCapabilityRoute(contract, capabilities).templateId, "workflow-condition-rider");
+  assert.throws(
+    () => applyAutomationCapabilityRoute(contract, { ...capabilities, supportedTemplates: [] }),
+    /templateId .* was not advertised/
+  );
 });
 
 test("repair attempts preserve reviewed context and strip executable fields", () => {

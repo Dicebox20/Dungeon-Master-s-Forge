@@ -8,22 +8,25 @@ test("capabilities describe the stable Forge compatibility boundary", () => {
   const result = serviceCapabilities(config());
   assert.deepEqual(result.service, {
     name: "Dungeon Master's Forge AI Service",
-    version: "1.6.1"
+    version: "1.6.6"
   });
   assert.equal(result.forge.schemaVersion, "1.0");
   assert.equal(result.forge.promptVersion, PROMPT_VERSION);
   assert.deepEqual(result.forge.supportedKinds, KNOWN_SPEC_KINDS);
   assert.equal(result.forge.kindRole, "compatibility-renderer");
   assert.deepEqual(result.forge.compositionalCapabilities, COMPOSITIONAL_CAPABILITIES);
-  assert.deepEqual(result.forge.automationContract.recipes, ["conditionOnHit", "selfTargetLight", "multiActivityResource", "daeTransferEffect", "animationVisual"]);
+  assert.deepEqual(result.forge.automationContract.recipes, ["conditionOnHit", "selfTargetLight", "multiActivityResource", "daeTransferEffect"]);
   assert.deepEqual(result.forge.automationContract.routes, [
     { recipe: "conditionOnHit", layer: "Midi-QOL + Item Macro", dependencies: ["midi-qol", "itemacro"], fallback: "Core attack workflow with review" },
     { recipe: "selfTargetLight", layer: "Item Macro", dependencies: ["itemacro"], fallback: "Portable light metadata with review" },
     { recipe: "multiActivityResource", layer: "DND5e core", dependencies: [], fallback: "Core activities with review" },
     { recipe: "daeTransferEffect", layer: "Dynamic Active Effects", dependencies: ["dae"], fallback: "Portable effect data with review" },
-    { recipe: "animationVisual", layer: "Automated Animations + Sequencer", dependencies: ["autoanimations", "sequencer"], fallback: "No animation with review" }
   ]);
   assert.equal(result.forge.automationContract.declarativeOnly, true);
+  assert.equal(result.forge.automationContract.templateVersion, "1.0");
+  assert.equal(result.forge.automationContract.templates.find(template => template.id === "workflow-condition-rider").status, "production");
+  assert.equal(result.forge.automationContract.templates.find(template => template.id === "animation-presentation").status, "planned");
+  assert.equal(result.forge.automationContract.templates.find(template => template.id === "actor-sourced-concentration-aura").status, "planned");
   assert.equal(result.metering.model, "usage-units");
   assert.deepEqual(result.request, {
     maxCharacters: 20000,

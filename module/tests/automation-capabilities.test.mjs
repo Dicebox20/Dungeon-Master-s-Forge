@@ -21,7 +21,13 @@ test("capability snapshots expose supported recipes and v14 compatibility warnin
     moduleVersion: "2.23.1",
     config: { midiQolAutomation: true, itemMacroAutomation: true, daeAutomation: true }
   });
-  assert.deepEqual(snapshot.supportedRecipes, ["conditionOnHit", "selfTargetLight", "multiActivityResource", "daeTransferEffect", "animationVisual"]);
+  assert.deepEqual(snapshot.supportedRecipes, ["conditionOnHit", "selfTargetLight", "multiActivityResource", "daeTransferEffect"]);
+  assert.deepEqual(snapshot.supportedTemplates, [
+    "workflow-condition-rider",
+    "self-token-light-toggle",
+    "shared-charge-activity-set",
+    "attunement-effect-transfer"
+  ]);
   assert.deepEqual(snapshot.providerContext.settings, {
     midiQolAutomation: true,
     itemMacroAutomation: true,
@@ -59,7 +65,8 @@ test("capability snapshots expose supported recipes and v14 compatibility warnin
 
 test("capability snapshots do not advertise dependency-bound recipes when disabled", () => {
   const snapshot = buildAutomationCapabilitySnapshot({ game: fakeGame(), config: {} });
-  assert.deepEqual(snapshot.supportedRecipes, ["multiActivityResource", "animationVisual"]);
+  assert.deepEqual(snapshot.supportedRecipes, ["multiActivityResource"]);
+  assert.deepEqual(snapshot.supportedTemplates, ["shared-charge-activity-set"]);
 });
 
 test("capability routing can select Item Macro independently while preserving combined dependencies", () => {

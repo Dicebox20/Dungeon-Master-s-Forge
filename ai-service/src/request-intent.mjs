@@ -1,5 +1,12 @@
 function itemNameFromChunk(chunk) {
-  return chunk.match(/^\s*Item name\s*:\s*(.+)$/im)?.[1]?.trim() ?? "";
+  const raw = chunk.match(/^\s*Item name\s*:\s*(.+)$/im)?.[1]?.trim() ?? "";
+  const pairs = [["\"", "\""], ["'", "'"], ["“", "”"], ["‘", "’"]];
+  for (const [opening, closing] of pairs) {
+    if (raw.startsWith(opening) && raw.endsWith(closing) && raw.length > opening.length + closing.length) {
+      return raw.slice(opening.length, -closing.length).trim();
+    }
+  }
+  return raw;
 }
 
 const TITLE_WORD = String.raw`(?:[A-Z0-9][A-Za-z0-9'"-]*|of|the|and|or|for|to|a|an|in|on|with|without|from)`;

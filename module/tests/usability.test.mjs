@@ -114,6 +114,7 @@ assert.match(script, /_dm_forgeReviewValidated/);
 assert.match(settingsTemplate, /name="providerEndpoint"/);
 assert.match(settingsTemplate, /name="providerModel"/);
 assert.match(settingsTemplate, /name="providerApiToken"/);
+assert.match(settingsTemplate, /name="providerMembershipToken"/);
 assert.match(settingsTemplate, /class="dm_forge-secret-input"/);
 assert.match(settingsTemplate, /type="password"[^>]*name="providerApiToken"/);
 assert.match(settingsTemplate, /name="providerApiToken"[^>]*autocomplete="new-password"/);

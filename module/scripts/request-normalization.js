@@ -81,6 +81,17 @@ function compactText(value) {
   return String(value ?? "").replace(/\s+/g, " ").trim();
 }
 
+function unwrapNameQuotes(value) {
+  const text = compactText(value);
+  const pairs = [["\"", "\""], ["'", "'"], ["“", "”"], ["‘", "’"]];
+  for (const [opening, closing] of pairs) {
+    if (text.startsWith(opening) && text.endsWith(closing) && text.length > opening.length + closing.length) {
+      return compactText(text.slice(opening.length, -closing.length));
+    }
+  }
+  return text;
+}
+
 function titleCaseWords(value) {
   return String(value ?? "")
     .split(/\s+/)
@@ -136,16 +147,16 @@ function explicitNameValue(value) {
   const text = compactText(value);
   if (!text) return "";
   const beforeInstruction = text.match(/^(.{2,80}?)[.!?]\s+(?=(?:make|create|build|design|craft|generate)\b)/i)?.[1];
-  return compactText(beforeInstruction ?? text);
+  return unwrapNameQuotes(beforeInstruction ?? text);
 }
 
 function firstTitleLine(request) {
   const line = String(request ?? "").split(/\r?\n/).map(value => value.trim()).find(Boolean) ?? "";
   if (!line || line.includes(":") || /^(make|create|build|design|craft|generate)\b/i.test(line)) return "";
   const beforeInstruction = line.match(/^(.{2,80}?)[.!?]\s+(?=(?:make|create|build|design|craft|generate)\b)/i)?.[1];
-  if (beforeInstruction) return compactText(beforeInstruction);
+  if (beforeInstruction) return unwrapNameQuotes(beforeInstruction);
   if (line.length > 80) return "";
-  return compactText(line);
+  return unwrapNameQuotes(line);
 }
 
 function splitItemRequests(request) {
@@ -196,7 +207,7 @@ function detectExplicitName(text, fields = {}) {
   const title = firstTitleLine(text);
   if (title) return title;
   const named = String(text ?? "").match(/\b(?:named|called)\s+(?:"([^"]+)"|'([^']+)'|(.+?))(?=\s+(?:with|that|which|who|it|once|as|while|requiring|requires)\b|[.,;\n]|$)/i);
-  return compactText(named?.[1] ?? named?.[2] ?? named?.[3]);
+  return unwrapNameQuotes(named?.[1] ?? named?.[2] ?? named?.[3]);
 }
 
 function detectMagicalBonus(text, baseItem = "", { skipDefault = false } = {}) {

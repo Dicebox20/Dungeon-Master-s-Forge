@@ -50,4 +50,6 @@ test("preflight accepts valid documents and normalizes failure shapes", () => {
   assert.equal(result.supported, true);
   assert.equal(result.valid, true);
   assert.deepEqual(normalizeValidationFailures({ "system.name": "Invalid" }), [{ path: "system.name", message: "Invalid" }]);
+  assert.deepEqual(normalizeValidationFailures({ fields: null, joint: null }), []);
+  assert.deepEqual(normalizeValidationFailures({ fields: { name: "Invalid" } }), [{ path: "fields.name", message: "Invalid" }]);
 });

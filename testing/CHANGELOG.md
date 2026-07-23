@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+## 2.23.1-test.62
+
+- Preserves every declared automation route in advanced specification JSON, including mixed condition and self-light items.
+- Advertises only four production routes; animation presentation remains planned until its trusted renderer and harness evidence exist.
+- Keeps provider output declarative-only while the local Foundry renderer remains responsible for reviewed automation code.
+- Updates the tester package for the current service contract and automation review guidance.
+
+## 2.23.1-test.61
+
+- Gates trusted condition, light, and utility macro payloads on the local Item Macro/Midi-QOL settings instead of treating declarative automation metadata as executable code.
+- Adds macro activity and Midi-QOL hook details to isolated harness snapshots and optional expectation cards.
+- Keeps the hosted service declarative-only; no provider-generated scripts or macros are accepted.
+- Adds focused compatibility tests for the DMF execution plan and preserves the explicit GM-only macro probe boundary.
+
+## 2.23.1-test.60
+
+- Normalizes common trigger and target wording for every production automation template while preserving strict rejection of unknown or planned routes.
+- Keeps the service and Foundry module on the same catalog-defined trigger defaults.
+
+- `2.23.1-test.59` adds a bounded translation layer for observed automation labels such as `on-hit`, trusted-local authority wording, free-form fallback text, and production template names. It also validates and discards safe template-description metadata echoed by the provider before strict runtime validation.
+- `2.23.1-test.58` adds the initial bounded translation layer for observed automation labels such as `on-hit`, trusted-local authority wording, free-form fallback text, and production template names.
+- `2.23.1-test.57` reconciles the automation-template catalog across the service and module, packages the current provider and preflight runtime together, adds compatibility coverage for roadmap-bound automation, and refreshes the tester release identity after the `.56` package drift audit.
 - `2.23.1-test.56` routes generated DND5e activities through the system's public `createActivity`, `updateActivity`, and `deleteActivity` APIs, adds a strict Foundry DataModel preflight before writes, and records capability/document snapshots in the isolated harness.
 - `2.23.1-test.54` restores the per-item review-note text tree and removes the duplicate aggregate review-notes panel from the preview.
 - `2.23.1-test.53` adds capability-routed automation metadata to the preview and hosted capabilities response, shows the selected layer and required modules before approval, and removes the duplicate per-item review-notes card.

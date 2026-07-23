@@ -7,6 +7,7 @@ import {
   SERVICE_VERSION
 } from "./constants.mjs";
 import { AUTOMATION_CONTRACT_VERSION, AUTOMATION_RECIPES, AUTOMATION_ROUTES } from "./automation-contract.mjs";
+import { AUTOMATION_TEMPLATE_VERSION, AUTOMATION_TEMPLATES } from "./automation-templates.mjs";
 
 function serviceCapabilities(config) {
   return {
@@ -22,13 +23,17 @@ function serviceCapabilities(config) {
       compositionalCapabilities: [...COMPOSITIONAL_CAPABILITIES],
       automationContract: {
         version: AUTOMATION_CONTRACT_VERSION,
+        templateVersion: AUTOMATION_TEMPLATE_VERSION,
         declarativeOnly: true,
-        recipes: [...AUTOMATION_RECIPES],
-        routes: AUTOMATION_ROUTES.map(route => ({ ...route })),
+        recipes: AUTOMATION_RECIPES.filter(recipe => AUTOMATION_TEMPLATES.some(template => template.status === "production" && template.recipes.includes(recipe))),
+        routes: AUTOMATION_ROUTES
+          .filter(route => AUTOMATION_TEMPLATES.some(template => template.status === "production" && template.recipes.includes(route.recipe)))
+          .map(route => ({ ...route })),
+        templates: AUTOMATION_TEMPLATES.map(template => ({ ...template, capabilityIds: [...template.capabilityIds], recipes: [...template.recipes], fields: [...template.fields], requiredModules: [...template.requiredModules] })),
         workflowPasses: ["postActiveEffects", "activity"],
         targetSources: ["hitTargets", "failedSaves", "self", "selectedTargets"]
       },
-      capabilityPolicy: "All safe declarative capabilities are available in Free Forge; usage tiers meter hosted compute, not item mechanics."
+      capabilityPolicy: "All safe declarative capabilities are available in Free Forge; capacity tiers meter hosted compute, not item mechanics."
     },
     request: {
       maxCharacters: config.maxRequestChars,
@@ -43,12 +48,18 @@ function serviceCapabilities(config) {
       declarativeModelOutputOnly: true,
       executableModelOutput: false,
       hostedForge: config.publicFreeTier === true,
-      publicFreeTier: config.publicFreeTier === true
+      publicFreeTier: config.publicFreeTier === true,
+      paidCapacity: config.paidEntitlementsEnabled === true
     },
     metering: {
       model: "usage-units",
       cacheHitsCharged: false,
       clientProviderKeysCharged: false
+    },
+    capacity: {
+      freeMonthlyUsage: config.clientMonthlyUsageLimit,
+      paidEntitlementsEnabled: config.paidEntitlementsEnabled === true,
+      paidMonthlyUsage: config.paidEntitlementsEnabled ? config.paidMonthlyUsageLimit : null
     }
   };
 }

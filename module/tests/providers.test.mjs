@@ -44,6 +44,21 @@ assert.deepEqual(providerDefaults("bring-your-own"), {
   unresolvedPolicy: "review"
 });
 
+if (getProvider(HOSTED_PROVIDER_ID).available) {
+  assert.deepEqual(providerDefaults(HOSTED_PROVIDER_ID), {
+    membershipToken: "",
+    unresolvedPolicy: "review"
+  });
+  const hostedPartitioned = partitionProviderConfiguration(HOSTED_PROVIDER_ID, {
+    membershipToken: "private-membership-token",
+    unresolvedPolicy: "review"
+  });
+  assert.deepEqual(hostedPartitioned.persisted, { unresolvedPolicy: "review" });
+  assert.deepEqual(hostedPartitioned.session, { membershipToken: "private-membership-token" });
+  assert.equal(hostedPartitioned.diagnostics.membershipToken, "[redacted]");
+  assert.equal(JSON.stringify(hostedPartitioned.persisted).includes("private-membership-token"), false);
+}
+
 const byoConfiguration = {
   endpoint: "https://forge.example/api/compile",
   model: "forge-model",
@@ -189,14 +204,21 @@ await assert.rejects(
 );
 
 if (getProvider(HOSTED_PROVIDER_ID).available) {
-  const hostedConnection = networkProviderConfiguration(HOSTED_PROVIDER_ID, { unresolvedPolicy: "review" });
+  const hostedConnection = networkProviderConfiguration(HOSTED_PROVIDER_ID, {
+    membershipToken: "private-membership-token",
+    unresolvedPolicy: "review"
+  });
   assert.match(hostedConnection.endpoint, /^https:/);
   assert.equal(hostedConnection.apiToken, "");
+  assert.equal(hostedConnection.membershipToken, "private-membership-token");
+  let hostedRequest;
   const hostedResult = await compileWithProvider("Make a free-tier fire dagger", {
     providerId: HOSTED_PROVIDER_ID,
-    configuration: { unresolvedPolicy: "review" },
+    configuration: { membershipToken: "private-membership-token", unresolvedPolicy: "review" },
     context: { foundryVersion: "14", systemVersion: "5.3.3", moduleVersion: "2.22.0" },
-    fetchImpl: async () => ({
+    fetchImpl: async (_url, init) => {
+      hostedRequest = init;
+      return {
       ok: true,
       status: 200,
       json: async () => ({
@@ -206,10 +228,13 @@ if (getProvider(HOSTED_PROVIDER_ID).available) {
         warnings: [],
         deferred: []
       })
-    })
+      };
+    }
   });
   assert.equal(hostedResult.provider, HOSTED_PROVIDER_ID);
   assert.equal(hostedResult.specs[0].name, "Hosted Fire Dagger");
+  assert.equal(hostedRequest.headers["X-Forge-Membership"], "private-membership-token");
+  assert.equal(hostedResult.providerConfiguration.membershipToken, "[redacted]");
 }
 
 export const testedProviderCount = providers.length;

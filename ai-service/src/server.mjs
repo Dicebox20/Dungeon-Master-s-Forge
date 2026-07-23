@@ -11,6 +11,7 @@ import { createErrorReportStore } from "./error-report-store.mjs";
 import { createCachedCompiler } from "./result-cache.mjs";
 import { createUsageMeterStore } from "./quota-store.mjs";
 import { measureUsage } from "./usage.mjs";
+import { verifyPaidEntitlement } from "./paid-entitlement.mjs";
 
 function tokenEqual(actual, expected) {
   const left = createHash("sha256").update(String(actual)).digest();
@@ -75,8 +76,8 @@ function applyCors(request, response, config) {
     response.setHeader("Vary", "Origin");
   }
   response.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  response.setHeader("Access-Control-Allow-Headers", "Authorization, Cache-Control, Content-Type");
-  response.setHeader("Access-Control-Expose-Headers", "X-Forge-Cache, X-Forge-Usage-Charged, X-Forge-Usage-Limit, X-Forge-Usage-Remaining");
+  response.setHeader("Access-Control-Allow-Headers", "Authorization, Cache-Control, Content-Type, X-Forge-Membership");
+  response.setHeader("Access-Control-Expose-Headers", "X-Forge-Cache, X-Forge-Usage-Charged, X-Forge-Usage-Limit, X-Forge-Usage-Remaining, X-Forge-Usage-Tier");
   response.setHeader("Access-Control-Max-Age", "600");
 }
 
@@ -251,7 +252,10 @@ function createForgeServer(options) {
   });
   const logger = options.logger ?? console;
   const rateLimit = createRateLimiter(config.rateLimitPerMinute, options.now);
-  const usesUsageMeter = config.clientDailyUsageLimit > 0 || config.clientMonthlyUsageLimit > 0 || config.globalDailyUsageLimit > 0;
+  const usesUsageMeter = config.clientDailyUsageLimit > 0
+    || config.clientMonthlyUsageLimit > 0
+    || config.globalDailyUsageLimit > 0
+    || (config.paidEntitlementsEnabled && config.paidMonthlyUsageLimit > 0);
   const usageStore = usesUsageMeter
     ? (options.usageStore ?? createUsageMeterStore({
         databasePath: config.quotaDatabasePath,
@@ -317,7 +321,12 @@ function createForgeServer(options) {
             perMinute: config.rateLimitPerMinute,
             perClientDayUsage: config.clientDailyUsageLimit,
             perClientMonthUsage: config.clientMonthlyUsageLimit,
-            globalPerDayUsage: config.globalDailyUsageLimit
+            globalPerDayUsage: config.globalDailyUsageLimit,
+            paidPerMonthUsage: config.paidEntitlementsEnabled ? config.paidMonthlyUsageLimit : 0
+          },
+          capacity: {
+            paidEntitlementsEnabled: config.paidEntitlementsEnabled === true,
+            paidMonthlyUsage: config.paidEntitlementsEnabled ? config.paidMonthlyUsageLimit : null
           }
         });
         return;
@@ -378,6 +387,16 @@ function createForgeServer(options) {
       }
 
       const client = clientAddress(request, config);
+      const membershipHeader = String(request.headers["x-forge-membership"] ?? "").trim();
+      const membershipResult = verifyPaidEntitlement(membershipHeader, config.paidEntitlementSecret, options.now?.() ?? Date.now());
+      if (membershipResult.status === "unavailable" || membershipResult.status === "invalid") {
+        throw new ServiceError(401, "invalid_membership", "The Forge membership token is invalid or expired.");
+      }
+      const membership = membershipResult.entitlement;
+      const quotaSubject = membership ? `membership:${membership.subject}` : client;
+      const quotaTier = membership ? "paid-capacity" : "free";
+      const monthlyBucket = membership ? "paid-month" : "client-month";
+      const monthlyLimit = membership ? config.paidMonthlyUsageLimit : config.clientMonthlyUsageLimit;
       const usesClientProviderKey = requestUsesClientProviderKey(config, bearer);
       const quota = rateLimit(client);
       response.setHeader("X-RateLimit-Limit", String(config.rateLimitPerMinute));
@@ -387,13 +406,16 @@ function createForgeServer(options) {
         throw new ServiceError(429, "rate_limited", "Forge AI request limit exceeded. Try again shortly.");
       }
 
-      if (!usesClientProviderKey && usageStore && config.clientMonthlyUsageLimit > 0) {
-        const monthly = usageStore.checkMonthly("client-month", client, config.clientMonthlyUsageLimit);
+      response.setHeader("X-Forge-Usage-Tier", quotaTier);
+      if (!usesClientProviderKey && usageStore && monthlyLimit > 0) {
+        const monthly = usageStore.checkMonthly(monthlyBucket, quotaSubject, monthlyLimit);
         response.setHeader("X-Forge-Usage-Limit", String(monthly.limit));
         response.setHeader("X-Forge-Usage-Remaining", String(monthly.remaining));
         if (!monthly.allowed) {
           response.setHeader("Retry-After", String(monthly.retryAfter));
-          throw new ServiceError(429, "monthly_client_usage_limit", "This Free Forge client has reached its monthly hosted usage allowance.");
+          throw new ServiceError(429, membership ? "monthly_paid_usage_limit" : "monthly_client_usage_limit", membership
+            ? "This Forge membership has reached its monthly capacity allowance."
+            : "This Free Forge client has reached its monthly hosted usage allowance.");
         }
       }
       if (!usesClientProviderKey && usageStore && config.clientDailyUsageLimit > 0) {
@@ -424,7 +446,7 @@ function createForgeServer(options) {
           maxItemsPerRequest: config.maxItemsPerRequest
         });
       }
-      claimRepairAttempt(client, payload);
+      claimRepairAttempt(quotaSubject, payload);
       const { result, cacheStatus } = await cachedCompile({
         payload,
         requestApiKey: requiresClientOpenAiKey || usesClientProviderKey ? bearer : "",
@@ -435,8 +457,8 @@ function createForgeServer(options) {
       const measured = measureUsage(payload, result);
       const chargedUnits = !usesClientProviderKey && usageStore && cacheWasCharged ? measured.units : 0;
       let clientUsage = null;
-      if (chargedUnits > 0 && config.clientMonthlyUsageLimit > 0) {
-        clientUsage = usageStore.consumeMonthly("client-month", client, chargedUnits, config.clientMonthlyUsageLimit);
+      if (chargedUnits > 0 && monthlyLimit > 0) {
+        clientUsage = usageStore.consumeMonthly(monthlyBucket, quotaSubject, chargedUnits, monthlyLimit);
         response.setHeader("X-Forge-Usage-Limit", String(clientUsage.limit));
         response.setHeader("X-Forge-Usage-Remaining", String(clientUsage.remaining));
       }
@@ -449,7 +471,7 @@ function createForgeServer(options) {
       response.setHeader("X-Forge-Usage-Charged", String(chargedUnits));
       sendJson(response, 200, {
         ...result,
-        usage: { ...measured, chargedUnits, cacheStatus }
+        usage: { ...measured, chargedUnits, cacheStatus, tier: quotaTier }
       });
     } catch (error) {
       if (response.destroyed) return;

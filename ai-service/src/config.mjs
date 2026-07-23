@@ -56,6 +56,9 @@ function loadConfig(env = process.env) {
     clientDailyUsageLimit: integer(env.DMF_CLIENT_DAILY_USAGE_LIMIT, 0, { min: 0, max: 1000000000 }),
     clientMonthlyUsageLimit: integer(env.DMF_CLIENT_MONTHLY_USAGE_LIMIT, publicFreeTier ? 500000 : 0, { min: 0, max: 1000000000 }),
     globalDailyUsageLimit: integer(env.DMF_GLOBAL_DAILY_USAGE_LIMIT, publicFreeTier ? 10000000 : 0, { min: 0, max: 1000000000 }),
+    paidEntitlementsEnabled: flag(env.DMF_PAID_ENTITLEMENTS_ENABLED, false),
+    paidMonthlyUsageLimit: integer(env.DMF_PAID_MONTHLY_USAGE_LIMIT, 1000000, { min: 1, max: 1000000000 }),
+    paidEntitlementSecret: String(env.DMF_PAID_ENTITLEMENT_SECRET ?? ""),
     quotaDatabasePath: String(env.DMF_QUOTA_DATABASE_PATH ?? (publicFreeTier ? "./data/free-tier-quota.sqlite" : ":memory:")).trim(),
     quotaHashSecret: String(env.DMF_QUOTA_HASH_SECRET ?? ""),
     errorReportsEnabled: flag(env.DMF_ERROR_REPORTS_ENABLED, publicFreeTier),
@@ -77,6 +80,9 @@ function loadConfig(env = process.env) {
   };
 
   config.allowClientApiKeyFallback = mode === "openai" && !config.openaiApiKey;
+  if (config.paidEntitlementsEnabled && config.paidEntitlementSecret.length < 32) {
+    throw new ServiceError(500, "invalid_configuration", "Paid Forge entitlements require DMF_PAID_ENTITLEMENT_SECRET with at least 32 characters.");
+  }
   if (config.publicFreeTier) {
     if (config.mode !== "openai" || !config.openaiApiKey) {
       throw new ServiceError(500, "invalid_configuration", "Public free-tier mode requires OpenAI mode and a server-side OPENAI_API_KEY.");

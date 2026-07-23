@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { createForgeServer } from "../src/server.mjs";
+import { signPaidEntitlement } from "../src/paid-entitlement.mjs";
 import { config, envelope } from "./helpers.mjs";
 import { validSpecs } from "./fixtures/valid-specs.mjs";
 
@@ -47,7 +48,8 @@ test("health endpoint reports mock mode and allows configured Foundry origin", a
     perMinute: 20,
     perClientDayUsage: 0,
     perClientMonthUsage: 0,
-    globalPerDayUsage: 0
+    globalPerDayUsage: 0,
+    paidPerMonthUsage: 0
   });
 });
 
@@ -58,7 +60,7 @@ test("capabilities endpoint is read-only and does not invoke compilation", async
   const response = await fetch(`${app.baseUrl}/v1/forge/capabilities`, { headers: { Origin: origin } });
   const body = await response.json();
   assert.equal(response.status, 200);
-  assert.equal(body.service.version, "1.6.1");
+  assert.equal(body.service.version, "1.6.6");
   assert.equal(body.forge.schemaVersion, "1.0");
   assert.equal(body.forge.supportedKinds.length, 14);
   assert.equal(body.features.hostedForge, false);
@@ -179,6 +181,57 @@ test("mock compile completes the Forge 1.0 contract", async t => {
   assert.equal(response.headers.get("x-forge-cache"), "MISS");
 });
 
+test("paid membership uses its own bounded monthly capacity bucket", async t => {
+  const secret = "test-paid-entitlement-secret-at-least-32-characters";
+  const app = await runningServer({
+    clientMonthlyUsageLimit: 25,
+    paidEntitlementsEnabled: true,
+    paidMonthlyUsageLimit: 250,
+    paidEntitlementSecret: secret
+  });
+  t.after(app.close);
+  const token = signPaidEntitlement({
+    sub: "opaque-member-001",
+    tier: "supporter",
+    exp: Math.floor(Date.now() / 1000) + 3600
+  }, secret);
+  const response = await fetch(`${app.baseUrl}/v1/forge/compile`, {
+    method: "POST",
+    headers: {
+      Origin: origin,
+      Authorization: "Bearer test-client-token",
+      "Content-Type": "application/json",
+      "X-Forge-Membership": token
+    },
+    body: JSON.stringify(envelope())
+  });
+  const body = await response.json();
+  assert.equal(response.status, 200, JSON.stringify(body));
+  assert.equal(response.headers.get("x-forge-usage-tier"), "paid-capacity");
+  assert.equal(response.headers.get("x-forge-usage-limit"), "250");
+  assert.equal(body.usage.tier, "paid-capacity");
+});
+
+test("invalid paid membership tokens are rejected instead of falling back to free capacity", async t => {
+  const app = await runningServer({
+    paidEntitlementsEnabled: true,
+    paidEntitlementSecret: "test-paid-entitlement-secret-at-least-32-characters"
+  });
+  t.after(app.close);
+  const response = await fetch(`${app.baseUrl}/v1/forge/compile`, {
+    method: "POST",
+    headers: {
+      Origin: origin,
+      Authorization: "Bearer test-client-token",
+      "Content-Type": "application/json",
+      "X-Forge-Membership": "not-a-valid-token"
+    },
+    body: JSON.stringify(envelope())
+  });
+  assert.equal(response.status, 401);
+  assert.equal((await response.json()).error.code, "invalid_membership");
+});
+
 test("repair attempts are explicit, bounded, and one-shot per reviewed result", async t => {
   const app = await runningServer();
   t.after(app.close);
@@ -249,11 +302,12 @@ test("CORS preflight permits negotiated completed-cache refresh requests", async
     headers: {
       Origin: origin,
       "Access-Control-Request-Method": "POST",
-      "Access-Control-Request-Headers": "authorization, cache-control, content-type"
+      "Access-Control-Request-Headers": "authorization, cache-control, content-type, x-forge-membership"
     }
   });
   assert.equal(response.status, 204);
   assert.match(response.headers.get("access-control-allow-headers") ?? "", /Cache-Control/i);
+  assert.match(response.headers.get("access-control-allow-headers") ?? "", /X-Forge-Membership/i);
 });
 
 test("no-cache compile requests refresh completed cached results", async t => {

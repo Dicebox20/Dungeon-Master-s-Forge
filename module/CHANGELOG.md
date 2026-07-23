@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Preserved multiple safe automation routes through preview, review notes, Foundry flags, and harness expectations without accepting provider-generated scripts.
+- Narrowed the advertised production automation catalog so unrendered animation presentation remains planned instead of being offered as working behavior.
+
 - Corrected the review-note layout by restoring per-item notes and removing the duplicate aggregate preview card.
 - Prepared tester build `2.23.1-test.53` with capability-routed automation metadata in the preview and service capabilities response, and removed the duplicate per-item review-notes card.
 - Moved repair consent into the dialog footer with a visible checked state and hover explanation, and preserved the user's original request text for repair provenance.

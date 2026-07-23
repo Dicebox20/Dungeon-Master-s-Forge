@@ -14,6 +14,16 @@
     <p class="notes">Local Rules stays entirely inside Foundry. Bring Your Own API checks a user-configured Forge-compatible endpoint.</p>
   </div>
 
+  <div class="dm_forge-provider-settings" data-provider-configuration="hosted-forge" {{#unless isHostedForge}}hidden{{/unless}}>
+    <div class="form-group">
+      <label>Forge membership token</label>
+      <div class="form-fields">
+        <input type="password" class="dm_forge-secret-input" name="providerMembershipToken" value="{{providerMembershipToken}}" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="text" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other" aria-label="Forge membership token">
+      </div>
+      <p class="notes">Optional. A valid Supporter or Founding Patron token unlocks paid Forge Capacity for this session. The token is never saved to the world or included in prompts, JSON, diagnostics, or reports.</p>
+    </div>
+  </div>
+
   <div class="dm_forge-provider-settings" data-provider-configuration="bring-your-own" {{#unless isBringYourOwn}}hidden{{/unless}}>
     <div class="form-group">
       <label>Endpoint</label>

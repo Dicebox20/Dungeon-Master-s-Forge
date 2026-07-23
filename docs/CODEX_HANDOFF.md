@@ -22,31 +22,32 @@ Beta completion measures dependable, reviewable workflows and safe boundaries. I
 ## Tester Distribution
 
 - Tester manifest: `https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/dm_forge/tester/testing/module.json`
-- Current tester version: `2.23.1-test.54`
-- Current tester download: `https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/dm_forge/tester/testing/releases/dungeon-masters-forge-v2-2.23.1-test.54.zip`
-- Current ZIP SHA-256: `BA6B92DA22679F9507CAEF2EA76CA8A32DD7A80CC5CD8B7F9C8AF9311206B5EB`
+- Current tester version: `2.23.1-test.62` (source/package candidate; publication remains a separate release action)
+- Current tester download: `https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/dm_forge/tester/testing/releases/dungeon-masters-forge-v2-2.23.1-test.62.zip`
+- Current ZIP SHA-256: `0C3CE959B99937D736EAC0E42AE1B58CA2C6861511AF8CEA62F9E94186070EA1`
 
 The production manifest remains on `main`. Keep tester artifacts and URLs on `dm_forge/tester` until a release is deliberately promoted.
 
 ## Current Compliance State
 
-- Local source candidates are stable `2.23.1` and tester `2.23.1-test.54`.
+- Local source candidates are stable `2.23.1` and tester `2.23.1-test.62`.
 - Public-facing documentation now describes the runtime AI flow, review-before-create boundary, provider data flow, token storage, diagnostic consent, and unofficial Foundry status.
-- The service and module suites currently pass `216/216` and `52/52` respectively.
+- The service and module suites currently pass `237/237` and `80/80` respectively.
 - The active routing policy is capability-based: native DND5e is selected only when complete and reliable; verified Midi-QOL, DAE, Item Macro, and related routes are preferred when they provide required workflow behavior; portable core data and a review note are the fallback when a route is unavailable or unverified.
 - The Dice Box Group selected MIT licensing. The stable and tester builders require and include `LICENSE`; isolated candidate archives passed local inspection. Repeat the final build after any source change before an approved release action.
 - The existing stable ZIP is an older archive and must not be described as the current compliant submission package.
-- Tester build `2.23.1-test.54` is installed locally and prepared for tester publication. The stable `main` lane, provider keys, and stable release ZIP remain unchanged. The explicitly requested public monthly allowance is `500,000` metered usage units.
+- Tester build `2.23.1-test.62` is installed locally and is the current package candidate. The stable `main` lane, provider keys, and stable release ZIP remain unchanged. The explicitly requested public monthly allowance is `500,000` metered usage units.
 
 ## Hosted Service
 
 - DigitalOcean service name: Dungeon Master's Forge AI Service
-- Last verified service version: `1.6.1`
+- Last verified service version: `1.6.6`
 - Listener: localhost port `8788`, exposed through the configured reverse proxy/domain
 - Health route: `/health`
 - Last known public access: `public-free-tier`
 - Public Free-tier limits: temporary Dice Box Group rollout reports 10 per minute, no daily client block, `500,000` metered usage units per client-month, and a separate `1,000,000,000` global daily ceiling; the private testing lane remains outside the public ledger
 - Private testing service: `https://dmforge-test.137-184-103-220.sslip.io`, authenticated, port `8789`; it now runs the usage-metered prompt-contract `1.1.0` candidate from isolated `/opt/dmforge-ai-testing`
+- Both service lanes advertise automation contract `1.0`, template catalog `1.0` with 10 records, repair reruns, and negotiated cache refresh. Existing public and private limits were preserved during deployment.
 - Dual-service deployment record: `docs/DUAL_FREE_FORGE_DEPLOYMENT_2026-07-16.md`
 - Source release default: Free Forge at the public endpoint above, using `gpt-5.4-mini`; Local Rules remains an explicit offline option.
 - The hosted Free Forge previously ran `gpt-4.1-mini`; the private/BYO test service was configured for `gpt-5.4-mini`. Always check the service environment and health response before claiming the hosted model changed.
@@ -79,7 +80,8 @@ Before each code patch, inspect the accessible Brain Hub organizer project files
 - The recurring `free-forge-beta-sweep` automation was deleted at the user's request. Future item/Region sweeps are manual; do not recreate a scheduled task unless explicitly requested.
 - `docs/BETA_V1_MANUAL_VERIFICATION_STANDARD.md` is the required evidence process for future Free Forge sweeps. It defines an opt-in dedicated-Actor harness boundary so manual review is short without weakening strict readiness accounting.
 - The evidence process now requires an immediate structured snapshot when the GM submits review notes or a UI/functionality failure; the GM need not attach JSON, console output, or DMF review-note text unless the live snapshot is blocked or incomplete.
-- The first harness foundation now has a disabled-by-default GM setting and module API. It refuses any world except `dmf-test-world`, creates only `DMF Verification Actor` and verification folders, validates copied documents against expectation cards, and never auto-executes activities, macros, Scenes, or Regions.
+- The first harness foundation now has a disabled-by-default GM setting and module API. It refuses any world except `dmf-test-world`, creates only `DMF Verification Actor` and verification folders, validates copied documents against expectation cards, and never auto-executes activities, provider output, Scenes, or Regions.
+- The harness now also exposes an explicit `verification.executeMacro({ macroId | macroName, args })` tester API. It requires the enabled GM/test-world boundary and one exact existing Foundry Macro; it runs only on request and returns the macro identity/result without auto-selecting targets, placing tokens, or executing provider output.
 - `testing/BETA_V1_REPEATABLE_AUTONOMOUS_SWEEP_TASK.md` is the current copy/paste task for manually launched Beta V1 cycles. It separates unattended structural coverage from strict isolated Foundry evidence and keeps Scene Region work opt-in.
 - Simple weapons and common consumable projectiles now usually create as the intended Foundry document type and consume correctly.
 - The user-facing failed-item report flow has been removed. Reviewed network results now use the unchanged-request `Retry` action and the `SEND IT AGAIN!?` repair confirmation; anonymous technical error diagnostics remain separately opt-in.
@@ -97,7 +99,7 @@ Before each code patch, inspect the accessible Brain Hub organizer project files
 5. Item-image selection remains inconsistent. When no system or bundled image is available, the preview and review notes must clearly say a generic fallback is used; no `/undefined` asset request is acceptable.
 6. Attunement state can intentionally suppress extra activities. When testing staff or charged items, confirm the created item is attuned before interpreting a basic attack as a routing failure.
 7. Error-report submission needs a low-cost smoke test after service changes. Do not submit every isolated failure; group reports by recurring pattern.
-8. Build and prove the opt-in `DMF Verification Actor` harness before relying on a high-volume manual sweep. It must not modify campaign Actors, Scenes, Regions, or execute scripts/macros.
+8. Build and prove the opt-in `DMF Verification Actor` harness before relying on a high-volume manual sweep. It must not modify campaign Actors, Scenes, Regions, or execute provider-generated scripts/macros; the separate exact-name/ID macro probe is tester-only and GM-confirmed.
 9. The tester build intentionally hides the harness utility buttons while retaining `game.modules.get("dungeon-masters-forge").api.verification`; the current browser bridge could not invoke that page-side API without bypassing its safety boundary. Do not count the harness pass until it is run through the visible harness control or an approved Foundry-side console/API path.
 
 ## Recommended Beta Test Sequence

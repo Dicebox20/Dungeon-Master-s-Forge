@@ -15,6 +15,7 @@ const DAMAGE_TYPES = [
 const WEAPONS = {
   dagger: { weaponType: "simpleM", baseItem: "dagger", damage: [1, 4, "piercing"], properties: ["mgc", "fin", "lgt", "thr"], range: { value: 20, long: 60, reach: 5, units: "ft" }, img: "icons/weapons/daggers/dagger-curved-red.webp" },
   greataxe: { weaponType: "martialM", baseItem: "greataxe", damage: [1, 12, "slashing"], properties: ["mgc", "hvy", "two"], img: "icons/weapons/axes/axe-double.webp" },
+  greatsword: { weaponType: "martialM", baseItem: "greatsword", damage: [2, 6, "slashing"], properties: ["mgc", "hvy", "two"], img: "icons/weapons/swords/sword-guard.webp" },
   lance: { weaponType: "martialM", baseItem: "lance", damage: [1, 10, "piercing"], properties: ["mgc", "rch"], img: "icons/weapons/polearms/spear-flared-silver-pink.webp" },
   longsword: { weaponType: "martialM", baseItem: "longsword", damage: [1, 8, "slashing"], versatile: [1, 10, "slashing"], properties: ["mgc", "ver"], img: "icons/weapons/swords/sword-guard.webp" },
   mace: { weaponType: "simpleM", baseItem: "mace", damage: [1, 6, "bludgeoning"], properties: ["mgc"], img: "icons/weapons/maces/mace-round-spiked-black.webp" },
@@ -301,7 +302,8 @@ function detectName(request, fields, subject, assumptions) {
 function parseDamage(text) {
   const parts = [];
   const pattern = /(\d+)d(\d+)(?:\s*\+\s*([+-]?\d+))?\s+(acid|bludgeoning|cold|fire|force|lightning|necrotic|piercing|poison|psychic|radiant|slashing|thunder)(?:\s+damage)?/gi;
-  for (const match of text.matchAll(pattern)) {
+  const mechanicsText = String(text ?? "").split(/\n\s*Original request\s*:/i, 1)[0];
+  for (const match of mechanicsText.matchAll(pattern)) {
     parts.push({
       number: Number(match[1]),
       denomination: Number(match[2]),
@@ -749,14 +751,18 @@ function parseLightRadii(text) {
 
 function compileHybridArtifact(context) {
   const { request, name, rarity, attunement, weaponName, assumptions } = context;
-  const flameIndex = request.search(/\bflame\s+strike\b/i);
-  const weaponClause = flameIndex >= 0 ? request.slice(0, flameIndex) : request;
+  // Layered briefs mention the spell name before its detailed activity fields.
+  // Prefer the preserved original request so weapon riders and spell damage do
+  // not get assigned to the wrong side of that boundary.
+  const sourceRequest = String(request).match(/\n\s*Original request\s*:\s*([\s\S]*)$/i)?.[1]?.trim() || request;
+  const flameIndex = sourceRequest.search(/\bflame\s+strike\b/i);
+  const weaponClause = flameIndex >= 0 ? sourceRequest.slice(0, flameIndex) : sourceRequest;
   const weaponSpec = compileWeapon({
     ...context,
     request: weaponClause,
     lower: weaponClause.toLowerCase()
   });
-  const flameClause = flameIndex >= 0 ? request.slice(flameIndex) : "";
+  const flameClause = flameIndex >= 0 ? sourceRequest.slice(flameIndex) : "";
   const flameDamage = parseDamage(flameClause);
   if (!flameDamage.length) {
     flameDamage.push(

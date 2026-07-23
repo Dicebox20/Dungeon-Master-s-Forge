@@ -88,6 +88,10 @@
   with transport-byte telemetry for capacity planning. Free Forge keeps safe proven item families;
   future hosted tiers add capacity and convenience rather than paywalling basic mechanics. See
   `docs/research/USAGE_METERING_MODEL_2026-07-22.md`.
+- Paid-capacity foundation: Supporter and Founding Patron share one bounded monthly Forge Capacity
+  entitlement, selected by a server-signed session token. The temporary elevated Free Forge tester
+  allowance remains separate and unchanged. Manual provisioning is the controlled first step; Patreon
+  OAuth/webhook synchronization remains a follow-up after the entitlement path is tested.
 - Next patch UI: show hosted usage as a player-friendly `Forge Capacity` percentage in the main DMF
   window. Count down capacity after each successful hosted generation and repair, explain that
   complex items consume more than simple items, and avoid exposing raw kilobytes, provider tokens,
@@ -123,6 +127,8 @@
 ## Planned: Preview Navigation Refinement
 
 - Move the `</> Advanced Specification Editor` control into the preview tab row beside `Visual Preview` and `Automation Code`, keeping it available as a third review surface without consuming a separate scrolling section above the item preview.
+- Next patch UI copy: rename the `Advanced Specification Editor` tab and accessible label to `Edit File`; keep the existing specification editor behavior unchanged.
+- Next patch repair-dialog copy: replace the long explanation with `Describe what your item was supposed to do, and how it failed` followed by `Re-review Forge Window before sending repair request`.
 - Preserve the existing explicit review boundary: editing the specification must invalidate validation and approval until the changed data is validated again.
 
 ## Priority: Universal User-Confirmed Repair Rerun
@@ -153,6 +159,23 @@ The prompt and capability matrix is recorded in `docs/research/advanced-automati
 - Add harness expectation cards for reaction cancellation, hit-target filtering, once-per-turn limits, overtime expiry, aura enter/exit, self-token resolution, charge isolation, summon profile selection, and UUID validation.
 - Keep Region writes, teleportation, macro execution, and linked-document mutation opt-in and separately confirmed in-world actions.
 
+## Planned: Harness Efficiency Patch
+
+- Expose GM-only SRD-backed fixture actor setup through the isolated harness API, using tagged subject, ally, hostile-save, second-hostile, and durable-hostile actors in `dmf-test-world`.
+- Add a fixture reset operation for HP, uses, concentration, conditions, and Active Effects without touching untagged Actors or campaign content.
+- Capture a capability snapshot covering Foundry, DND5e, Midi-QOL, DAE, Item Macro, relevant settings, and supported activity types before each run.
+- Expand expectation cards to verify activities, damage, saves, targeting, uses, recovery, attunement, conditions, aura origin, concentration, and automation-layer metadata.
+- Add a GM-selected safe activity probe that confirms a workflow opens and records resource changes without choosing targets, placing tokens, executing macros, or modifying Scenes and Regions automatically.
+- Add an explicit tester-only macro probe through `game.modules.get("dungeon-masters-forge").api.verification.executeMacro({ macroId | macroName, args })`; require the enabled GM and exact `dmf-test-world`, resolve one exact Macro, and return a compact execution report without auto-running item workflows or provider output.
+- Record attached `macroData` activities and `flags.midi-qol.onUseMacroName` in harness snapshots so structural automation evidence can distinguish metadata, attachment, and live execution.
+- Gate trusted local macro materialization through `module/scripts/automation-execution.js`; missing settings must produce a review fallback rather than a misleading executable preview.
+- Produce compact evidence bundles containing the prompt, provider, run tag, JSON summary, review categories, expectation diff, settings snapshot, and new console entries.
+- Add fresh-tag replay controls to distinguish cache behavior from deterministic failures and compare Local Rules, Free Forge, and Bring Your Own API results.
+- Add a repair-loop evidence mode that records the original result, repair note, returned result, fresh approval state, and one-request-only boundary.
+- Validate user-supplied UUID references against document type, world, Scene, permission, and stale-reference boundaries without following model-invented UUIDs.
+- Audit Forge ownership flags and provide cleanup summaries that remove only documents bearing the selected run tag.
+- Keep the current macro as a fallback until the harness API fixture path is installed and proven in the dedicated Foundry world.
+
 ## Planned: Bounded Helpful Defaults
 
 - Make hosted and Local Rules providers use the same conservative inference policy for omitted, non-dangerous numeric and timing details, while keeping every inferred choice visible in Review Notes as an assumption.
@@ -177,6 +200,9 @@ The prompt and capability matrix is recorded in `docs/research/advanced-automati
 
 ## Planned: Capability-Based Automation Routing
 
+- Production template contracts now live in `ai-service/src/automation-templates.mjs` and `module/scripts/automation-templates.js`; use `docs/research/automation-architecture-possibility-2026-07-23.md` and `testing/AUTOMATION_TEMPLATE_CATALOG_2026-07-23.txt` when promoting a planned capability.
+- Treat natural-language automation translation as its own versioned layer. Maintain an allowlisted term map and canonical intermediate representation before strict contract validation; map unknown or ambiguous wording to review rather than expanding the validator.
+- Use `docs/research/automation-capability-taxonomy-2026-07-23.md` to classify prompt mechanics independently from item families and to assign questionnaire category IDs before adding a new renderer.
 - Use native DND5e activities, uses, effects, saves, damage, summons, and enchantments whenever they fully express the requested mechanic and remain reliable.
 - Prefer the verified Midi-QOL, DAE, or Item Macro route when the mechanic needs workflow timing, target confirmation, reactions, condition application, concentration, or other behavior that core data cannot express reliably.
 - Advertise the selected automation layer, required modules, settings assumptions, and fallback before approval. Recipes that truly need a combination, such as the current condition-on-hit hook, must list every dependency rather than silently coupling unrelated settings.

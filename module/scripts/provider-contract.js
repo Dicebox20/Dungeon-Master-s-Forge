@@ -97,12 +97,13 @@ function remoteHttpError(response, subject, payload = null) {
   const usageLimit = String(response?.headers?.get?.("x-forge-usage-limit") ?? "").trim();
   const detail = remoteErrorDetail(payload);
   if (status === 429) {
-    if (["monthly_client_usage_limit", "monthly_client_limit"].includes(detail?.code)) {
+    if (["monthly_client_usage_limit", "monthly_client_limit", "monthly_paid_usage_limit"].includes(detail?.code)) {
       const limit = usageLimit || monthlyLimit;
       const allowanceText = /^\d+$/.test(limit)
         ? ` The configured monthly allowance is ${limit} usage units.`
         : "";
-      return new Error(`${subject} monthly hosted usage allowance reached (HTTP 429).${allowanceText}`);
+      const label = detail?.code === "monthly_paid_usage_limit" ? "paid Forge capacity" : "monthly hosted usage allowance";
+      return new Error(`${subject} ${label} reached (HTTP 429).${allowanceText}`);
     }
     if (["daily_client_usage_limit", "daily_client_limit"].includes(detail?.code)) {
       const limit = usageLimit || dailyLimit;
@@ -209,6 +210,7 @@ function usageFromResponseHeaders(headers, usage = {}) {
   const remaining = responseNumber(headers, "x-forge-usage-remaining");
   const chargedUnits = responseNumber(headers, "x-forge-usage-charged");
   const cacheStatus = String(headers?.get?.("x-forge-cache") ?? usage.cacheStatus ?? "").trim();
+  const tier = String(headers?.get?.("x-forge-usage-tier") ?? usage.tier ?? "").trim();
   const next = { ...clone(usage) };
   if (limit != null && remaining != null && limit > 0) {
     next.capacity = {
@@ -219,6 +221,7 @@ function usageFromResponseHeaders(headers, usage = {}) {
   }
   if (chargedUnits != null) next.chargedUnits = chargedUnits;
   if (cacheStatus) next.cacheStatus = cacheStatus;
+  if (tier) next.tier = tier;
   return next;
 }
 
@@ -410,6 +413,7 @@ async function requestRemoteHealth(options) {
   if (typeof fetchImpl !== "function") throw new Error("No fetch implementation is available for provider health.");
   const headers = { Accept: "application/json" };
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  if (options.membershipToken) headers["X-Forge-Membership"] = options.membershipToken;
 
   const controller = new AbortController();
   const timeoutMs = Number(options.timeoutMs ?? DEFAULT_REMOTE_TIMEOUT_MS);
@@ -477,6 +481,7 @@ async function requestRemoteCapabilities(options) {
   if (typeof fetchImpl !== "function") throw new Error("No fetch implementation is available for provider capabilities.");
   const headers = { Accept: "application/json" };
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  if (options.membershipToken) headers["X-Forge-Membership"] = options.membershipToken;
 
   const controller = new AbortController();
   const timeoutMs = Number(options.timeoutMs ?? DEFAULT_REMOTE_TIMEOUT_MS);
@@ -533,6 +538,7 @@ async function requestRemoteCompilation(options) {
   };
   if (options.refreshCompletedCache === true) headers["Cache-Control"] = "no-cache";
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  if (options.membershipToken) headers["X-Forge-Membership"] = options.membershipToken;
 
   const controller = new AbortController();
   const timeoutMs = Number(options.timeoutMs ?? DEFAULT_REMOTE_TIMEOUT_MS);
@@ -581,6 +587,7 @@ async function requestRemoteErrorReport(options) {
 
   const headers = { "Content-Type": "application/json", Accept: "application/json" };
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
+  if (options.membershipToken) headers["X-Forge-Membership"] = options.membershipToken;
 
   const controller = new AbortController();
   const timeoutMs = Number(options.timeoutMs ?? DEFAULT_REMOTE_TIMEOUT_MS);
