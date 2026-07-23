@@ -28,7 +28,7 @@ globalThis.CONST ??= {
   TOKEN_DISPOSITIONS: { FRIENDLY: 1 }
 };
 
-const { activityNeedsTargetConfirmation, applyMidiQolActivityDefaults, clonedSrdSummonActorData, forceExplicitChoiceOnAttack, forceSummonUseConfirmation, isFriendlySummon, itemHasExplicitActivityChoices, multiActivityStaffActivityLists, normalizeSrdActorLookupName, suppressMidiTargetConfirmationForUtility } = await import("../scripts/forge-engine.js");
+const { activityNeedsTargetConfirmation, applyMidiQolActivityDefaults, clonedSrdSummonActorData, forceExplicitChoiceOnAttack, forceSummonUseConfirmation, isFriendlySummon, itemHasExplicitActivityChoices, multiActivityStaffActivityLists, normalizeActorAuraActivitySpec, normalizeSrdActorLookupName, suppressMidiTargetConfirmationForUtility } = await import("../scripts/forge-engine.js");
 
 const forgeEngineSource = await (await import("node:fs/promises")).readFile(new URL("../scripts/forge-engine.js", import.meta.url), "utf8");
 assert.doesNotMatch(
@@ -88,6 +88,22 @@ assert.deepEqual(
 assert.equal(activityNeedsTargetConfirmation({ affects: { type: "self" } }), false);
 assert.equal(activityNeedsTargetConfirmation({ affects: { type: "creature" } }), true);
 assert.equal(activityNeedsTargetConfirmation({ prompt: true }), true);
+assert.deepEqual(
+  normalizeActorAuraActivitySpec({
+    activityName: "Radiant Aura",
+    range: { value: 30, units: "ft" },
+    target: { template: { type: "sphere", size: 20, units: "ft" }, prompt: true }
+  }),
+  {
+    activityName: "Radiant Aura",
+    range: { value: null, units: "self" },
+    target: {
+      template: { type: "sphere", size: 20, units: "ft" },
+      prompt: false,
+      affects: { count: "1", type: "self", special: "Wielder's actor token" }
+    }
+  }
+);
 assert.deepEqual(
   applyMidiQolActivityDefaults({ name: "Unchanged" }, { enabled: false, target: { affects: { type: "creature" } }, useCost: 1 }),
   { name: "Unchanged" }

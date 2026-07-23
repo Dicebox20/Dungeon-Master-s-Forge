@@ -37,11 +37,18 @@ test("health endpoint reports mock mode and allows configured Foundry origin", a
   assert.equal(response.headers.get("access-control-allow-origin"), origin);
   const health = await response.json();
   assert.equal(health.mode, "mock");
-  assert.equal(health.promptVersion, "1.0.0");
+  assert.equal(health.promptVersion, "1.1.0");
   assert.equal(health.access, "private");
   assert.deepEqual(health.quotaStorage, { kind: "disabled", durable: false });
   assert.deepEqual(health.compilation, { active: 0, queued: 0, maxConcurrent: 2, maxQueued: 20 });
-  assert.deepEqual(health.requestLimits, { maxCharacters: 20000, maxItems: 10, perMinute: 20, perClientDay: 0, perClientMonth: 0, globalPerDay: 0 });
+  assert.deepEqual(health.requestLimits, {
+    maxCharacters: 20000,
+    maxItems: 10,
+    perMinute: 20,
+    perClientDayUsage: 0,
+    perClientMonthUsage: 0,
+    globalPerDayUsage: 0
+  });
 });
 
 test("capabilities endpoint is read-only and does not invoke compilation", async t => {
@@ -172,6 +179,51 @@ test("mock compile completes the Forge 1.0 contract", async t => {
   assert.equal(response.headers.get("x-forge-cache"), "MISS");
 });
 
+test("repair attempts are explicit, bounded, and one-shot per reviewed result", async t => {
+  const app = await runningServer();
+  t.after(app.close);
+  const request = envelope();
+  const response = await fetch(`${app.baseUrl}/v1/forge/compile`, {
+    method: "POST",
+    headers: { Origin: origin, Authorization: "Bearer test-client-token", "Content-Type": "application/json" },
+    body: JSON.stringify({
+      ...request,
+      requestMode: "repair-attempt",
+      repair: {
+        parentRequestId: "repair-parent-01",
+        attempt: 1,
+        originalRequest: request.request,
+        repairNotes: "Preserve the item and correct the reviewed light behavior.",
+        currentReviewedSpecs: [{ kind: "weaponExtraDamage", name: "Repair Ember Blade" }],
+        reviewNotes: [{ state: "notice", label: "Notice", message: "The light note is stale." }],
+        deterministicFindings: ["toggleLight is present."],
+        provenance: { providerLane: "bring-your-own" }
+      }
+    })
+  });
+  const body = await response.json();
+  assert.equal(response.status, 200, JSON.stringify(body));
+  assert.equal(body.requestMode, "repair-attempt");
+
+  const repeated = await fetch(`${app.baseUrl}/v1/forge/compile`, {
+    method: "POST",
+    headers: { Origin: origin, Authorization: "Bearer test-client-token", "Content-Type": "application/json" },
+    body: JSON.stringify({
+      ...request,
+      requestMode: "repair-attempt",
+      repair: {
+        parentRequestId: "repair-parent-01",
+        attempt: 1,
+        originalRequest: request.request,
+        repairNotes: "Try the correction again.",
+        currentReviewedSpecs: [{ kind: "weaponExtraDamage", name: "Repair Ember Blade" }]
+      }
+    })
+  });
+  assert.equal(repeated.status, 409);
+  assert.equal((await repeated.json()).error.code, "repair_already_attempted");
+});
+
 test("duplicate compile requests are served from the result cache", async t => {
   let calls = 0;
   const compile = async () => ({ schemaVersion: "1.0", compilerVersion: "test", requestCount: 0, specs: [] });
@@ -187,6 +239,82 @@ test("duplicate compile requests are served from the result cache", async t => {
   assert.equal(first.headers.get("x-forge-cache"), "MISS");
   assert.equal(second.headers.get("x-forge-cache"), "HIT");
   assert.equal(calls, 1);
+});
+
+test("CORS preflight permits negotiated completed-cache refresh requests", async t => {
+  const app = await runningServer();
+  t.after(app.close);
+  const response = await fetch(`${app.baseUrl}/v1/forge/compile`, {
+    method: "OPTIONS",
+    headers: {
+      Origin: origin,
+      "Access-Control-Request-Method": "POST",
+      "Access-Control-Request-Headers": "authorization, cache-control, content-type"
+    }
+  });
+  assert.equal(response.status, 204);
+  assert.match(response.headers.get("access-control-allow-headers") ?? "", /Cache-Control/i);
+});
+
+test("no-cache compile requests refresh completed cached results", async t => {
+  let calls = 0;
+  const app = await runningServer({}, {
+    compile: async () => ({ schemaVersion: "1.0", compilerVersion: "test", requestCount: 0, specs: [], call: ++calls })
+  });
+  t.after(app.close);
+  const request = cacheControl => fetch(`${app.baseUrl}/v1/forge/compile`, {
+    method: "POST",
+    headers: {
+      Origin: origin,
+      Authorization: "Bearer test-client-token",
+      "Content-Type": "application/json",
+      ...(cacheControl ? { "Cache-Control": cacheControl } : {})
+    },
+    body: JSON.stringify(envelope())
+  });
+
+  const first = await request();
+  const refreshed = await request("no-cache");
+  const replay = await request();
+  assert.equal(first.headers.get("x-forge-cache"), "MISS");
+  assert.equal(refreshed.headers.get("x-forge-cache"), "REFRESH");
+  assert.equal(replay.headers.get("x-forge-cache"), "HIT");
+  assert.equal((await refreshed.json()).call, 2);
+  assert.equal((await replay.json()).call, 2);
+  assert.equal(calls, 2);
+});
+
+test("completed cache hits do not consume hosted usage", async t => {
+  const app = await runningServer({
+    mode: "openai",
+    publicFreeTier: true,
+    clientToken: "",
+    clientMonthlyUsageLimit: 100,
+    globalDailyUsageLimit: 1000,
+    allowedOrigins: ["*"]
+  }, {
+    compile: async () => ({
+      schemaVersion: "1.0",
+      compilerVersion: "test",
+      requestCount: 1,
+      specs: [],
+      providerUsage: { total_tokens: 25 }
+    })
+  });
+  t.after(app.close);
+  const request = () => fetch(`${app.baseUrl}/v1/forge/compile`, {
+    method: "POST",
+    headers: { Origin: "https://foundry.example", "Content-Type": "application/json" },
+    body: JSON.stringify(envelope())
+  });
+  const first = await request();
+  const second = await request();
+  assert.match(first.headers.get("access-control-expose-headers"), /X-Forge-Usage-Remaining/);
+  assert.equal(first.headers.get("x-forge-usage-charged"), "25");
+  assert.equal(first.headers.get("x-forge-usage-remaining"), "75");
+  assert.equal(second.headers.get("x-forge-cache"), "HIT");
+  assert.equal(second.headers.get("x-forge-usage-charged"), "0");
+  assert.equal(second.headers.get("x-forge-usage-remaining"), "75");
 });
 
 test("wrong client tokens are rejected before compilation", async t => {
@@ -337,11 +465,11 @@ test("public free-tier mode accepts anonymous requests and reports bounded quota
     mode: "openai",
     publicFreeTier: true,
     clientToken: "",
-    clientDailyLimit: 2,
-    clientMonthlyLimit: 20,
-    globalDailyLimit: 3,
+    clientDailyUsageLimit: 200,
+    clientMonthlyUsageLimit: 2000,
+    globalDailyUsageLimit: 3000,
     allowedOrigins: ["*"]
-  }, { compile: async () => ({ schemaVersion: "1.0", compilerVersion: "test", requestCount: 1, specs: [] }) });
+  }, { compile: async () => ({ schemaVersion: "1.0", compilerVersion: "test", requestCount: 1, specs: [], providerUsage: { total_tokens: 10 } }) });
   t.after(app.close);
   const response = await fetch(`${app.baseUrl}/v1/forge/compile`, {
     method: "POST",
@@ -350,9 +478,8 @@ test("public free-tier mode accepts anonymous requests and reports bounded quota
   });
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("access-control-allow-origin"), "*");
-  assert.equal(response.headers.get("x-dailylimit-limit"), "2");
-  assert.equal(response.headers.get("x-monthlylimit-limit"), "20");
-  assert.equal(response.headers.get("x-globaldailylimit-limit"), "3");
+  assert.equal(response.headers.get("x-forge-usage-limit"), "2000");
+  assert.equal(response.headers.get("x-forge-usage-charged"), "10");
 });
 
 test("public free-tier mode enforces per-client daily limits behind a trusted proxy", async t => {
@@ -361,10 +488,11 @@ test("public free-tier mode enforces per-client daily limits behind a trusted pr
     publicFreeTier: true,
     clientToken: "",
     trustProxy: true,
-    clientDailyLimit: 1,
-    globalDailyLimit: 10,
+    clientDailyUsageLimit: 5,
+    globalDailyUsageLimit: 100,
+    cacheTtlMs: 0,
     allowedOrigins: ["*"]
-  }, { compile: async () => ({ schemaVersion: "1.0", compilerVersion: "test", requestCount: 1, specs: [] }) });
+  }, { compile: async () => ({ schemaVersion: "1.0", compilerVersion: "test", requestCount: 1, specs: [], providerUsage: { total_tokens: 6 } }) });
   t.after(app.close);
   const request = () => fetch(`${app.baseUrl}/v1/forge/compile`, {
     method: "POST",
@@ -374,7 +502,9 @@ test("public free-tier mode enforces per-client daily limits behind a trusted pr
   assert.equal((await request()).status, 200);
   const limited = await request();
   assert.equal(limited.status, 429);
-  assert.equal((await limited.json()).error.code, "daily_client_limit");
+  assert.equal(limited.headers.get("x-forge-usage-limit"), "5");
+  assert.equal(limited.headers.get("x-forge-usage-remaining"), "0");
+  assert.equal((await limited.json()).error.code, "daily_client_usage_limit");
 });
 
 test("public free-tier mode enforces per-client monthly limits behind a trusted proxy", async t => {
@@ -383,11 +513,12 @@ test("public free-tier mode enforces per-client monthly limits behind a trusted 
     publicFreeTier: true,
     clientToken: "",
     trustProxy: true,
-    clientDailyLimit: 10,
-    clientMonthlyLimit: 1,
-    globalDailyLimit: 10,
+    clientDailyUsageLimit: 100,
+    clientMonthlyUsageLimit: 5,
+    globalDailyUsageLimit: 100,
+    cacheTtlMs: 0,
     allowedOrigins: ["*"]
-  }, { compile: async () => ({ schemaVersion: "1.0", compilerVersion: "test", requestCount: 1, specs: [] }) });
+  }, { compile: async () => ({ schemaVersion: "1.0", compilerVersion: "test", requestCount: 1, specs: [], providerUsage: { total_tokens: 6 } }) });
   t.after(app.close);
   const request = () => fetch(`${app.baseUrl}/v1/forge/compile`, {
     method: "POST",
@@ -397,8 +528,8 @@ test("public free-tier mode enforces per-client monthly limits behind a trusted 
   assert.equal((await request()).status, 200);
   const limited = await request();
   assert.equal(limited.status, 429);
-  assert.equal(limited.headers.get("x-monthlylimit-remaining"), "0");
-  assert.equal((await limited.json()).error.code, "monthly_client_limit");
+  assert.equal(limited.headers.get("x-forge-usage-remaining"), "0");
+  assert.equal((await limited.json()).error.code, "monthly_client_usage_limit");
 });
 
 test("public free-tier mode bypasses hosted quotas when a client provider key is supplied", async t => {
@@ -408,9 +539,9 @@ test("public free-tier mode bypasses hosted quotas when a client provider key is
     publicFreeTier: true,
     clientToken: "",
     trustProxy: true,
-    clientDailyLimit: 1,
-    clientMonthlyLimit: 1,
-    globalDailyLimit: 1,
+    clientDailyUsageLimit: 1,
+    clientMonthlyUsageLimit: 1,
+    globalDailyUsageLimit: 1,
     allowedOrigins: ["*"],
     cacheTtlMs: 0
   }, {
@@ -443,6 +574,7 @@ test("public free-tier mode bypasses hosted quotas when a client provider key is
   assert.equal(first.headers.get("x-monthlylimit-limit"), null);
   assert.equal(first.headers.get("x-dailylimit-limit"), null);
   assert.equal(first.headers.get("x-globaldailylimit-limit"), null);
+  assert.equal(first.headers.get("x-forge-usage-charged"), "0");
 });
 
 test("public free-tier mode enforces a global daily spend ceiling", async t => {
@@ -451,10 +583,11 @@ test("public free-tier mode enforces a global daily spend ceiling", async t => {
     publicFreeTier: true,
     clientToken: "",
     trustProxy: true,
-    clientDailyLimit: 10,
-    globalDailyLimit: 1,
+    clientDailyUsageLimit: 100,
+    globalDailyUsageLimit: 5,
+    cacheTtlMs: 0,
     allowedOrigins: ["*"]
-  }, { compile: async () => ({ schemaVersion: "1.0", compilerVersion: "test", requestCount: 1, specs: [] }) });
+  }, { compile: async () => ({ schemaVersion: "1.0", compilerVersion: "test", requestCount: 1, specs: [], providerUsage: { total_tokens: 6 } }) });
   t.after(app.close);
   const request = address => fetch(`${app.baseUrl}/v1/forge/compile`, {
     method: "POST",
@@ -464,7 +597,9 @@ test("public free-tier mode enforces a global daily spend ceiling", async t => {
   assert.equal((await request("203.0.113.10")).status, 200);
   const limited = await request("203.0.113.11");
   assert.equal(limited.status, 429);
-  assert.equal((await limited.json()).error.code, "daily_global_limit");
+  assert.equal(limited.headers.get("x-forge-usage-limit"), "5");
+  assert.equal(limited.headers.get("x-forge-usage-remaining"), "0");
+  assert.equal((await limited.json()).error.code, "daily_global_usage_limit");
 });
 
 test("public free-tier HTTP quotas survive a service restart", async t => {
@@ -476,12 +611,13 @@ test("public free-tier HTTP quotas survive a service restart", async t => {
     publicFreeTier: true,
     clientToken: "",
     trustProxy: true,
-    clientDailyLimit: 1,
-    globalDailyLimit: 10,
+    clientDailyUsageLimit: 5,
+    globalDailyUsageLimit: 100,
+    cacheTtlMs: 0,
     allowedOrigins: ["*"],
     quotaDatabasePath: databasePath
   };
-  const options = { compile: async () => ({ schemaVersion: "1.0", compilerVersion: "test", requestCount: 1, specs: [] }) };
+  const options = { compile: async () => ({ schemaVersion: "1.0", compilerVersion: "test", requestCount: 1, specs: [], providerUsage: { total_tokens: 6 } }) };
   const request = baseUrl => fetch(`${baseUrl}/v1/forge/compile`, {
     method: "POST",
     headers: { Origin: "https://foundry.example", "X-Forwarded-For": "203.0.113.50", "Content-Type": "application/json", Connection: "close" },
@@ -490,14 +626,14 @@ test("public free-tier HTTP quotas survive a service restart", async t => {
 
   const first = await runningServer(overrides, options);
   const health = await fetch(`${first.baseUrl}/health`, { headers: { Origin: "https://foundry.example", Connection: "close" } });
-  assert.deepEqual((await health.json()).quotaStorage, { kind: "sqlite", durable: true });
+  assert.deepEqual((await health.json()).quotaStorage, { kind: "sqlite-usage", durable: true });
   assert.equal((await request(first.baseUrl)).status, 200);
   await first.close();
 
   const restarted = await runningServer(overrides, options);
   const limited = await request(restarted.baseUrl);
   assert.equal(limited.status, 429);
-  assert.equal((await limited.json()).error.code, "daily_client_limit");
+  assert.equal((await limited.json()).error.code, "daily_client_usage_limit");
   await restarted.close();
 });
 

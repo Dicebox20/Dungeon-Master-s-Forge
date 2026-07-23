@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- Added the explicit `repair-attempt` request contract with bounded reviewed context, executable-field stripping, prompt guidance, capability advertisement, and one-shot parent-result protection.
+- Kept repair requests separate from the bounded malformed-output retry; each confirmed repair is a fresh metered compilation and returns to review.
+- Expanded the capability contract so the fourteen renderer kinds remain compatible routes instead of acting as the full feature ceiling.
+- Replaced hosted prompt-count quotas with provider-token or deterministic data-size usage metering.
+- Kept cache hits and client-funded provider requests outside the hosted usage allowance.
+- Made completed result reuse opt-in so repeated prompts request fresh model output while concurrent duplicates still coalesce safely.
+- Kept executable output and campaign-changing behavior behind the existing safety boundaries.
+
 ## 1.6.0 - 2026-07-02
 
 - Added one bounded retry for malformed, unsafe, or contract-invalid model output.

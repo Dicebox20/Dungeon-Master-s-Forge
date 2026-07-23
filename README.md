@@ -1,13 +1,13 @@
 # Dungeon Master's Forge
 
-Dungeon Master's Forge is a Foundry VTT item-creation toolkit for the DND5e system. Describe an item in natural language, review the generated mechanics, then create a core DND5e item only after explicit approval.
+Dungeon Master's Forge is a Foundry VTT item-creation toolkit for DND5e. Describe the item you want, review the mechanics it comes up with, and create a core DND5e item only after you approve it.
 
-The project is building Beta V1 as a dependable starting point for portable Foundry items: native activities, effects, resources, targeting, and summon profiles come first. Optional integrations such as Midi-QOL, DAE, and Item Macro can enhance that foundation when they are installed, but they are not required for the generated item to exist or work in base DND5e.
+We are working toward Beta V1 as a dependable starting point for portable Foundry items. Native activities, effects, resources, targeting, and summon profiles come first. Optional integrations such as Midi-QOL, DAE, and Item Macro can add richer automation when installed, but they are not required for the item to exist or work in base DND5e.
 
 ## Repository Guide
 
 - `module/` - Foundry VTT module source and stable release manifest
-- `ai-service/` - reference Forge-compatible AI compilation service
+- `ai-service/` - reference Forge-compatible compilation service
 - `docs/STATUS.md` - current verified project snapshot
 - `docs/TESTER_QUICKSTART.md` - shortest path for trusted testers and second-machine setup
 - `docs/LAUNCH_DAY_RUNBOOK.md` - tester-to-stable promotion and rollback procedure
@@ -20,10 +20,10 @@ The project is building Beta V1 as a dependable starting point for portable Foun
 
 - Foundry VTT: v14
 - DND5e: 5.3.3
-- Stable package: `2.23.1`
-- Current tester build: see the tester manifest for the latest published candidate
+- Stable package: see the stable manifest for the currently published version
+- Current tester build: see the tester manifest for the current candidate; tester updates are published separately from the stable release
 
-The current project state includes:
+Right now, the project includes:
 
 - deterministic normalization and repair for proven item families
 - Bring Your Own API support for Forge-compatible remote services
@@ -44,17 +44,18 @@ Dungeon Master's Forge is for:
 
 - Review and validation before any item is created
 - Core DND5e weapons, equipment, consumables, effects, charges, attacks, saves, healing, enchantments, summons, conditions, and utility patterns
+- Free Forge summons clone exact system-owned DND5e SRD actors only. Named creatures without an exact SRD match, generated creature stat blocks, and custom summons remain a manual-authoring or Bring Your Own API path.
 - Deterministic recovery for known activity, targeting, resource, effect, summon, and named-spell mapping failures
 - Read-only reuse of compatible DND5e system content without modifying locked compendiums
-- Live AI interpretation through a Forge-compatible Bring Your Own API endpoint or the invited tester lane
+- Live prompt interpretation through a Forge-compatible Bring Your Own API endpoint or the invited tester lane
 
-## Stable Channel Hosting
+## Stable Channel
 
-The stable package uses a Forge-compatible Bring Your Own API service for live interpretation. The included reference service can run on the Foundry computer, another trusted LAN computer, or a Tailscale-connected computer.
+The stable package uses a Forge-compatible Bring Your Own API service for live interpretation. The included reference service can run on the Foundry computer, another trusted computer on your LAN, or a computer connected through Tailscale.
 
-## Tester Channel Hosting
+## Tester Channel
 
-The temporary tester lane automatically connects invited testers to the hosted **Free Forge** allowance. It is used for staged regression sweeps, compatibility checks, and beta feedback before stable promotion.
+The temporary tester build connects invited testers to the hosted **Free Forge** allowance automatically. We use it for staged regression checks, compatibility testing, and feedback before a stable release.
 
 ## Not Yet Included
 
@@ -70,10 +71,11 @@ The temporary tester lane automatically connects invited testers to the hosted *
 
 ## Pre-Launch Tester Channel
 
-Invited testers can install the current tester build, which automatically connects to the hosted 20-request calendar-month Free Forge allowance:
+Invited testers can install the current tester build, which automatically connects to the hosted 100-prompt calendar-month Free Forge allowance:
 
 - Tester manifest: `https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/dm_forge/tester/testing/module.json`
 - Tester notes: [testing/README.md](./testing/README.md)
+- Tester list and public thank-you page: [testing/testers.md](./testing/testers.md)
 
 The tester channel is temporary and is not the final public launch manifest.
 
@@ -81,12 +83,12 @@ The tester channel is temporary and is not the final public launch manifest.
 
 Open [module/README.md](./module/README.md) for installation, usage, and testing notes.
 
-## AI Service
+## Hosted Forge Service
 
 Open [ai-service/README.md](./ai-service/README.md) for the local service, mock mode, server-key mode, and Bring Your Own API setup.
 
-## Public Boundary
+## Repository Note
 
-- This export is meant to be the cleaner GitHub-facing surface for the project.
-- The working development repo still contains older archives, experiments, regression macros, and extracted verification folders that are intentionally not mirrored here.
-- Hosted generation remains disabled in the stable channel. The temporary tester channel enables Free Forge automatically for invited testing.
+- This repository is the cleaner GitHub-facing project surface.
+- The working development copy still contains older archives, experiments, regression macros, and extracted verification folders that are intentionally not mirrored here.
+- Hosted generation remains disabled in the stable channel. The temporary tester build enables Free Forge automatically for invited testing.

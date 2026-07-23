@@ -231,4 +231,36 @@ assert.deepEqual(stormfireSpec.saveActivities[0].save, { ability: "dex", dc: 18 
 assert.deepEqual(stormfireSpec.saveActivities[0].damageParts.map(part => part.types[0]), ["fire", "radiant"]);
 assert.equal(stormfireSpec.uses.recovery[0].period, "dawn");
 
-export const testedRequestCount = 15;
+const gravebell = compileItemRequest(`
+Create an uncommon +1 mace called Gravebell. On a hit against an undead creature, the target makes a DC 13 Wisdom save.
+On a failure it is frightened of the wielder for 1 minute; on a success it takes the normal damage only.
+`);
+assert.equal(gravebell.specs[0].name, "Gravebell");
+assert.equal(gravebell.specs[0].conditionOnHit.targetCreatureType, "undead");
+
+const threeDoors = compileItemRequest(`
+Create a very rare staff called Staff of the Three Doors. It has 7 charges and regains 1d6 charges at dawn.
+Spend 2 charges to cast Misty Step on yourself, 3 charges to cast Hold Person with a DC 15 Wisdom save,
+or 4 charges to cast Dimension Door with one willing creature.
+`);
+assert.equal(threeDoors.specs[0].activities.length, 3);
+assert.deepEqual(threeDoors.specs[0].activities.map(activity => [activity.activityName, activity.chargeCost]), [
+  ["Cast Misty Step", 2],
+  ["Cast Hold Person", 3],
+  ["Cast Dimension Door", 4]
+]);
+assert.equal(threeDoors.specs[0].activities.find(activity => activity.activityName === "Cast Hold Person").save.ability, "wis");
+assert.equal(threeDoors.specs[0].activities.find(activity => activity.activityName === "Cast Misty Step").save, undefined);
+assert.ok(threeDoors.specs[0].unresolvedMechanics.some(mechanic => /Teleportation requires manual execution/.test(mechanic.label)));
+
+const emberstep = compileItemRequest(`
+Create an uncommon charm called Emberstep Charm. As a bonus action, the wearer toggles a self-only ember effect for 1 minute.
+While active, the wearer sheds bright light for 20 feet and dim light for 20 additional feet.
+`);
+assert.equal(emberstep.specs[0].kind, "equipmentPowerSuite");
+assert.equal(emberstep.specs[0].toggleLight.target.prompt, false);
+assert.equal(emberstep.specs[0].toggleLight.target.affects.type, "self");
+assert.equal(emberstep.specs[0].toggleLight.bright, 20);
+assert.equal(emberstep.specs[0].toggleLight.dim, 40);
+
+export const testedRequestCount = 18;

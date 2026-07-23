@@ -15,10 +15,29 @@ if (Test-Path -LiteralPath $archivePath) {
   if (-not $Force) { throw "Archive already exists: $archivePath. Re-run with -Force to replace it." }
   Remove-Item -LiteralPath $archivePath -Force
 }
+New-Item -ItemType Directory -Path (Split-Path -Parent $archivePath) -Force | Out-Null
 
 try {
   New-Item -ItemType Directory -Path $packageRoot | Out-Null
-  Copy-Item -Path (Join-Path $repoRoot "module/*") -Destination $packageRoot -Recurse
+  # Keep tests, examples, backups, and release helpers out of the tester archive.
+  $packageItems = @(
+    "module.json",
+    "README.md",
+    "CHANGELOG.md",
+    "ROADMAP.md",
+    "docs",
+    "scripts",
+    "styles",
+    "templates",
+    "LICENSE"
+  )
+  foreach ($relativePath in $packageItems) {
+    $sourcePath = Join-Path $repoRoot "module/$relativePath"
+    if (-not (Test-Path -LiteralPath $sourcePath)) {
+      throw "Tester package source was not found: $sourcePath"
+    }
+    Copy-Item -LiteralPath $sourcePath -Destination $packageRoot -Recurse -Force
+  }
   Copy-Item -LiteralPath $manifestPath -Destination (Join-Path $packageRoot "module.json") -Force
   Copy-Item -LiteralPath (Join-Path $PSScriptRoot "overrides/hosted-release-config.js") `
     -Destination (Join-Path $packageRoot "scripts/hosted-release-config.js") -Force

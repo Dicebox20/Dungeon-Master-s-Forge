@@ -1,15 +1,15 @@
 # Dungeon Master's Forge Tester Quickstart
 
-This is the shortest path for a trusted tester to install the current module build and try item generation without digging through the full project docs.
+This is the quickest way for a trusted tester to install the current build and try item generation without digging through the full project documentation.
 
-Updated: 2026-07-02
+Updated: 2026-07-18
 
 ## What You Need
 
 - Foundry VTT v14
 - DND5e system 5.3.3
 - The Dungeon Master's Forge tester manifest:
-  - `https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/main/testing/module.json`
+  - `https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/dm_forge/tester/testing/module.json`
 - An internet connection for hosted Free Forge generation
 
 ## Recommended Companion Modules
@@ -20,16 +20,16 @@ These are the companions the current Forge workflow is designed to live beside:
 - DAE
 - Item Macro
 
-The Forge can still run its local deterministic workflow without every companion enabled, but these are the main compatibility targets for richer automation output.
+The Forge can still run its local deterministic workflow without every companion module enabled. These are the main compatibility targets when you want richer automation.
 
 ## Install The Module
 
 1. In Foundry, open **Add-on Modules**.
 2. Click **Install Module**.
 3. Paste the tester manifest URL:
-   - `https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/main/testing/module.json`
-4. Install **Dungeon Master's Forge V2**.
-5. If the legacy package is installed, disable it and enable the new **Dungeon Master's Forge V2** package.
+   - `https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/dm_forge/tester/testing/module.json`
+4. Install **Dungeon Master's Forge**.
+5. If the legacy package is installed, disable it and enable the new **Dungeon Master's Forge** package.
 6. Keep the legacy package installed through this first launch so its saved settings can migrate.
 
 ## Open The Forge
@@ -38,7 +38,7 @@ Use either:
 
 - the hammer button in the Items directory
 - the inline hammer shortcut in the Items directory controls
-- **Game Settings > Configure Settings > Module Settings > Dungeon Master's Forge V2**
+- **Game Settings > Configure Settings > Module Settings > Dungeon Master's Forge**
 
 ## If You Only Want Offline Testing
 
@@ -52,14 +52,16 @@ This path does not require any external AI service.
 
 ## If You Want Live AI Testing
 
-The tester build selects **Free Forge** automatically. No endpoint, model, API token, or personal OpenAI key is required.
+The tester build should select **Free Forge** automatically. You do not need to enter an endpoint, model, API token, or personal OpenAI key.
 
 1. Open **Forge Settings**.
 2. Confirm the provider is **Free Forge**.
 3. Click **Check Connection**.
 4. Confirm the status reports a healthy connection before compiling requests.
 
-The hosted testing allowance is 20 generation requests per client per calendar month. Temporary per-minute and global daily safeguards also apply. Failed generation attempts may count against the allowance because they can still consume upstream service capacity.
+The hosted testing allowance is measured by usage rather than a fixed number of prompts. Simple items use less of the monthly allowance, while longer and more complicated requests use more. Temporary per-minute and global daily safeguards also apply. Fresh generation work can use allowance even when the result needs review, while cached results do not.
+
+If you have your own compatible API access, use **Bring Your Own API** without drawing from the hosted Free Forge allowance. Your provider's own usage limits and billing still apply, and a ChatGPT subscription alone does not automatically include API credits because ChatGPT subscriptions and API access are separate.
 
 ### Optional Bring Your Own API Testing
 

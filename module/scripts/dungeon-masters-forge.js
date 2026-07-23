@@ -54,6 +54,7 @@ import { buildLayeredItemBlueprint } from "./item-blueprint.js";
 import { applyDefaultLeveledSpellCharges, applyForgeSpecDefaults, autoSelectSrdChoiceSpells, dedupeRecognizedSpellActivities, reconcilePlannedSrdSpellActivities, repairNamedSrdSpellActivities } from "./srd-spell-enrichment.js";
 import { applyBaseChassisFallbackArt, applyCategoryItemFallbackArt, applyConsumableProjectileFallbackArt, applyFallbackActivityArt, applySpellActivityArt, applySystemEquipmentArt, needsFallbackItemArt } from "./system-art-enrichment.js";
 import { openSceneRegionForge } from "./scene-region-forge.js";
+import { buildAutomationCapabilitySnapshot } from "./automation-capabilities.js";
 import {
   PREVIOUS_PACKAGE_ID,
   MODULE_ID,
@@ -419,7 +420,7 @@ async function prepareSpecsForForge(input, requestText = "") {
 }
 
 function currentConfig(overrides = {}) {
-  return {
+  const config = {
     itemFolderName: overrides.itemFolderName ?? game.settings.get(MODULE_ID, "itemFolderName"),
     actorFolderName: overrides.actorFolderName ?? game.settings.get(MODULE_ID, "actorFolderName"),
     sourceLabel: overrides.sourceLabel ?? game.settings.get(MODULE_ID, "sourceLabel"),
@@ -431,6 +432,15 @@ function currentConfig(overrides = {}) {
     authorizeGeneratedAutomation: overrides.authorizeGeneratedAutomation === true,
     replaceExistingWorldDocuments: overrides.replaceExistingWorldDocuments
       ?? game.settings.get(MODULE_ID, "replaceExisting")
+  };
+  return {
+    ...config,
+    automationCapabilities: buildAutomationCapabilitySnapshot({
+      game,
+      moduleId: MODULE_ID,
+      moduleVersion: BUILD_VERSION,
+      config
+    })
   };
 }
 
@@ -609,6 +619,36 @@ function forgeFooterProviderStatusHTML(snapshot) {
   `;
 }
 
+function forgeCapacitySnapshot(usage = {}) {
+  const limit = Number(usage?.capacity?.limit ?? usage?.capacityLimit ?? 0);
+  const remaining = Number(usage?.capacity?.remaining ?? usage?.capacityRemaining ?? 0);
+  if (!Number.isFinite(limit) || limit <= 0 || !Number.isFinite(remaining)) return null;
+  const percent = Math.max(0, Math.min(100, Math.round((remaining / limit) * 100)));
+  const message = percent === 0
+    ? "Forge Capacity: 0% remaining - The Blacksmith is sorry, he had to go to bed."
+    : percent < 10
+      ? `Forge Capacity: ${percent}% remaining - The Blacksmith is exhausted.`
+      : percent <= 25
+        ? `Forge Capacity: ${percent}% remaining - The Blacksmith is getting tired.`
+        : `Forge Capacity: ${percent}% remaining`;
+  return {
+    percent,
+    state: percent <= 25 ? "warning" : "ready",
+    message
+  };
+}
+
+function renderForgeCapacity(dialog, usage = {}) {
+  const output = dialog?.element?.querySelector?.("[data-forge-capacity]");
+  if (!(output instanceof HTMLElement)) return;
+  const snapshot = forgeCapacitySnapshot(usage);
+  output.hidden = !snapshot;
+  if (!snapshot) return;
+  output.dataset.state = snapshot.state;
+  output.textContent = snapshot.message;
+  output.title = "Hosted Forge Capacity is based on the current allowance. Complexity, batches, and repairs use different amounts.";
+}
+
 function forgeContent() {
   const specs = game.settings.get(MODULE_ID, "lastSpecs") || JSON.stringify(EXAMPLE_SPECS, null, 2);
   const request = game.settings.get(MODULE_ID, "lastRequest") || "";
@@ -649,25 +689,24 @@ function forgeContent() {
           </header>
           <nav class="dm_forge-review-tabs" data-forge-review-tabs hidden aria-label="Review view">
             <button type="button" class="dm_forge-review-tab is-active" data-forge-review-tab="visual" aria-selected="true">Visual preview</button>
-            <button type="button" class="dm_forge-review-tab" data-forge-review-tab="automation" aria-selected="false">Automation code</button>
+            <button type="button" class="dm_forge-review-tab" data-forge-review-tab="automation" aria-selected="false" hidden>Automation code</button>
+            <button type="button" class="dm_forge-review-tab" data-forge-review-tab="specs" aria-selected="false"><i class="fa-solid fa-code"></i> Advanced Specification Editor</button>
           </nav>
           <div class="dm_forge-review-summary" data-forge-preview hidden></div>
 
           <div class="dm_forge-automation-review" data-forge-automation-review hidden></div>
 
-          <details class="dm_forge-advanced">
-            <summary><i class="fa-solid fa-code"></i><span>Advanced specification editor</span></summary>
+          <section class="dm_forge-advanced" data-forge-advanced-review hidden aria-label="Advanced Specification Editor">
             <label class="dm_forge-specs">
               <span>Generated specifications</span>
               <textarea name="specs" spellcheck="false" aria-label="Item specs JSON">${escapeHTML(specs)}</textarea>
             </label>
-          </details>
+          </section>
         </section>
       </div>
 
       <section class="dm_forge-bottom-tray">
         <div class="dm_forge-compile-report" data-forge-compile-report hidden></div>
-        <div class="dm_forge-notice-stack" data-forge-notices hidden></div>
         <label class="dm_forge-approval dm_forge-approval-compact" title="Required before creating items: review the generated specifications, then approve creation.">
           <input type="checkbox" name="reviewApproval" aria-label="Approve creation after reviewing the specifications.">
           <span class="dm_forge-approval-box" aria-hidden="true"><i class="fa-solid fa-check"></i></span>
@@ -676,12 +715,9 @@ function forgeContent() {
         <label class="dm_forge-approval dm_forge-approval-compact dm_forge-code-approval" data-forge-code-approval-wrap hidden title="Required when the item contains generated automation code: read the code preview and authorize it before creation.">
           <input type="checkbox" name="automationCodeApproval" aria-label="I have read and authorize the generated automation code.">
           <span class="dm_forge-approval-box" aria-hidden="true"><i class="fa-solid fa-check"></i></span>
-          <span class="dm_forge-approval-label">Approve automation</span>
+          <span class="dm_forge-approval-label"><span>Approve</span><small>Automation</small></span>
         </label>
-        <button type="button" class="dm_forge-report-button" data-action="report-failed-item" disabled hidden>
-          <i class="fa-solid fa-bug"></i>
-          <span>Report Failed Item</span>
-        </button>
+        <output class="dm_forge-capacity" data-forge-capacity hidden aria-live="polite"></output>
         <output class="dm_forge-message" data-forge-status data-state="idle" aria-live="polite">Ready.</output>
       </section>
     </section>
@@ -892,17 +928,51 @@ function syncCreateAction(dialog) {
   createButton.setAttribute("aria-disabled", String(createButton.disabled));
 }
 
+function retryActionAvailability(dialog) {
+  const form = dialog?.element?.querySelector?.("form");
+  const request = form instanceof HTMLFormElement ? formControl(form, "request").value.trim() : "";
+  const previewRequest = String(dialog?._dm_forgePreviewRequest ?? "").trim();
+  if (!request || !previewRequest || request !== previewRequest) {
+    return { enabled: false, message: "Convert the description into editable Forge specs." };
+  }
+  const availability = repairRerunAvailability(dialog);
+  return availability.enabled
+    ? { enabled: true, message: "Open the SEND IT AGAIN!? confirmation for one new repair request." }
+    : { enabled: false, message: "Convert the description into editable Forge specs." };
+}
+
+function syncCompileAction(dialog) {
+  const button = dialog?.element?.querySelector?.('button[data-action="compile"]');
+  if (!(button instanceof HTMLButtonElement)) return;
+
+  const retry = retryActionAvailability(dialog).enabled;
+  const label = retry ? "Retry" : "Preview";
+  const icon = retry ? "fa-rotate" : "fa-wand-magic-sparkles";
+  button.replaceChildren(
+    Object.assign(document.createElement("i"), { className: `fa-solid ${icon}` }),
+    Object.assign(document.createElement("span"), { textContent: label })
+  );
+  button.title = retry
+    ? "Open SEND IT AGAIN!? to send one new, user-confirmed repair request."
+    : "Convert the description into editable Forge specs";
+  button.setAttribute("aria-label", label);
+  button.dataset.forgeCompileMode = retry ? "retry" : "preview";
+}
+
 function relocateBottomActions(dialog) {
   const form = dialog.element?.querySelector("form");
   const footer = form?.querySelector(".form-footer");
   const approval = form?.elements?.namedItem("reviewApproval");
   const approvalLabel = approval instanceof HTMLInputElement ? approval.closest(".dm_forge-approval") : null;
-  const reportButton = form?.querySelector('[data-action="report-failed-item"]');
+  const automationApproval = form?.elements?.namedItem("automationCodeApproval");
+  const automationApprovalLabel = automationApproval instanceof HTMLInputElement
+    ? automationApproval.closest(".dm_forge-approval")
+    : null;
   const compileButton = footer?.querySelector('[data-action="compile"]');
-  const validateButton = footer?.querySelector('[data-action="validate"]');
-  if (!(footer instanceof HTMLElement) || !(approvalLabel instanceof HTMLElement) || !(reportButton instanceof HTMLButtonElement)) return;
+  if (!(footer instanceof HTMLElement) || !(approvalLabel instanceof HTMLElement)) return;
 
   if (compileButton instanceof HTMLButtonElement) compileButton.after(approvalLabel);
+  if (automationApprovalLabel instanceof HTMLElement && approvalLabel instanceof HTMLElement) approvalLabel.after(automationApprovalLabel);
   if (!footer.querySelector("[data-forge-footer-provider-status]")) {
     const provider = activeProviderState({
       unresolvedPolicy: formControl(form, "unresolvedPolicy").value
@@ -910,62 +980,41 @@ function relocateBottomActions(dialog) {
     const snapshot = providerStatusSnapshot(provider.id, provider.configuration, dialog._dm_forgeProviderConnection);
     approvalLabel.insertAdjacentHTML("afterend", forgeFooterProviderStatusHTML(snapshot));
   }
-  if (validateButton instanceof HTMLButtonElement) validateButton.before(reportButton);
-  reportButton.hidden = false;
   footer.classList.add("dm_forge-actions-footer");
 }
 
-function failedItemReportAvailability(dialog) {
-  const rawSpecs = reportRawSpecsForDialog(dialog);
-  const preview = dialog?.element?.querySelector?.("[data-forge-preview]");
-  const hasPreview = preview instanceof HTMLElement && preview.hidden === false;
-  const items = hasPreview ? reportSummariesForDialog(dialog) : [];
-  if (!rawSpecs || !hasPreview || !items.length) {
-    return {
-      enabled: false,
-      message: "Available after you preview or validate an item. The report window will include the current request, generated JSON, preview notes, and your note."
-    };
+function repairRerunAvailability(dialog) {
+  const context = dialog?._dm_forgeRepairContext;
+  if (!context || context.attempted === true) {
+    return { visible: false, enabled: false, message: "Repair is available after a reviewed network preview and can be used only once." };
   }
-
   const provider = reportContextProvider(dialog);
   const providerRecord = getProvider(provider.id);
   if (!providerRecord || providerRecord.mode !== "network") {
-    return {
-      enabled: false,
-      message: "Failed-item reports are available when you are connected to a network Forge service."
-    };
+    return { visible: false, enabled: false, message: "Repair reruns require a network Forge service." };
   }
-
+  const capabilities = dialog?._dm_forgeProviderConnection?.capabilities;
+  if (capabilities?.features?.repairRerun !== true) {
+    return { visible: true, enabled: false, message: "The connected Forge service does not advertise user-confirmed repair reruns yet." };
+  }
   try {
     const connection = networkProviderConfiguration(provider.id, provider.configuration);
     if (!String(connection.endpoint ?? "").trim()) {
-      return {
-        enabled: false,
-        message: "Add a Forge-compatible compile endpoint in Forge Settings before sending failed-item reports."
-      };
+      return { visible: true, enabled: false, message: "Configure the connected Forge service before sending a repair rerun." };
     }
   } catch {
-    return {
-      enabled: false,
-      message: "Finish configuring the connected Forge service before sending failed-item reports."
-    };
+    return { visible: true, enabled: false, message: "Finish configuring the connected Forge service before sending a repair rerun." };
   }
-
-  return {
-    enabled: true,
-      message: "Opens a separate report window. We will attach the current request, generated JSON, preview notes, provider details, and your note. The configured service controls how long it keeps the report."
-  };
+  return { visible: true, enabled: true, message: "Send one new repair request, then review and approve the returned preview again." };
 }
 
-function syncFailedItemReportAction(dialog) {
-  const button = dialog?.element?.querySelector?.('[data-action="report-failed-item"]');
-  const text = dialog?.element?.querySelector?.("[data-forge-report-action-text]");
-  if (!(button instanceof HTMLButtonElement)) return;
-
-  const availability = failedItemReportAvailability(dialog);
-  button.disabled = !availability.enabled;
-  button.setAttribute("aria-disabled", String(button.disabled));
-  if (text) text.textContent = availability.message;
+function setRepairPromptLock(dialog, locked) {
+  const form = dialog?.element?.querySelector?.("form");
+  const request = form instanceof HTMLFormElement ? formControl(form, "request") : null;
+  if (!(request instanceof HTMLTextAreaElement)) return;
+  request.readOnly = locked === true;
+  request.dataset.forgeRepairLocked = String(locked === true);
+  request.setAttribute("aria-readonly", String(locked === true));
 }
 
 function setReviewValidated(dialog, validated) {
@@ -979,11 +1028,13 @@ function setReviewValidated(dialog, validated) {
   }
   if (automationApproval instanceof HTMLInputElement && !validated) automationApproval.checked = false;
   syncCreateAction(dialog);
-  syncFailedItemReportAction(dialog);
+  syncCompileAction(dialog);
 }
 
 function clearForgeResultState(dialog) {
   dialog._dm_forgeCompilation = null;
+  dialog._dm_forgeRepairContext = null;
+  dialog._dm_forgePreviewRequest = null;
   dialog._dm_forgeAutomationCodeRequired = false;
   setReviewValidated(dialog, false);
   for (const selector of ["[data-forge-compile-report]", "[data-forge-preview]", "[data-forge-automation-review]", "[data-forge-notices]", "[data-forge-diagnostics]"]) {
@@ -992,6 +1043,9 @@ function clearForgeResultState(dialog) {
     output.hidden = true;
     if ("innerHTML" in output) output.innerHTML = "";
   }
+  // Keep the editor control mounted so the next preview can write the normalized specs.
+  const advancedReview = dialog.element?.querySelector("[data-forge-advanced-review]");
+  if (advancedReview instanceof HTMLElement) advancedReview.hidden = true;
   const codeApprovalWrap = dialog.element?.querySelector("[data-forge-code-approval-wrap]");
   const reviewTabs = dialog.element?.querySelector("[data-forge-review-tabs]");
   const codeApproval = dialog.element?.querySelector('input[name="automationCodeApproval"]');
@@ -1001,6 +1055,9 @@ function clearForgeResultState(dialog) {
     codeApproval.checked = false;
     codeApproval.disabled = true;
   }
+  const capacity = dialog.element?.querySelector("[data-forge-capacity]");
+  if (capacity instanceof HTMLElement) capacity.hidden = true;
+  syncCompileAction(dialog);
 }
 
 function bindForgeUsability(dialog, element) {
@@ -1014,7 +1071,6 @@ function bindForgeUsability(dialog, element) {
   const request = formControl(form, "request");
   const specs = formControl(form, "specs");
   const unresolvedPolicy = formControl(form, "unresolvedPolicy");
-  const reportButton = form.querySelector('[data-action="report-failed-item"]');
   for (const tab of form.querySelectorAll("[data-forge-review-tab]")) {
     tab.addEventListener("click", () => setReviewTab(dialog, tab.dataset.forgeReviewTab));
   }
@@ -1028,11 +1084,6 @@ function bindForgeUsability(dialog, element) {
   });
   unresolvedPolicy.addEventListener("change", () => {
     refreshForgeProviderSummary(dialog, form);
-    syncFailedItemReportAction(dialog);
-  });
-  reportButton?.addEventListener("click", event => {
-    event.preventDefault();
-    void openFailedItemReportDialog(dialog);
   });
   request.addEventListener("input", () => {
     clearForgeResultState(dialog);
@@ -1044,7 +1095,7 @@ function bindForgeUsability(dialog, element) {
   });
   setReviewValidated(dialog, false);
   refreshForgeProviderSummary(dialog, form);
-  syncFailedItemReportAction(dialog);
+  syncCompileAction(dialog);
 }
 
 function setStatus(dialog, state, message) {
@@ -1055,22 +1106,39 @@ function setStatus(dialog, state, message) {
   output.textContent = message;
 }
 
-function reviewNoteHTML(note) {
-  const icons = {
+const REVIEW_NOTE_ICONS = Object.freeze({
     assumption: "fa-lightbulb",
     deferred: "fa-hand",
     "free-forge": "fa-cloud",
     notice: "fa-circle-info",
     note: "fa-circle-info",
     reference: "fa-book-open",
-    unresolved: "fa-triangle-exclamation",
+    resolved: "fa-check",
+    review: "fa-clipboard-check",
+    unresolved: "fa-clipboard-check",
     warning: "fa-triangle-exclamation"
-  };
+});
+
+function reviewNoteIcon(state) {
+  return REVIEW_NOTE_ICONS[state] ?? "fa-circle-info";
+}
+
+function reviewNoteDisplayLabel(note) {
+  const state = note?.state;
+  if (state === "warning") return "Warning";
+  if (["review", "unresolved", "deferred"].includes(state)) return "Review";
+  if (state === "notice") return "Notice";
+  if (state === "free-forge") return "Free Forge";
+  if (["assumption", "reference", "note", "resolved"].includes(state)) return "Resolved";
+  return note?.label ?? "Review note";
+}
+
+function reviewNoteHTML(note) {
   return `
     <div class="dm_forge-review-note" data-state="${escapeHTML(note.state)}">
-      <i class="fa-solid ${icons[note.state] ?? "fa-circle-info"}"></i>
+      <i class="fa-solid ${reviewNoteIcon(note.state)}"></i>
       <div>
-        <strong>${escapeHTML(note.label)}</strong>
+        <strong>${escapeHTML(reviewNoteDisplayLabel(note))}</strong>
         <span>${escapeHTML(note.message)}</span>
         ${note.handling ? `<small>${escapeHTML(note.handling)}</small>` : ""}
       </div>
@@ -1087,20 +1155,10 @@ function footerReviewNoteHTML(note) {
 }
 
 function footerReviewBadgeHTML(note) {
-  const icons = {
-    assumption: "fa-lightbulb",
-    deferred: "fa-hand",
-    "free-forge": "fa-cloud",
-    notice: "fa-circle-info",
-    note: "fa-circle-info",
-    reference: "fa-book-open",
-    unresolved: "fa-triangle-exclamation",
-    warning: "fa-triangle-exclamation"
-  };
   const tooltip = [note.label, note.message, note.handling].filter(Boolean).join(" - ");
   return `
     <span class="dm_forge-footer-badge" data-state="${escapeHTML(note.state)}" title="${escapeHTML(tooltip)}">
-      <i class="fa-solid ${icons[note.state] ?? "fa-circle-info"}"></i>
+      <i class="fa-solid ${reviewNoteIcon(note.state)}"></i>
       <span>${escapeHTML(note.label)}</span>
     </span>
   `;
@@ -1108,10 +1166,11 @@ function footerReviewBadgeHTML(note) {
 
 function summarizeFooterNotes(notes) {
   const groups = [
-    { state: "warning", label: "Warnings", states: ["warning", "unresolved", "deferred"] },
+    { state: "warning", label: "Warnings", states: ["warning"] },
+    { state: "review", label: "Review", states: ["review", "unresolved", "deferred"] },
     { state: "notice", label: "Notices", states: ["notice"] },
     { state: "free-forge", label: "Free Forge", states: ["free-forge"] },
-    { state: "note", label: "Notes", states: ["assumption", "reference", "note"] }
+    { state: "resolved", label: "Resolved", states: ["assumption", "reference", "note"] }
   ];
   return groups
     .map(group => ({
@@ -1130,14 +1189,16 @@ function itemNoteBadgesHTML(notes) {
         <strong>Review notes</strong>
         <span>${notes.length} note${notes.length === 1 ? "" : "s"}</span>
       </div>
-      <div class="dm_forge-item-note-badges">
-        ${groups.map(group => footerReviewBadgeHTML({
-          state: group.state,
-          label: `${group.label} ${group.notes.length}`,
-          message: group.notes.slice(0, 2).map(note => note.message).join(" | "),
-          handling: group.notes.length > 2 ? `${group.notes.length - 2} more note${group.notes.length - 2 === 1 ? "" : "s"} in the footer details.` : "Open the footer notes for full details."
-        })).join("")}
-        <span class="dm_forge-item-note-hint">Full details stay in the footer notes.</span>
+      <div class="dm_forge-review-note-groups">
+        ${groups.map(group => `
+          <details class="dm_forge-review-note-group" data-state="${escapeHTML(group.state)}">
+            <summary>
+              <span class="dm_forge-review-note-group-title"><i class="fa-solid ${reviewNoteIcon(group.state)}"></i>${escapeHTML(group.label)}</span>
+              <span>${group.notes.length}</span>
+            </summary>
+            <div class="dm_forge-review-note-group-body">${group.notes.map(reviewNoteHTML).join("")}</div>
+          </details>
+        `).join("")}
       </div>
     </section>
   `;
@@ -1230,7 +1291,7 @@ function reviewItemHTML(summary) {
                 <span>${summary.unresolvedCount} mechanic${summary.unresolvedCount === 1 ? "" : "s"}</span>
               </div>
               <div class="dm_forge-item-sheet-alert-copy">
-                <p>Forge kept the dominant supported item pattern and preserved the leftover mechanic${summary.unresolvedCount === 1 ? "" : "s"} for review instead of failing the request.</p>
+                <p>Forge created every compatible mechanic it could model safely and preserved the remaining mechanic${summary.unresolvedCount === 1 ? "" : "s"} for review instead of inventing behavior.</p>
                 ${summary.unresolvedLabels?.length
                   ? `<div class="dm_forge-item-sheet-alert-tags">${summary.unresolvedLabels.map(label => `<span>${escapeHTML(label)}</span>`).join("")}</div>`
                   : ""}
@@ -1279,13 +1340,13 @@ function collectFooterNotes(summaries, validation) {
     }
   }
   for (const warning of validation?.warnings ?? []) {
-    const note = { state: "warning", label: "Validation warning", message: warning, handling: "" };
+    const note = { state: "review", label: "Validation review", message: warning, handling: "" };
     const key = `${note.state}|${note.label}|${note.message}|`;
     if (seen.has(key)) continue;
     seen.add(key);
     notes.push(note);
   }
-  const order = { warning: 0, unresolved: 1, deferred: 2, notice: 3, "free-forge": 4, assumption: 5, reference: 6, note: 7 };
+  const order = { warning: 0, review: 1, unresolved: 1, deferred: 1, notice: 2, "free-forge": 3, resolved: 4, assumption: 4, reference: 4, note: 4 };
   return notes.sort((left, right) => (order[left.state] ?? 99) - (order[right.state] ?? 99));
 }
 
@@ -1313,7 +1374,20 @@ function renderFooterNotices(dialog, summaries, validation) {
             <span class="dm_forge-footer-more">Expand for details</span>
           </div>
         </summary>
-        <div class="dm_forge-footer-notes">${notes.map(footerReviewNoteHTML).join("")}</div>
+        <div class="dm_forge-footer-tree">
+          ${groups.map(group => `
+            <details class="dm_forge-footer-group" data-state="${escapeHTML(group.state)}">
+              <summary>
+                <span class="dm_forge-footer-group-title">
+                  <i class="fa-solid ${reviewNoteIcon(group.state)}"></i>
+                  <span>${escapeHTML(group.label)}</span>
+                </span>
+                <span>${group.notes.length}</span>
+              </summary>
+              <div class="dm_forge-footer-group-body">${group.notes.map(footerReviewNoteHTML).join("")}</div>
+            </details>
+          `).join("")}
+        </div>
       </details>
     `
     : "";
@@ -1758,6 +1832,7 @@ async function renderPreview(dialog, validation, compilation = dialog._dm_forgeC
     </div>
     ${reviewOverviewHTML(summaries)}
     <div class="dm_forge-review-items">${summaries.map(reviewItemHTML).join("")}</div>
+    <div class="dm_forge-preview-notices" data-forge-notices hidden></div>
   `;
   const compiledKinds = dialog.element?.querySelector("[data-forge-compiled-kinds]");
   if (compiledKinds) {
@@ -1765,18 +1840,28 @@ async function renderPreview(dialog, validation, compilation = dialog._dm_forgeC
   }
   renderFooterNotices(dialog, summaries, validation);
   renderAutomationCodeReview(dialog, validation.automationCodePreview ?? []);
-  return collectFooterNotes(summaries, validation);
+  const reviewNotes = collectFooterNotes(summaries, validation);
+  renderForgeCapacity(dialog, compilation?.usage);
+  updateRepairContext(dialog, {
+    request: dialogRequestFor(dialog),
+    validation,
+    reviewNotes,
+    compilation
+  });
+  return reviewNotes;
 }
 
 function setReviewTab(dialog, tab = "visual") {
-  const normalizedTab = tab === "automation" ? "automation" : "visual";
+  const normalizedTab = ["visual", "automation", "specs"].includes(tab) ? tab : "visual";
   const preview = dialog.element?.querySelector("[data-forge-preview]");
   const automation = dialog.element?.querySelector("[data-forge-automation-review]");
+  const specs = dialog.element?.querySelector("[data-forge-advanced-review]");
   const tabs = dialog.element?.querySelectorAll("[data-forge-review-tab]") ?? [];
   if (preview instanceof HTMLElement) preview.hidden = normalizedTab !== "visual";
   if (automation instanceof HTMLElement && dialog._dm_forgeAutomationCodeRequired === true) {
     automation.hidden = normalizedTab !== "automation";
   }
+  if (specs instanceof HTMLElement) specs.hidden = normalizedTab !== "specs";
   for (const button of tabs) {
     const active = button.dataset.forgeReviewTab === normalizedTab;
     button.classList.toggle("is-active", active);
@@ -1795,10 +1880,12 @@ function renderAutomationCodeReview(dialog, entries = []) {
   dialog._dm_forgeAutomationCodeRequired = codeEntries.length > 0;
   output.hidden = codeEntries.length === 0;
   if (wrapper instanceof HTMLElement) wrapper.hidden = codeEntries.length === 0;
-  if (tabs instanceof HTMLElement) tabs.hidden = codeEntries.length === 0;
+  const automationTab = dialog.element?.querySelector('[data-forge-review-tab="automation"]');
+  if (automationTab instanceof HTMLButtonElement) automationTab.hidden = codeEntries.length === 0;
+  if (tabs instanceof HTMLElement) tabs.hidden = false;
   if (approval instanceof HTMLInputElement) {
     approval.disabled = codeEntries.length === 0;
-    if (codeEntries.length === 0) approval.checked = false;
+    approval.checked = false;
   }
   output.innerHTML = codeEntries.length
     ? `
@@ -1816,7 +1903,7 @@ function renderAutomationCodeReview(dialog, entries = []) {
       </details>
     `
     : "";
-  if (codeEntries.length) setReviewTab(dialog, "visual");
+  setReviewTab(dialog, "visual");
   syncCreateAction(dialog);
 }
 
@@ -1830,10 +1917,11 @@ function renderCompilationReport(dialog, compilation, reviewNotes = null) {
   const unresolvedCount = compilation.unresolvedMechanics?.length ?? 0;
   const reviewGroups = reviewNotes ? summarizeFooterNotes(reviewNotes) : [];
   const reviewGroup = state => reviewGroups.find(group => group.state === state);
-  const warningCount = reviewGroup("warning")?.notes.length ?? (compilation.warnings?.length ?? 0);
+  const warningCount = reviewGroup("warning")?.notes.length ?? 0;
+  const reviewCount = reviewGroup("review")?.notes.length ?? 0;
   const noticeCount = reviewGroup("notice")?.notes.length ?? 0;
   const freeForgeCount = reviewGroup("free-forge")?.notes.length ?? 0;
-  const noteCount = reviewGroup("note")?.notes.length ?? 0;
+  const resolvedCount = reviewGroup("resolved")?.notes.length ?? 0;
   const normalizationNote = compilation.normalization?.changed
     ? "Request normalized into a layered Forge brief before compilation."
     : "";
@@ -1866,6 +1954,15 @@ function renderCompilationReport(dialog, compilation, reviewNotes = null) {
         `
         : ""
       }
+      ${reviewCount
+        ? `
+          <span class="dm_forge-review-pill" data-state="review">
+            <i class="fa-solid fa-clipboard-check"></i>
+            <span>${reviewCount} review item${reviewCount === 1 ? "" : "s"}</span>
+          </span>
+        `
+        : ""
+      }
       ${noticeCount
         ? `
           <span class="dm_forge-review-pill" data-state="notice">
@@ -1884,11 +1981,11 @@ function renderCompilationReport(dialog, compilation, reviewNotes = null) {
         `
         : ""
       }
-      ${noteCount
+      ${resolvedCount
         ? `
-          <span class="dm_forge-review-pill" data-state="note">
-            <i class="fa-solid fa-circle-info"></i>
-            <span>Notes ${noteCount}</span>
+          <span class="dm_forge-review-pill" data-state="resolved">
+            <i class="fa-solid fa-check"></i>
+            <span>Resolutions ${resolvedCount}</span>
           </span>
         `
         : ""
@@ -2020,7 +2117,7 @@ function summaryItemNotes(summary) {
   };
 }
 
-function reportSummariesForDialog(dialog) {
+function reviewSummariesForDialog(dialog) {
   const compilation = dialog?._dm_forgeCompilation ?? null;
   let specs = [];
   try {
@@ -2035,16 +2132,7 @@ function reportSummariesForDialog(dialog) {
   return buildReviewSummaries(specs, compilation).map(summaryItemNotes);
 }
 
-function reportRawSpecsForDialog(dialog) {
-  try {
-    const form = dialog?.element?.querySelector?.("form");
-    return form instanceof HTMLFormElement ? formControl(form, "specs").value.trim() : "";
-  } catch {
-    return "";
-  }
-}
-
-function reportRequestForDialog(dialog) {
+function dialogRequestFor(dialog) {
   try {
     const form = dialog?.element?.querySelector?.("form");
     return form instanceof HTMLFormElement ? formControl(form, "request").value.trim() : "";
@@ -2053,37 +2141,119 @@ function reportRequestForDialog(dialog) {
   }
 }
 
-function reportStatusForDialog(dialog) {
-  const status = dialog?.element?.querySelector?.("[data-forge-status]");
-  return String(status?.textContent ?? "").trim();
+const REPAIR_TEXT_LIMIT = 12000;
+const REPAIR_NOTES_LIMIT = 4000;
+const REPAIR_JSON_LIMIT = 60000;
+
+function repairSafeValue(value) {
+  if (Array.isArray(value)) return value.map(repairSafeValue);
+  if (!value || typeof value !== "object") return value;
+  const next = {};
+  for (const [key, child] of Object.entries(value)) {
+    if (/^(?:flags|macroCommand|scripts?|command|rawConsole|apiToken|authorization|password|secret)$/i.test(key)) continue;
+    next[key] = repairSafeValue(child);
+  }
+  return next;
 }
 
-function compilationSnapshotForDialog(dialog) {
-  const compilation = dialog?._dm_forgeCompilation;
-  if (!compilation || typeof compilation !== "object") return null;
+function boundedRepairText(value, limit) {
+  return String(value ?? "")
+    .replace(/[\u0000-\u001f\u007f]/g, " ")
+    .trim()
+    .slice(0, limit);
+}
+
+function repairParentRequestId() {
+  try {
+    const id = String(foundry.utils.randomID(24));
+    if (/^[A-Za-z0-9_-]{8,100}$/.test(id)) return id;
+  } catch {
+    // Fall through to the browser UUID generator.
+  }
+  return `dmf-${crypto.randomUUID().replace(/-/g, "").slice(0, 24)}`;
+}
+
+function updateRepairContext(dialog, { request, validation, reviewNotes, compilation } = {}) {
+  if (!dialog || !validation?.specs?.length) return;
+  const provider = reportContextProvider(dialog);
+  const existing = dialog._dm_forgeRepairContext ?? {};
+  const originalPrompt = existing.originalPrompt || boundedRepairText(request, REPAIR_TEXT_LIMIT);
+  const originalRequest = boundedRepairText(
+    request || existing.originalRequest || compilation?.originalRequest || compilation?.normalizedRequest,
+    REPAIR_TEXT_LIMIT
+  );
+  const currentReviewedSpecs = repairSafeValue(validation.specs);
+  const currentNotes = (reviewNotes ?? []).slice(0, 40).map(note => ({
+    state: boundedRepairText(note?.state, 40),
+    label: boundedRepairText(note?.label, 160),
+    message: boundedRepairText(note?.message, 600),
+    handling: boundedRepairText(note?.handling, 600)
+  })).filter(note => note.message);
+  const deterministicFindings = [
+    ...(validation.warnings ?? []),
+    ...validation.specs.flatMap(spec => (spec.unresolvedMechanics ?? []).map(mechanic =>
+      `${spec.name}: ${mechanic.requestedText || mechanic.reason || mechanic.label || "Manual review required."}`
+    ))
+  ].map(value => boundedRepairText(value, 600)).filter(Boolean).slice(0, 40);
+  const providerRecord = getProvider(provider.id);
+  const requestFingerprint = fingerprintForgeSpecs([{ request: originalPrompt }]);
+  const specFingerprint = fingerprintForgeSpecs(currentReviewedSpecs);
+  dialog._dm_forgeRepairContext = {
+    ...existing,
+    parentRequestId: existing.parentRequestId || repairParentRequestId(),
+    originalPrompt,
+    originalRequest,
+    provider: {
+      id: provider.id,
+      label: providerRecord?.label ?? provider.id,
+      mode: providerRecord?.mode ?? ""
+    },
+    currentReviewedSpecs,
+    currentReviewedSpecsJson: JSON.stringify(currentReviewedSpecs, null, 2).slice(0, REPAIR_JSON_LIMIT),
+    reviewNotes: currentNotes,
+    deterministicFindings,
+    originalStatus: existing.originalStatus || "reviewed",
+    requestFingerprint,
+    specFingerprint,
+    attempted: existing.attempted === true,
+    repairNotes: existing.repairNotes || ""
+  };
+}
+
+function repairSnapshotForDialog(dialog) {
+  const context = dialog?._dm_forgeRepairContext;
+  if (!context) return null;
   return {
-    providerLabel: String(compilation.providerLabel ?? ""),
-    providerMode: String(compilation.providerMode ?? ""),
-    normalizedRequest: String(compilation.request ?? ""),
-    decisions: Array.isArray(compilation.decisions)
-      ? compilation.decisions.map(decision => ({
-          name: String(decision?.name ?? ""),
-          pattern: String(decision?.pattern ?? ""),
-          unresolvedCount: Number.isFinite(Number(decision?.unresolvedCount)) ? Number(decision.unresolvedCount) : 0
-        }))
-      : [],
-    assumptions: Array.isArray(compilation.assumptions) ? compilation.assumptions.map(String) : [],
-    warnings: Array.isArray(compilation.warnings) ? compilation.warnings.map(String) : [],
-    deferred: Array.isArray(compilation.deferred) ? compilation.deferred.map(String) : [],
-    unresolvedCount: Array.isArray(compilation.unresolvedMechanics) ? compilation.unresolvedMechanics.length : 0,
-    forgeProvenance: compilation.forgeProvenance && typeof compilation.forgeProvenance === "object"
-      ? {
-          servicePreparedSpecFingerprint: String(compilation.forgeProvenance.servicePreparedSpecFingerprint ?? "").slice(0, 100),
-          providerSpecFingerprint: String(compilation.forgeProvenance.providerSpecFingerprint ?? "").slice(0, 100),
-          finalSpecFingerprint: String(compilation.forgeProvenance.finalSpecFingerprint ?? "").slice(0, 100),
-          changedAfterProvider: compilation.forgeProvenance.changedAfterProvider === true
-        }
-      : null
+    mode: "repair-attempt",
+    parentRequestId: boundedRepairText(context.parentRequestId, 100),
+    attempted: context.attempted === true,
+    requestFingerprint: boundedRepairText(context.requestFingerprint, 120),
+    originalSpecFingerprint: boundedRepairText(context.specFingerprint, 120),
+    repairNotes: boundedRepairText(context.repairNotes, REPAIR_NOTES_LIMIT),
+    providerLane: boundedRepairText(context.provider?.id, 100)
+  };
+}
+
+function buildRepairAttemptPayload(dialog, repairNotes) {
+  const context = dialog?._dm_forgeRepairContext;
+  if (!context || context.attempted === true) {
+    throw new Error("This Forge result does not have another repair attempt available.");
+  }
+  const notes = boundedRepairText(repairNotes, REPAIR_NOTES_LIMIT);
+  if (!notes) throw new Error("Add a short repair note before sending the repair request.");
+  return {
+    parentRequestId: context.parentRequestId,
+    attempt: 1,
+    originalRequest: context.originalRequest,
+    repairNotes: notes,
+    currentReviewedSpecs: repairSafeValue(context.currentReviewedSpecs),
+    reviewNotes: repairSafeValue(context.reviewNotes),
+    deterministicFindings: repairSafeValue(context.deterministicFindings),
+    provenance: {
+      requestFingerprint: context.requestFingerprint,
+      specFingerprint: context.specFingerprint,
+      providerLane: context.provider?.id ?? ""
+    }
   };
 }
 
@@ -2124,7 +2294,7 @@ function buildReportPayloadBase(dialog, error, context = {}) {
       requestId: requestIdFromMessage(error?.message),
       stack: sanitizedStack(error)
     },
-    items: reportSummariesForDialog(dialog)
+    items: reviewSummariesForDialog(dialog)
   };
 }
 
@@ -2133,25 +2303,6 @@ function buildAnonymousErrorReportPayload(dialog, error, context = {}) {
     ...context,
     source: "dungeon-masters-forge-module"
   });
-}
-
-function buildFailedItemReportPayload(dialog, userNote, desiredOutcome = "") {
-  return {
-    ...buildReportPayloadBase(dialog, new Error("User reported a failed item from the Forge preview window."), {
-      stage: "user-feedback",
-      source: "dungeon-masters-forge-failed-item"
-    }),
-    feedback: {
-      kind: "failed-item",
-      userNote: String(userNote ?? "").trim(),
-      desiredOutcome: String(desiredOutcome ?? "").trim(),
-      requestText: reportRequestForDialog(dialog),
-      generatedSpecsJson: reportRawSpecsForDialog(dialog),
-      statusMessage: reportStatusForDialog(dialog),
-      includedPreviewNotes: true
-    },
-    compilation: compilationSnapshotForDialog(dialog)
-  };
 }
 
 async function maybeSubmitAnonymousErrorReport(dialog, error, context = {}) {
@@ -2191,126 +2342,165 @@ function reportError(dialog, error, context = {}) {
   ui.notifications.error(`${MODULE_TITLE}: ${message}`);
 }
 
-function failedItemReportDialogContent() {
+function repairRerunDialogContent(context) {
+  // Keep the confirmation window focused; the main Forge window owns the detailed evidence.
   return `
-    <section class="dm_forge-report-dialog">
-      <p>Tell us what failed when you previewed, created, or used this item.</p>
-      <ul>
-        <li>Describe the mismatch between the prompt and the result.</li>
-        <li>Mention whether the failure happened in preview, on item creation, or during use in chat.</li>
-        <li>Avoid including secrets such as API keys or access tokens.</li>
-      </ul>
-      <p><strong>Included automatically:</strong> the current request, generated specifications JSON, preview notes, provider details, and Foundry/system version data.</p>
-      <label class="dm_forge-report-consent">
-        <input type="checkbox" name="reportConsent" aria-label="I understand what this report sends.">
-        <span>I understand that this report sends the prompt, generated specifications, preview notes, provider host/path, and my notes to the configured Forge service. It does not send the API token, world documents, actors, Scenes, or Regions. The configured service controls retention; the current hosted tester service prunes expired reports when a new report is received. I will remove secrets or private campaign details from my notes.</span>
+    <section class="dm_forge-repair-dialog">
+      <header class="dm_forge-repair-warning">
+        <strong>SEND IT AGAIN!?</strong>
+        <span>This is a new provider request, not an approval and not a hidden retry.</span>
+      </header>
+      <p>Describe the intended result in plain language. The original prompt and review details remain visible in the main Forge window. The repaired result will return to preview and require fresh review and approval. It will not create or execute anything automatically.</p>
+      <label class="dm_forge-repair-dialog-field">
+        <span>What should it have done?</span>
+        <textarea name="repairNotes" aria-label="What should it have done?" placeholder="Example: Keep the weapon and all existing effects, but preserve the requested light toggle."></textarea>
       </label>
-      <label class="dm_forge-report-dialog-field">
-        <span>What went wrong?</span>
-        <textarea name="reportNote" aria-label="Failed item report note" placeholder="Example: Burning Hands showed up in preview, but the created item defaulted to the melee attack and never offered the spell activity."></textarea>
+      <label class="dm_forge-repair-consent" title="I understand this sends the displayed prompt, reviewed JSON, review findings, and my repair note as one new provider request. It will require fresh review before creation.">
+        <input type="checkbox" name="repairConsent" aria-label="I understand this sends one new repair request.">
+        <span>I understand</span>
       </label>
-      <label class="dm_forge-report-dialog-field">
-        <span>Desired outcome in plain language <em>(optional)</em></span>
-        <textarea name="desiredOutcome" aria-label="Desired outcome in plain language" placeholder="Example: I wanted an action that casts Burning Hands from the item, using its charges and spell save DC."></textarea>
-      </label>
-      <p class="notes">This optional outcome helps us refine how Free Forge interprets natural D&D wording. It is stored with this report for review; it does not change an existing item automatically.</p>
-      <output class="dm_forge-report-dialog-status" data-forge-report-status data-state="idle" aria-live="polite">Your note will be sent with the current preview context.</output>
+      <output class="dm_forge-repair-dialog-status" data-forge-repair-status data-state="idle" aria-live="polite">Nothing has been sent.</output>
     </section>
   `;
 }
 
-function setFailedItemReportStatus(dialog, state, message) {
-  const output = dialog?.element?.querySelector?.("[data-forge-report-status]");
+function setRepairRerunStatus(dialog, state, message) {
+  const output = dialog?.element?.querySelector?.("[data-forge-repair-status]");
   if (!output) return;
   output.dataset.state = state;
   output.textContent = message;
 }
 
-async function submitFailedItemReport(parentDialog, userNote, desiredOutcome = "") {
-  const provider = reportContextProvider(parentDialog);
-  const providerRecord = getProvider(provider.id);
-  if (!providerRecord || providerRecord.mode !== "network") {
-    throw new Error("Failed-item reports are only available when a network Forge service is active.");
-  }
-  const connection = networkProviderConfiguration(provider.id, provider.configuration);
-  if (!String(connection.endpoint ?? "").trim()) {
-    throw new Error("Configure a Forge-compatible compile endpoint before sending failed-item reports.");
-  }
-  const payload = buildFailedItemReportPayload(parentDialog, userNote, desiredOutcome);
-  return requestRemoteErrorReport({
-    endpoint: connection.endpoint,
-    token: connection.apiToken,
-    payload
-  });
+function bindRepairConsentFooter(application, element) {
+  const root = element?.querySelector ? element : application?.element;
+  const form = root?.querySelector?.("form") ?? application?.element?.querySelector?.("form");
+  const footer = form?.querySelector?.(".form-footer");
+  const input = form?.elements?.namedItem("repairConsent");
+  const consent = input instanceof HTMLInputElement
+    ? input.closest(".dm_forge-repair-consent")
+    : null;
+  if (!(footer instanceof HTMLElement) || !(consent instanceof HTMLElement)) return;
+  consent.classList.add("dm_forge-repair-consent-footer");
+  footer.prepend(consent);
 }
 
-async function openFailedItemReportDialog(parentDialog) {
-  const availability = failedItemReportAvailability(parentDialog);
+async function runRepairRerun(parentDialog, repairNotes) {
+  const context = parentDialog?._dm_forgeRepairContext;
+  const payload = buildRepairAttemptPayload(parentDialog, repairNotes);
+  const provider = reportContextProvider(parentDialog);
+  const providerRecord = getProvider(provider.id);
+  if (!providerRecord || providerRecord.mode !== "network") throw new Error("Repair reruns require a network Forge service.");
+  const connection = networkProviderConfiguration(provider.id, provider.configuration);
+  if (!String(connection.endpoint ?? "").trim()) throw new Error("Configure a Forge-compatible compile endpoint before sending a repair rerun.");
+
+  context.attempted = true;
+  context.repairNotes = payload.repairNotes;
+  setStatus(parentDialog, "working", "Sending one confirmed repair request...");
+
+  const form = parentDialog.element?.querySelector("form");
+  const remoteCompilation = await compileWithProvider(context.originalRequest, {
+    providerId: provider.id,
+    configuration: provider.configuration,
+    requestMode: "repair-attempt",
+    repair: payload,
+     refreshCompletedCache: parentDialog?._dm_forgeProviderConnection?.capabilities?.request?.cacheControlRefresh === true,
+    context: {
+      foundryVersion: game.version,
+      systemId: game.system.id,
+      systemVersion: game.system.version,
+      moduleVersion: BUILD_VERSION,
+      supportedKinds: SUPPORTED_SPEC_KINDS,
+      automationCapabilities: currentConfig().automationCapabilities.providerContext
+    }
+  });
+  const compilation = await enrichCompilationWithSrdSpellChoices(remoteCompilation, context.originalRequest);
+  const mechanicsRequest = mechanicsRequestForCompilation(compilation, context.originalRequest);
+  const validation = await validateSpecs(compilation.specs, mechanicsRequest);
+  const preparedCompilation = compilationWithPreparedSpecs(compilation, validation.specs);
+  const rawSpecs = JSON.stringify(validation.specs, null, 2);
+  if (!(form instanceof HTMLFormElement)) throw new Error("Forge form is unavailable after the repair request.");
+  formControl(form, "specs").value = rawSpecs;
+  formControl(form, "reviewApproval").checked = false;
+  const automationApproval = formControl(form, "automationCodeApproval");
+  automationApproval.checked = false;
+  await Promise.all([
+    game.settings.set(MODULE_ID, "lastRequest", context.originalPrompt),
+    game.settings.set(MODULE_ID, "lastSpecs", rawSpecs)
+  ]);
+  const reviewNotesResult = await renderPreview(parentDialog, validation, preparedCompilation);
+  renderCompilationReport(parentDialog, preparedCompilation, reviewNotesResult);
+  showDialogView(form, "review");
+  const noteCount = reviewNotesResult.length;
+  setStatus(parentDialog, "success", `Repair preview ready with ${noteCount} review note${noteCount === 1 ? "" : "s"}. Review and approve again before creation.`);
+  ui.notifications.info(`${MODULE_TITLE}: Repair preview ready. No document was created.`);
+}
+
+async function openRepairRerunDialog(parentDialog) {
+  const availability = repairRerunAvailability(parentDialog);
   if (!availability.enabled) {
     ui.notifications.warn(`${MODULE_TITLE}: ${availability.message}`);
     return null;
   }
-
-  const reportDialog = new foundry.applications.api.DialogV2({
-    classes: ["dungeon-masters-forge", "dungeon-masters-forge-report-window"],
+  const context = parentDialog._dm_forgeRepairContext;
+  setRepairPromptLock(parentDialog, true);
+  const repairDialog = new foundry.applications.api.DialogV2({
+    classes: ["dungeon-masters-forge", "dungeon-masters-forge-repair-window"],
     window: {
-      title: "Report Failed Item",
-      icon: "fa-solid fa-bug",
+      title: "SEND IT AGAIN!?",
+      icon: "fa-solid fa-triangle-exclamation",
       minimizable: false,
       resizable: true
     },
-    position: { width: 640, height: 520 },
+    position: { width: 720, height: 680 },
     form: { closeOnSubmit: false },
-    content: failedItemReportDialogContent(),
+    content: repairRerunDialogContent(context),
     buttons: [
       {
         action: "cancel",
         label: "Cancel",
         icon: "fa-solid fa-xmark",
         type: "button",
-        callback: (_event, _button, dialog) => {
-          dialog.close();
-        }
+        callback: (_event, _button, dialog) => dialog.close()
       },
       {
-        action: "send-report",
-        label: "Send Report",
-        icon: "fa-solid fa-paper-plane",
-        class: "dm_forge-send-report",
+        action: "send-repair",
+        label: "Send repair request",
+        icon: "fa-solid fa-rotate",
+        class: "dm_forge-send-repair",
         default: true,
         type: "button",
         callback: async (_event, button, dialog) => {
+          const form = dialog.element?.querySelector("form");
+          const sendButton = dialog.element?.querySelector(".dm_forge-send-repair");
           try {
-            const note = formControl(button.form, "reportNote").value.trim();
-            const desiredOutcome = formControl(button.form, "desiredOutcome").value.trim();
-            const reportConsent = formControl(button.form, "reportConsent").checked;
-            if (!reportConsent) {
-              setFailedItemReportStatus(dialog, "warning", "Confirm that you understand what this report sends before continuing.");
+            if (!(form instanceof HTMLFormElement)) throw new Error("The repair form is unavailable. Close this window and reopen SEND IT AGAIN!? from the reviewed result.");
+            const repairNotes = formControl(form, "repairNotes").value.trim();
+            const consent = formControl(form, "repairConsent").checked;
+            if (!consent) {
+              setRepairRerunStatus(dialog, "warning", "Confirm that you understand this sends one new repair request.");
               return;
             }
-            if (!note) {
-              setFailedItemReportStatus(dialog, "warning", "Add a short note describing what failed before sending the report.");
+            if (!repairNotes) {
+              setRepairRerunStatus(dialog, "warning", "Describe what it should have done before sending the request.");
               return;
             }
-            setFailedItemReportStatus(dialog, "working", "Sending failed-item report...");
-            setStatus(parentDialog, "working", "Sending failed-item report...");
-            await submitFailedItemReport(parentDialog, note, desiredOutcome);
-            setFailedItemReportStatus(dialog, "success", "Report sent. Thank you - the current preview notes and generated JSON were included.");
-            setStatus(parentDialog, "success", "Failed-item report sent with the current preview notes and generated JSON.");
-            ui.notifications.info(`${MODULE_TITLE}: Failed-item report sent.`);
+            if (sendButton instanceof HTMLButtonElement) sendButton.disabled = true;
+            setRepairRerunStatus(dialog, "working", "Sending the one confirmed repair request...");
+            await runRepairRerun(parentDialog, repairNotes);
+            setRepairRerunStatus(dialog, "success", "Repair preview ready. This window will close; review the returned result before approving it.");
             dialog.close();
           } catch (error) {
-            const message = error instanceof Error ? error.message : String(error);
-            setFailedItemReportStatus(dialog, "error", message);
-            setStatus(parentDialog, "warning", message);
+            if (sendButton instanceof HTMLButtonElement) sendButton.disabled = false;
+            setRepairRerunStatus(dialog, "error", error instanceof Error ? error.message : String(error));
+            reportError(parentDialog, error, { stage: "repair-attempt" });
           }
         }
       }
     ]
   });
-
-  reportDialog.render({ force: true });
-  return reportDialog;
+  repairDialog.addEventListener("close", () => setRepairPromptLock(parentDialog, false), { once: true });
+  repairDialog.render({ force: true });
+  return repairDialog;
 }
 
 async function saveDialogState(rawSpecs, config, provider) {
@@ -2758,9 +2948,13 @@ async function openForge() {
         type: "button",
         callback: async (_event, button, dialog) => {
           try {
+            const request = formControl(button.form, "request").value.trim();
+            if (retryActionAvailability(dialog).enabled) {
+              await openRepairRerunDialog(dialog);
+              return;
+            }
             setStatus(dialog, "working", "Preparing preview...");
             clearForgeResultState(dialog);
-            const request = formControl(button.form, "request").value.trim();
             const provider = activeProviderState({
               unresolvedPolicy: formControl(button.form, "unresolvedPolicy").value
             });
@@ -2786,7 +2980,8 @@ async function openForge() {
                 systemId: game.system.id,
                 systemVersion: game.system.version,
                 moduleVersion: BUILD_VERSION,
-                supportedKinds: SUPPORTED_SPEC_KINDS
+                supportedKinds: SUPPORTED_SPEC_KINDS,
+                automationCapabilities: currentConfig().automationCapabilities.providerContext
               }
             });
             const compilation = await enrichCompilationWithSrdSpellChoices(remoteCompilation, request);
@@ -2805,6 +3000,8 @@ async function openForge() {
             if (diagnostics) diagnostics.hidden = true;
             const reviewNotes = await renderPreview(dialog, validation, preparedCompilation);
             renderCompilationReport(dialog, preparedCompilation, reviewNotes);
+            dialog._dm_forgePreviewRequest = request;
+            syncCompileAction(dialog);
             showDialogView(button.form, "review");
             const reviewGroups = summarizeFooterNotes(reviewNotes);
             const noteCount = reviewNotes.length;
@@ -3058,6 +3255,7 @@ Hooks.once("ready", async () => {
       cleanup: cleanupIsolatedVerificationHarness
     }),
     version: BUILD_VERSION,
+    automationCapabilities: () => currentConfig().automationCapabilities,
     validate: validateSpecs,
     create: createFromSpecs,
     example: () => foundry.utils.deepClone(EXAMPLE_SPECS)
@@ -3069,6 +3267,9 @@ Hooks.once("ready", async () => {
 
 Hooks.on("renderApplicationV2", (application, element) => {
   if (application === forgeDialog) bindForgeUsability(application, element);
+  if (application?.element?.classList?.contains("dungeon-masters-forge-repair-window")) {
+    bindRepairConsentFooter(application, element);
+  }
   scheduleItemsSidebarLauncherRefresh(element);
 });
 

@@ -1,0 +1,39 @@
+Dungeon Master's Forge - Advanced Automation Prompt Matrix
+
+Run in order. Preview > inspect review notes and automation code > approve only after review > create > test the created document. Do not execute Region or Macro plans until the separate in-world confirmation exists.
+
+1. Reaction context
+Create a rare brooch called Warden's Reflex. When its wearer is hit by an attack, offer a reaction before damage is applied. If accepted, add 5 AC against that triggering attack, consume the wearer's reaction, and do not affect later attacks. If the triggering attack cannot be identified, leave the reaction as a manual-review note.
+
+2. Conditional on-hit rider
+Create an uncommon +1 mace called Gravebell. On a hit against an undead creature, the target makes a DC 13 Wisdom save. On a failure it is frightened of the wielder for 1 minute; on a success it takes the normal damage only. The save must use the hit targets, not every selected target.
+
+3. Damage bonus trigger
+Create a rare ring called Ember Ledger. Once on each of the wearer's turns, when the wearer hits with a weapon attack, add 1d6 fire damage. It must not trigger on spells, opportunity attacks outside the wearer's turn, or a second hit on the same turn.
+
+4. Failed-save condition
+Create a rare whip called Coil of Stillness. On a hit, the target makes a DC 14 Strength save. On a failure it is restrained until the end of the wielder's next turn; on a success it takes the weapon damage and is not restrained. Apply the condition only to the failed hit target and preserve an explicit duration.
+
+5. Over-time save and damage
+Create a very rare lantern called Lantern of the Red Mire. When activated, it marks one creature for 1 minute. At the start of that creature's turns it makes a DC 15 Constitution save, taking 2d6 poison damage on a failure and half on a success. The effect ends when the duration expires or concentration ends.
+
+6. Proximity aura
+Create a legendary mantle called Mantle of the Hearthguard. While worn, allies within 10 feet have resistance to fire damage. The resistance appears while they are inside the aura and is removed when they leave it. It does not affect the wearer or enemies.
+
+7. Self-target utility macro
+Create an uncommon charm called Emberstep Charm. As a bonus action, the wearer toggles a self-only ember effect for 1 minute. While active, the wearer sheds bright light for 20 feet and dim light for 20 additional feet. The toggle must resolve the wearer's active token and must not require a manually selected token.
+
+8. Charge-gated multi-activity item
+Create a very rare staff called Staff of the Three Doors. It has 7 charges and regains 1d6 charges at dawn. Spend 2 charges to cast Misty Step on yourself, 3 charges to cast Hold Person with a DC 15 Wisdom save, or 4 charges to cast Dimension Door with one willing creature. Each power is a separate activity and only the selected power spends its listed charges.
+
+9. Summon with expiration
+Create a rare whistle called Bonecall. As an action, spend 3 charges to summon either a Skeleton or a Wolf in an unoccupied space within 30 feet for 1 hour. The GM chooses the profile when the activity is used. The summoned actor must be a disposable SRD-backed actor and must not be merged into the campaign actor.
+
+10. Region-linked macro plan
+Create a rare signet called Gatekeeper's Seal. Provide a reviewed macro plan that adds the behavior to the selected Scene Region UUID. When a token enters that Region, the macro asks for confirmation, checks the token's disposition, and applies the named effect only to that token. Do not execute the macro during creation.
+
+11. Teleport destination link
+Create a legendary key called Wayfarer's Key. Provide a reviewed Region behavior plan that teleports a token entering the selected doorway Region to the selected destination Region UUID. Require a preview confirmation and never guess either UUID.
+
+12. Combined stress case
+Create an artifact weapon called Sunfire Oathblade. It has a normal attack, a once-per-turn radiant damage rider, a reaction that reduces incoming damage, a self-target light toggle, and an Execute Macro Region behavior linked to the selected shrine Region UUID. Show all automation code and links for review, then require separate approval for item creation and macro execution.

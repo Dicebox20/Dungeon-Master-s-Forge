@@ -6,7 +6,7 @@ function buildFreeTierDeploymentReport(config, quotaStorage) {
     throw new ServiceError(500, "invalid_configuration", "Free-tier deployment preflight requires DMF_PUBLIC_FREE_TIER=true.");
   }
   return {
-    ready: quotaStorage?.kind === "sqlite" && quotaStorage?.durable === true,
+    ready: quotaStorage?.kind === "sqlite-usage" && quotaStorage?.durable === true,
     service: { name: SERVICE_NAME, version: SERVICE_VERSION },
     listener: { host: config.host, port: config.port },
     access: {
@@ -14,11 +14,12 @@ function buildFreeTierDeploymentReport(config, quotaStorage) {
       wildcardOrigins: config.allowedOrigins.includes("*"),
       trustProxy: config.trustProxy
     },
-    quotas: {
+    usage: {
       perMinute: config.rateLimitPerMinute,
-      perClientDay: config.clientDailyLimit,
-      perClientMonth: config.clientMonthlyLimit,
-      globalPerDay: config.globalDailyLimit,
+      perClientDay: config.clientDailyUsageLimit,
+      perClientMonth: config.clientMonthlyUsageLimit,
+      globalPerDay: config.globalDailyUsageLimit,
+      unit: "provider-token-or-estimated-data",
       storage: quotaStorage
     },
     provider: {

@@ -6,7 +6,7 @@ The hosted service now runs as two isolated processes from the same verified ser
 
 | Surface | Endpoint | Host process | Access | Limits |
 | --- | --- | --- | --- | --- |
-| Public Free Forge | `https://dmforge.137-184-103-220.sslip.io/v1/forge/compile` | `dmforge-ai.service`, port `8788` | Anonymous public mode | `10/min`, `100/client-month`, `50/global-day` |
+| Public Free Forge | `https://dmforge.137-184-103-220.sslip.io/v1/forge/compile` | `dmforge-ai.service`, port `8788` | Anonymous public mode | `10/min`, `500,000 usage units/client-month`, `1,000,000,000 usage units/global-day` |
 | Testing Free Forge | `https://dmforge-test.137-184-103-220.sslip.io/v1/forge/compile` | `dmforge-ai-testing.service`, port `8789` | Bearer-authenticated private mode | `100/min`, no public daily/monthly ledger |
 
 The test process has its own environment file, quota path, error-report path, systemd unit, and

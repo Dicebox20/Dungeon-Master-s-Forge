@@ -3,6 +3,7 @@ import test from "node:test";
 import { normalizeModelOutput, validateForgeRequest } from "../src/contract.mjs";
 import { actor } from "./fixtures/valid-specs.mjs";
 import { envelope } from "./helpers.mjs";
+import { normalizeAutomationCapabilities, normalizeAutomationContract } from "../src/automation-contract.mjs";
 
 function ids() {
   let value = 0;
@@ -14,6 +15,91 @@ test("valid Forge 1.0 requests are normalized", () => {
   assert.equal(result.schemaVersion, "1.0");
   assert.equal(result.context.systemId, "dnd5e");
   assert.equal(result.options.unresolvedPolicy, "review");
+});
+
+test("automation capability context is bounded and declarative", () => {
+  const result = validateForgeRequest(envelope({
+    context: {
+      ...envelope().context,
+      automationCapabilities: {
+        version: "1.0",
+        supportedRecipes: ["conditionOnHit", "selfTargetLight"],
+        activeModules: ["midi-qol", "itemacro"],
+        settings: { midiQolAutomation: true, itemMacroAutomation: true }
+      }
+    }
+  }));
+  assert.deepEqual(result.context.automationCapabilities.supportedRecipes, ["conditionOnHit", "selfTargetLight"]);
+  assert.deepEqual(normalizeAutomationContract({ recipe: "selfTargetLight", targetSource: "self" }).targetSource, "self");
+  assert.throws(() => normalizeAutomationContract({ recipe: "selfTargetLight", script: "return 1" }), /unsupported field/);
+  assert.throws(() => normalizeAutomationCapabilities({ version: "1.0", supportedRecipes: ["arbitraryMacro"] }), /unknown recipe/);
+});
+
+test("model automation metadata survives normalization without executable payloads", () => {
+  const request = "Create a rare longsword called Gravebell. On a hit, undead targets must make a DC 13 Constitution save or be poisoned for 1 minute.";
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "weaponConditionOnHit",
+      name: "Gravebell",
+      description: request,
+      weaponType: "martialM",
+      baseItem: "longsword",
+      damage: { base: { number: 1, denomination: 8, bonus: "@mod", types: ["slashing"] } },
+      extraDamageParts: [],
+      conditionOnHit: { condition: "poisoned", save: { ability: "con", dc: 13 }, durationSeconds: 60, targetCreatureType: "undead" },
+      automation: { recipe: "conditionOnHit", targetFilter: { creatureType: "undead" }, requires: ["midi-qol", "itemacro"] }
+    }]
+  }, validateForgeRequest(envelope({ request })), { makeId: ids() });
+  assert.equal(result.specs[0].automation.recipe, "conditionOnHit");
+  assert.equal(result.specs[0].automation.targetFilter.creatureType, "undead");
+  assert.equal(result.specs[0].automation.script, undefined);
+});
+
+test("repair attempts preserve reviewed context and strip executable fields", () => {
+  const request = "Create a rare torch called Ashen Mercy with a toggleable 20-foot bright light.";
+  const result = validateForgeRequest(envelope({
+    request,
+    requestMode: "repair-attempt",
+    repair: {
+      parentRequestId: "repair-parent-01",
+      attempt: 1,
+      originalRequest: request,
+      repairNotes: "Correct the stale light review note without changing the item.",
+      currentReviewedSpecs: [{
+        kind: "equipmentPowerSuite",
+        name: "Ashen Mercy",
+        flags: { "midi-qol": { command: "do-not-run" } },
+        macroCommand: "do-not-run"
+      }],
+      reviewNotes: [{ state: "notice", label: "Notice", message: "The light note is stale.", handling: "Review it." }],
+      deterministicFindings: ["toggleLight is present."],
+      provenance: { providerLane: "bring-your-own" }
+    }
+  }));
+  assert.equal(result.requestMode, "repair-attempt");
+  assert.equal(result.repair.attempt, 1);
+  assert.equal(result.repair.parentRequestId, "repair-parent-01");
+  assert.equal(result.repair.currentReviewedSpecs[0].flags, undefined);
+  assert.equal(result.repair.currentReviewedSpecs[0].macroCommand, undefined);
+  assert.equal(result.repair.reviewNotes[0].message, "The light note is stale.");
+});
+
+test("repair attempts reject repeated or mismatched source context", () => {
+  const base = {
+    parentRequestId: "repair-parent-01",
+    attempt: 1,
+    originalRequest: envelope().request,
+    repairNotes: "Correct the reviewed issue.",
+    currentReviewedSpecs: [{ kind: "weaponExtraDamage", name: "Repair Blade" }]
+  };
+  assert.throws(
+    () => validateForgeRequest(envelope({ requestMode: "repair-attempt", repair: { ...base, attempt: 2 } })),
+    error => error.code === "invalid_repair_attempt"
+  );
+  assert.throws(
+    () => validateForgeRequest(envelope({ requestMode: "repair-attempt", repair: { ...base, originalRequest: "Different request" } })),
+    error => error.code === "invalid_repair_context"
+  );
 });
 
 test("unknown client-supported kinds are rejected", () => {
@@ -120,7 +206,7 @@ test("model output becomes the exact Forge response envelope", () => {
   }, request, { makeId: ids() });
 
   assert.equal(result.schemaVersion, "1.0");
-  assert.equal(result.promptVersion, "1.0.0");
+  assert.equal(result.promptVersion, "1.1.0");
   assert.equal(result.requestCount, 1);
   assert.equal(result.specs[0].attackActivities[0].activityId, "0000000000000001");
   assert.equal(result.specs[0].effects[0].effectId, "0000000000000002");
@@ -1324,6 +1410,32 @@ test("staff output with summon profiles falls back to equipment power suite", ()
   assert.equal(result.specs[0].summonActivity.activityName, "Summon Ally");
 });
 
+test("explicit summon charge costs override stale model activity costs", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a very rare quarterstaff called Staff of the Bonebound Pact. It has 10 charges and regains 1d6 + 4 charges daily at dawn. As an action, spend 4 charges to summon one friendly Skeleton or Zombie for 1 hour."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "equipmentPowerSuite",
+      name: "Staff of the Bonebound Pact",
+      description: "A staff with a selectable undead ally.",
+      uses: { max: "10", recovery: [{ period: "dawn", type: "formula", formula: "1d6 + 4" }] },
+      activities: [{
+        activityName: "Summon Chosen Ally",
+        type: "summon",
+        chargeCost: 3
+      }],
+      summonProfiles: [
+        { profileName: "Skeleton", actor: actor("Skeleton") },
+        { profileName: "Zombie", actor: actor("Zombie") }
+      ]
+    }]
+  }, request, { makeId: ids() });
+
+  assert.equal(result.specs[0].utilityActivities[0].chargeCost, 4);
+  assert.equal(result.specs[0].summonActivity.chargeCost, 4);
+});
+
 test("staff output with a single summon actor and healing falls back to a suite without hard failure", () => {
   const request = validateForgeRequest(envelope({
     request: "Create a rare quarterstaff called Shepherd's Reliquary. It has 8 charges and regains 1d6 + 2 charges daily at dawn. As an action, the wielder can spend 1 charge to restore 2d8 + 2 hit points to a creature they touch, spend 2 charges to cast Shatter at DC 14, or spend 3 charges to summon a friendly wolf for 1 hour. It requires attunement."
@@ -1480,6 +1592,49 @@ test("missing hybrid mechanics are surfaced in unresolved review notes", () => {
   assert.equal(result.specs[0].summonProfiles[0].actor.srdActorName, "Wolf");
   assert.equal(result.warnings.includes("A requested summon was not preserved in the generated Foundry structure."), false);
   assert.equal(result.warnings.includes("Specific named spells were reduced to generic utility placeholders."), true);
+});
+
+test("malformed no-save aura damage is rerouted to anchored manual review", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a rare halberd called Stunning Halberd. It has a first-attack Constitution save and a radiant aura that deals damage to hostile creatures starting their turn inside it. The aura originates from the wielder's actor token."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "artifactWeaponHybrid",
+      name: "Stunning Halberd",
+      description: "A halberd with a stunning strike and radiant aura.",
+      weaponType: "martialM",
+      baseItem: "halberd",
+      damage: { base: { number: 1, denomination: 10, bonus: "@mod", types: ["slashing"] } },
+      extraDamageParts: [{ number: 1, denomination: 4, bonus: "", types: ["cold"] }],
+      saveActivities: [
+        {
+          activityId: "StunSave00000001",
+          activityName: "Stunning Strike",
+          save: { ability: "con", dc: 13 },
+          target: { affects: { type: "creature", count: "1" }, prompt: true }
+        },
+        {
+          activityId: "AuraDamage000001",
+          activityName: "Radiant Aura",
+          save: "none",
+          damageParts: [{ number: 2, denomination: 6, bonus: "", types: ["radiant"] }],
+          target: { template: { type: "sphere", size: 20, units: "ft" }, prompt: true }
+        }
+      ]
+    }]
+  }, request, { makeId: ids() });
+
+  const spec = result.specs[0];
+  assert.equal(spec.saveActivities.length, 1);
+  assert.equal(spec.saveActivities[0].activityName, "Stunning Strike");
+  assert.equal(spec.utilityActivities.length, 1);
+  assert.equal(spec.utilityActivities[0].activityName, "Radiant Aura");
+  assert.equal(spec.utilityActivities[0].damageParts, undefined);
+  assert.deepEqual(spec.utilityActivities[0].range, { value: null, units: "self" });
+  assert.deepEqual(spec.utilityActivities[0].target.affects, { type: "self", count: "1", special: "Wielder's actor token" });
+  assert.equal(spec.utilityActivities[0].target.prompt, false);
+  assert.equal(new Set(spec.unresolvedMechanics.map(mechanic => mechanic.category)).has("allyAura"), true);
 });
 
 test("condition riders and named light utilities do not trigger false unresolved flags", () => {
@@ -2265,6 +2420,38 @@ test("malformed non-damaging save activities are rerouted to utility activities"
   assert.equal("save" in spec.utilityActivities[0], false);
 });
 
+test("malformed non-damaging attack activities are rerouted to save or utility activities", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a rare weapon called Ashen Mercy. On a hit the target must succeed on a DC 14 Constitution saving throw or be blinded until the end of its next turn. It can also restore 2d8 hit points to one creature you touch."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "equipmentPowerSuite",
+      name: "Ashen Mercy",
+      description: "A weapon with a rider and a healing touch.",
+      attackActivities: [
+        {
+          activityName: "Blinding Strike",
+          save: { ability: "con", dc: 14 },
+          damageParts: []
+        },
+        {
+          activityName: "Healing Touch",
+          healing: { number: 2, denomination: 8, bonus: "", types: ["healing"] },
+          target: { affects: { count: "1", type: "creature" }, prompt: true },
+          damageParts: []
+        }
+      ]
+    }]
+  }, request, { makeId: ids() });
+
+  const spec = result.specs[0];
+  assert.deepEqual(spec.attackActivities ?? [], []);
+  assert.deepEqual(spec.saveActivities.map(activity => activity.activityName), ["Blinding Strike"]);
+  assert.equal(spec.utilityActivities[0].activityName, "Healing Touch");
+  assert.deepEqual(spec.utilityActivities[0].healing, { number: 2, denomination: 8, bonus: "", types: ["healing"] });
+});
+
 test("malformed damaging save activities still fail closed", () => {
   const request = validateForgeRequest(envelope({
     request: "Create a rare rod called Unsafe Rod that deals 3d8 force damage on a failed save."
@@ -2482,4 +2669,23 @@ test("named non-damaging save spells are canonicalized from utility model drift"
   assert.deepEqual(spec.saveActivities[0].damageParts, []);
   assert.deepEqual(spec.saveActivities[0].range, { value: 120, units: "ft" });
   assert.equal(spec.saveActivities[0].duration.concentration, true);
+});
+
+test("condition riders preserve an explicit creature-type filter", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create an uncommon +1 mace called Gravebell. On a hit against an undead creature, the target makes a DC 13 Wisdom save. On a failure it is frightened for 1 minute."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "weaponConditionOnHit",
+      name: "Gravebell",
+      conditionOnHit: {
+        condition: "frightened",
+        save: { ability: "wis", dc: 13 },
+        durationSeconds: 60
+      }
+    }]
+  }, request, { makeId: ids() });
+
+  assert.equal(result.specs[0].conditionOnHit.targetCreatureType, "undead");
 });

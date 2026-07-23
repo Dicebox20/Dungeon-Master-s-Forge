@@ -13,7 +13,7 @@ See the [public tester list](testers.md) for the people currently helping with t
 - [What Free Forge Can Do](#what-free-forge-can-do)
 - [Current Free Forge Limits](#current-free-forge-limits)
 - [What We Need From Testers](#what-we-need-from-testers)
-- [Report a Problem](#report-a-problem)
+- [Repair a Result](#repair-a-result)
 - [Bring Your Own API](#bring-your-own-api)
 - [Keep API Keys Safe](#keep-api-keys-safe)
 - [Feedback Template](#feedback-template)
@@ -44,7 +44,7 @@ Our goal is to make Foundry item creation easier for people who are not comforta
 7. Confirm that the provider is **Free Forge**.
 8. Click **Check Connection** before your first live test.
 
-The current tester build is `2.23.1-test.45`. Free Forge does not require a personal endpoint, API token, or OpenAI key.
+The current tester build is `2.23.1-test.52`. Free Forge does not require a personal endpoint, API token, or OpenAI key.
 
 ## Run Your First Test
 
@@ -103,7 +103,7 @@ Both styles are useful. Precise prompts test whether a supported mechanic works,
 
 ## What Free Forge Can Do
 
-Free Forge is designed to help create and review supported DND5e item patterns, including:
+Free Forge can combine safe, supported DND5e item mechanics instead of limiting each request to one fixed item family. Current capabilities include:
 
 - weapons with magical bonuses and extra damage
 - on-hit saving throws, conditions, and passive effects
@@ -113,22 +113,22 @@ Free Forge is designed to help create and review supported DND5e item patterns, 
 - supported summons using exact DND5e SRD creatures
 - items with several supported activities or powers
 
-It creates structured Foundry data and shows review notes before creation. It does not mean that every possible DND5e rule or every creative request is fully automated.
+It creates structured Foundry data and shows review notes before creation. It does not mean that every possible DND5e rule or every creative request runs without manual review.
 
 ## Current Free Forge Limits
 
-We can currently provide **100 prompts per tester per calendar month**. We are all low-income average Joes, and we are paying for the service out of pocket, so we cannot provide a larger free allowance right now.
+Free Forge uses a monthly hosted-usage allowance instead of counting every prompt equally. Small, straightforward items use less of the allowance. Large prompts and complicated items use more. This lets testers choose between several ambitious items or a larger number of simple ones while we continue paying for the service out of pocket.
 
 The service also has temporary safety limits:
 
-- 10 prompts per minute per client
-- 50 prompts per day across the public service
-- failed or rejected requests may still count because they can use upstream service capacity
+- a short-term per-minute safeguard to prevent accidental bursts and abuse
+- a monthly per-tester usage allowance and a global daily cost ceiling
+- fresh model work can use allowance even when the result needs review; cached results do not
 - complex, unsupported, or ambiguous mechanics may be preserved as a warning, Free Forge limitation, or manual-review note
 - exact SRD summons require an installed DND5e SRD actor with the expected name
 - the service does not create macros, scripts, automatic migrations, campaign content, or unsafe executable data
 
-If you have your own compatible API setup, **Bring Your Own API** bypasses the DMF monthly allowance. Your provider's own billing, usage limits, and terms still apply. A ChatGPT or Claude subscription does not automatically become API credit.
+If you have your own compatible API setup, **Bring Your Own API** does not use the hosted Free Forge allowance. Your provider's own billing, usage limits, and terms still apply. A ChatGPT or Claude subscription does not automatically become API credit.
 
 ## What We Need From Testers
 
@@ -144,15 +144,11 @@ Please try both straightforward prompts and prompts with unusual wording, typos,
 
 For each test, please look at the preview before creation. When possible, open the created item and try the relevant activity safely. We are especially interested in whether the item looks right in Foundry and whether the activity behaves as expected.
 
-## Report a Problem
+## Repair a Result
 
-### Report Failed Item
+When a reviewed network result is incorrect, leave the original request unchanged and click **Retry**. The Forge opens **SEND IT AGAIN!?**, showing the original prompt, current reviewed JSON, review notes, and validation findings. Add the specific correction, acknowledge the one new request, and send it. The repaired result returns to preview and requires fresh review and approval.
 
-Use **Report Failed Item** from the Forge window when a prompt produces a warning, failure, or clearly incorrect item. Include the expected result and what actually happened.
-
-This feature can be buggy. If it does not open, submit, or stay visible, do not get stuck on it. Try another prompt and send us the details manually instead.
-
-When the hosted tester service is used, submitted failed-item reports have a 30-day retention window and expired entries are pruned when a new report is received. Do not include secrets or private campaign details.
+Do not use Retry for a new idea, and do not include secrets or private campaign details in repair notes. For a creation or in-world behavior failure, capture the immediate structured snapshot and send the concise observation with the exported item JSON only when requested.
 
 ### Anonymous Error Reports
 

@@ -48,7 +48,10 @@ test("the expectation card catches a missing requested activity, effect, use poo
     minimumActivities: 1,
     minimumEffects: 1,
     expectedUses: 3,
-    minimumSummonProfiles: 2
+    minimumSummonProfiles: 2,
+    automationRecipe: "",
+    automationWorkflowPass: "",
+    automationTargetSource: ""
   });
 
   const incomplete = compareDocumentToExpectation({
@@ -76,6 +79,31 @@ test("the expectation card catches a missing requested activity, effect, use poo
   assert.equal(complete.passed, true);
   assert.equal(complete.failures.length, 0);
   assert.equal(buildVerificationExpectation({ kind: "weaponExtraDamage", name: "Plain Blade" }).expectedUses, null);
+});
+
+test("the expectation card verifies safe automation metadata without executing it", () => {
+  const spec = {
+    kind: "weaponConditionOnHit",
+    name: "Gravebell",
+    automation: {
+      recipe: "conditionOnHit",
+      targetSource: "hitTargets",
+      requires: ["midi-qol", "itemacro"]
+    }
+  };
+  const expectation = buildVerificationExpectation(spec);
+  const document = {
+    name: "Gravebell",
+    type: "weapon",
+    flags: { "dungeon-masters-forge": { kind: "weaponConditionOnHit", automation: spec.automation } },
+    system: { activities: new Map(), uses: { max: "" } },
+    effects: []
+  };
+  assert.equal(compareDocumentToExpectation(document, expectation).passed, true);
+  assert.throws(
+    () => compareDocumentToExpectation({ ...document, flags: { "dungeon-masters-forge": { kind: "weaponConditionOnHit", automation: { ...spec.automation, script: "return 1" } } } }, expectation),
+    /unsupported field/
+  );
 });
 
 test("status remains false outside the exact enabled GM boundary", () => {

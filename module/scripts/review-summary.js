@@ -1,5 +1,7 @@
 import { inferArmorProfile, normalizeMagicalBonus, safeItemIcon } from "./equipment-normalization.js";
 
+import { automationReviewNote } from "./automation-contract.js";
+
 const KIND_LABELS = Object.freeze({
   artifactWeaponHybrid: "Hybrid artifact",
   casterUtilityEquipment: "Spellcasting equipment",
@@ -247,6 +249,22 @@ function suppressResolvedSpellCompilationNote(message, spec = {}) {
   return mentionsResolvedSpell || staleResolvedSpellNote;
 }
 
+function specHasToggleLightReviewSupport(spec = {}) {
+  if (spec.toggleLight && typeof spec.toggleLight === "object") return true;
+  return (spec.utilityActivities ?? []).some(activity => {
+    if (!activity || typeof activity !== "object") return false;
+    const text = [activity.activityName, activity.name, activity.label, activity.description]
+      .map(value => String(value ?? ""))
+      .join(" ");
+    return /\b(?:bright|dim|light|shed|glow|ignite|flame)\b/i.test(text);
+  });
+}
+
+function suppressResolvedLightCompilationNote(message, spec = {}) {
+  if (!specHasToggleLightReviewSupport(spec)) return false;
+  return /requested light effect was not preserved|requested light effect.*(?:not preserved|not supported|not contain)/i.test(String(message ?? ""));
+}
+
 function compilationNotes(compilation, spec, itemName, itemCount) {
   if (!compilation) return [];
   const groups = [
@@ -261,6 +279,7 @@ function compilationNotes(compilation, spec, itemName, itemCount) {
       if (prefixed && !message.startsWith(`[${itemName}]`)) continue;
       if (!prefixed && itemCount > 1) continue;
       if (suppressResolvedSpellCompilationNote(message, spec)) continue;
+      if (suppressResolvedLightCompilationNote(message, spec)) continue;
       notes.push({ state, label, message: stripItemPrefix(message, itemName) });
     }
   }
@@ -289,7 +308,7 @@ function tierReviewNotes(tierReview, itemName) {
   if (!tierReview?.items?.length) return [];
   const match = tierReview.items.find(item => item.name === itemName);
   return (match?.notes ?? []).map(note => ({
-    state: note.state ?? "warning",
+    state: note.state ?? "review",
     label: note.label ?? "Tier planning",
     message: note.message ?? "",
     handling: note.handling ?? ""
@@ -329,7 +348,10 @@ function summarizeSpec(spec, context = {}) {
     const condition = titleCase(spec.conditionOnHit.condition);
     const save = saveText(spec.conditionOnHit.save);
     const duration = spec.conditionOnHit.durationSeconds ? `${spec.conditionOnHit.durationSeconds} seconds` : "";
-    add(`${condition} on hit${save ? `; ${save}` : ""}${duration ? `; ${duration}` : ""}`);
+    const targetType = spec.conditionOnHit.targetCreatureType
+      ? `; target filter: ${titleCase(spec.conditionOnHit.targetCreatureType)}`
+      : "";
+    add(`${condition} on hit${save ? `; ${save}` : ""}${duration ? `; ${duration}` : ""}${targetType}`);
   }
 
   if (spec.damageParts?.length || spec.save) {
@@ -395,6 +417,8 @@ function summarizeSpec(spec, context = {}) {
     ...references,
     ...unresolved
   ];
+  const automationNote = automationReviewNote(spec.automation);
+  if (automationNote) notes.push(automationNote);
   const hasActivePowers = [
     ...(spec.activities ?? []),
     ...(spec.attackActivities ?? []),

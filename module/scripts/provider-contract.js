@@ -94,25 +94,29 @@ function remoteHttpError(response, subject, payload = null) {
   const monthlyLimit = String(response?.headers?.get?.("x-monthlylimit-limit") ?? "").trim();
   const dailyLimit = String(response?.headers?.get?.("x-dailylimit-limit") ?? "").trim();
   const globalDailyLimit = String(response?.headers?.get?.("x-globaldailylimit-limit") ?? "").trim();
+  const usageLimit = String(response?.headers?.get?.("x-forge-usage-limit") ?? "").trim();
   const detail = remoteErrorDetail(payload);
   if (status === 429) {
-    if (detail?.code === "monthly_client_limit") {
-      const allowanceText = /^\d+$/.test(monthlyLimit)
-        ? ` This client can use Free Forge ${monthlyLimit} time${monthlyLimit === "1" ? "" : "s"} per calendar month.`
+    if (["monthly_client_usage_limit", "monthly_client_limit"].includes(detail?.code)) {
+      const limit = usageLimit || monthlyLimit;
+      const allowanceText = /^\d+$/.test(limit)
+        ? ` The configured monthly allowance is ${limit} usage units.`
         : "";
-      return new Error(`${subject} monthly free-tier limit reached (HTTP 429).${allowanceText}`);
+      return new Error(`${subject} monthly hosted usage allowance reached (HTTP 429).${allowanceText}`);
     }
-    if (detail?.code === "daily_client_limit") {
-      const allowanceText = /^\d+$/.test(dailyLimit)
-        ? ` This client can use Free Forge ${dailyLimit} time${dailyLimit === "1" ? "" : "s"} per day.`
+    if (["daily_client_usage_limit", "daily_client_limit"].includes(detail?.code)) {
+      const limit = usageLimit || dailyLimit;
+      const allowanceText = /^\d+$/.test(limit)
+        ? ` The configured daily allowance is ${limit} usage units.`
         : "";
-      return new Error(`${subject} daily free-tier limit reached (HTTP 429).${allowanceText}`);
+      return new Error(`${subject} daily hosted usage allowance reached (HTTP 429).${allowanceText}`);
     }
-    if (detail?.code === "daily_global_limit") {
-      const allowanceText = /^\d+$/.test(globalDailyLimit)
-        ? ` The shared Free Forge pool is capped at ${globalDailyLimit} request${globalDailyLimit === "1" ? "" : "s"} per day.`
+    if (["daily_global_usage_limit", "daily_global_limit"].includes(detail?.code)) {
+      const limit = usageLimit || globalDailyLimit;
+      const allowanceText = /^\d+$/.test(limit)
+        ? ` The shared daily safeguard is ${limit} usage units.`
         : "";
-      return new Error(`${subject} shared free-tier daily limit reached (HTTP 429).${allowanceText}`);
+      return new Error(`${subject} shared hosted usage safeguard reached (HTTP 429).${allowanceText}`);
     }
     const retryText = /^\d+$/.test(retryAfter)
       ? ` Retry in about ${retryAfter} second${retryAfter === "1" ? "" : "s"}.`
@@ -144,11 +148,19 @@ function redactProviderConfiguration(value) {
 
 function buildRemoteProviderRequest(request, options = {}) {
   const normalizedRequest = String(request ?? "").trim();
-  if (!normalizedRequest) throw new Error("Describe an item before compiling.");
+  const repairRequest = options.requestMode === "repair-attempt"
+    ? String(options.repair?.originalRequest ?? "").trim()
+    : "";
+  const wireRequest = repairRequest || normalizedRequest;
+  if (!wireRequest) throw new Error("Describe an item before compiling.");
 
   return {
     schemaVersion: REMOTE_PROVIDER_SCHEMA_VERSION,
-    request: normalizedRequest,
+    requestMode: options.requestMode === "repair-attempt" ? "repair-attempt" : "compile",
+    // Repair validation requires the top-level request and repair provenance to
+    // be byte-for-byte identical after trimming. Keep the wire request tied to
+    // the retained reviewed request instead of normalizing it a second time.
+    request: wireRequest,
     context: {
       foundryVersion: String(options.context?.foundryVersion ?? ""),
       systemId: String(options.context?.systemId ?? "dnd5e"),
@@ -156,12 +168,21 @@ function buildRemoteProviderRequest(request, options = {}) {
       moduleVersion: String(options.context?.moduleVersion ?? ""),
       supportedKinds: Array.isArray(options.context?.supportedKinds)
         ? options.context.supportedKinds.map(String)
-        : []
+        : [],
+      supportedCapabilities: Array.isArray(options.context?.supportedCapabilities)
+        ? options.context.supportedCapabilities.map(String)
+        : [],
+      ...(options.context?.automationCapabilities && typeof options.context.automationCapabilities === "object"
+        ? { automationCapabilities: clone(options.context.automationCapabilities) }
+        : {})
     },
     options: {
       model: String(options.model ?? ""),
       unresolvedPolicy: options.unresolvedPolicy === "block" ? "block" : "review"
-    }
+    },
+    ...(options.requestMode === "repair-attempt" && options.repair && typeof options.repair === "object"
+      ? { repair: clone(options.repair) }
+      : {})
   };
 }
 
@@ -178,7 +199,30 @@ function optionalPreparedSpecFingerprint(value) {
   return /^sha256:[0-9a-f]{64}$/.test(fingerprint) ? fingerprint : "";
 }
 
-function normalizeRemoteProviderResponse(payload, provider = {}) {
+function responseNumber(headers, name) {
+  const value = Number(headers?.get?.(name) ?? NaN);
+  return Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+function usageFromResponseHeaders(headers, usage = {}) {
+  const limit = responseNumber(headers, "x-forge-usage-limit");
+  const remaining = responseNumber(headers, "x-forge-usage-remaining");
+  const chargedUnits = responseNumber(headers, "x-forge-usage-charged");
+  const cacheStatus = String(headers?.get?.("x-forge-cache") ?? usage.cacheStatus ?? "").trim();
+  const next = { ...clone(usage) };
+  if (limit != null && remaining != null && limit > 0) {
+    next.capacity = {
+      limit,
+      remaining: Math.min(limit, remaining),
+      percentRemaining: Math.max(0, Math.min(100, Math.round((remaining / limit) * 100)))
+    };
+  }
+  if (chargedUnits != null) next.chargedUnits = chargedUnits;
+  if (cacheStatus) next.cacheStatus = cacheStatus;
+  return next;
+}
+
+function normalizeRemoteProviderResponse(payload, provider = {}, metadata = {}) {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     throw new Error("Remote provider response must be a JSON object.");
   }
@@ -223,6 +267,7 @@ function normalizeRemoteProviderResponse(payload, provider = {}) {
     assumptions: stringArray(payload.assumptions, "assumptions"),
     warnings: stringArray(payload.warnings, "warnings"),
     deferred: stringArray(payload.deferred, "deferred"),
+    usage: usageFromResponseHeaders(metadata.headers, payload.usage ?? {}),
     unresolvedMechanics: clone(payload.unresolvedMechanics ?? specs.flatMap(spec =>
       (spec.unresolvedMechanics ?? []).map(mechanic => ({ itemName: spec.name, ...mechanic }))
     ))
@@ -252,6 +297,9 @@ function normalizeRemoteCapabilities(payload, options = {}) {
     ? localKinds.filter(kind => remoteKinds.includes(kind))
     : [...remoteKinds];
   if (!compatibleKinds.length) throw new Error("Remote provider and this Forge build do not share a supported item kind.");
+  const remoteCapabilities = Array.isArray(forge.compositionalCapabilities)
+    ? [...new Set(forge.compositionalCapabilities.map(String).filter(Boolean))]
+    : [];
 
   const features = payload.features && typeof payload.features === "object" && !Array.isArray(payload.features)
     ? payload.features
@@ -267,11 +315,14 @@ function normalizeRemoteCapabilities(payload, options = {}) {
     forge: {
       schemaVersion: forge.schemaVersion,
       promptVersion: String(forge.promptVersion ?? ""),
-      supportedKinds: remoteKinds
+      supportedKinds: remoteKinds,
+      compositionalCapabilities: remoteCapabilities,
+      automationContract: clone(forge.automationContract ?? null)
     },
     request: clone(payload.request ?? {}),
     features: clone(features),
-    compatibleKinds
+    compatibleKinds,
+    compatibleCapabilities: remoteCapabilities
   };
 }
 
@@ -472,9 +523,15 @@ async function requestRemoteCompilation(options) {
   const requestBody = buildRemoteProviderRequest(options.request, {
     context: options.context,
     model: options.model,
-    unresolvedPolicy: options.unresolvedPolicy
+    unresolvedPolicy: options.unresolvedPolicy,
+    requestMode: options.requestMode,
+    repair: options.repair
   });
-  const headers = { "Content-Type": "application/json", Accept: "application/json" };
+  const headers = {
+    "Content-Type": "application/json",
+    Accept: "application/json"
+  };
+  if (options.refreshCompletedCache === true) headers["Cache-Control"] = "no-cache";
   if (options.token) headers.Authorization = `Bearer ${options.token}`;
 
   const controller = new AbortController();
@@ -513,7 +570,7 @@ async function requestRemoteCompilation(options) {
     throw new Error("Remote provider returned invalid JSON.");
   }
 
-  return normalizeRemoteProviderResponse(payload, options.provider);
+  return normalizeRemoteProviderResponse(payload, options.provider, { headers: response.headers });
 }
 
 async function requestRemoteErrorReport(options) {

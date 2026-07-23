@@ -97,14 +97,14 @@ Copy `.env.example` to `.env` and run `npm run start:env`, or set variables dire
 | `DMF_AI_MODE` | `mock` | `mock` or `openai`. |
 | `DMF_ALLOWED_ORIGINS` | localhost Foundry origins | Comma-separated exact Foundry origins. |
 | `DMF_CLIENT_TOKEN` | empty | Optional bearer token shared with the Foundry client in server-key mode. |
-| `DMF_PUBLIC_FREE_TIER` | `false` | Enables bounded tokenless public access; requires a server key, wildcard origins, a monthly client allowance, and a global daily ceiling. The service may still use a keyed network identifier for rate limiting. |
+| `DMF_PUBLIC_FREE_TIER` | `false` | Enables bounded tokenless public access; requires a server key, wildcard origins, a monthly client usage allowance, and a global daily usage ceiling. The service may still use a keyed network identifier for metering and rate limiting. |
 | `DMF_TRUST_PROXY` | `false` | Trust the first `X-Forwarded-For` address. Enable only behind a proxy that replaces untrusted forwarding headers. |
 | `DMF_RATE_LIMIT_PER_MINUTE` | `20` private / `2` free-tier template | Per-client in-memory limit. The hosted tester may use a different value. |
-| `DMF_CLIENT_DAILY_LIMIT` | `0` | Optional per-client daily request limit; `0` disables it. |
-| `DMF_CLIENT_MONTHLY_LIMIT` | `0` private / `100` free-tier template | Per-client calendar-month request limit; required in public free-tier mode. |
-| `DMF_GLOBAL_DAILY_LIMIT` | `0` private / `50` free-tier template | Global daily request limit; `0` disables it outside free-tier mode. |
-| `DMF_QUOTA_DATABASE_PATH` | `:memory:` private / `./data/free-tier-quota.sqlite` free tier | SQLite quota ledger. Public mode rejects in-memory storage. |
-| `DMF_QUOTA_HASH_SECRET` | empty | Server-only secret of at least 32 characters used to pseudonymize client addresses in the quota ledger. Required in public mode. |
+| `DMF_CLIENT_DAILY_USAGE_LIMIT` | `0` | Optional per-client daily usage-unit limit; `0` disables it. |
+| `DMF_CLIENT_MONTHLY_USAGE_LIMIT` | `0` private / `500000` free-tier template | Per-client calendar-month usage allowance, calibrated to roughly 50 prompts from the previous prompt-count baseline; required in public free-tier mode. |
+| `DMF_GLOBAL_DAILY_USAGE_LIMIT` | `0` private / `10000000` free-tier template | Global daily usage ceiling; required in public free-tier mode. |
+| `DMF_QUOTA_DATABASE_PATH` | `:memory:` private / `./data/free-tier-quota.sqlite` free tier | SQLite usage ledger. Public mode rejects in-memory storage. |
+| `DMF_QUOTA_HASH_SECRET` | empty | Server-only secret of at least 32 characters used to pseudonymize client addresses in the usage ledger. Required in public mode. |
 | `DMF_ERROR_REPORTS_ENABLED` | public mode default | Enables the separate, user-triggered failed-item report endpoint. |
 | `DMF_ERROR_REPORT_PATH` | `./data/error-reports.jsonl` | Host-local report file; protect it like other service data. |
 | `DMF_ERROR_REPORT_RETENTION_DAYS` | `30` | Number of days to retain normalized failed-item reports; bounded to 1-365 days and pruned when a new report is written. |
@@ -133,7 +133,7 @@ npm run smoke:capabilities
 npm run smoke:regression
 ```
 
-`preflight:free-tier` validates `.env`, opens the configured SQLite quota ledger, and prints a redacted deployment report without calling a model. The smoke commands expect the service to already be running. They print only contract versions and generated item names, never credentials or full requests. The batch smoke proves two explicitly named items survive the complete request/response path. The automated suite drives all fourteen supported Forge families through a mocked OpenAI Responses call and the complete compiler pipeline, then rejects incomplete or unsafe weapons, effects, charged powers, enchantments, summons, suites, and hybrid artifacts before they can reach Foundry.
+`preflight:free-tier` validates `.env`, opens the configured SQLite usage ledger, and prints a redacted deployment report without calling a model. Usage is based on provider tokens when available and a deterministic request/response-size estimate otherwise. Cached results and requests paid for with a client provider key are not charged to the hosted allowance. The smoke commands expect the service to already be running. They print only contract versions and generated item names, never credentials or full requests. The batch smoke proves two explicitly named items survive the complete request/response path. The automated suite drives every compatibility renderer plus representative compositional capabilities through a mocked OpenAI Responses call and the complete compiler pipeline, then rejects incomplete or unsafe weapons, effects, charged powers, enchantments, summons, suites, and hybrid artifacts before they can reach Foundry.
 
 `smoke:regression` runs a repeatable live-service compile sweep against curated prompt packs:
 
@@ -181,4 +181,4 @@ For the current hardened workspace build, a direct local smoke proof was verifie
 
 ## Production Boundary
 
-Service `1.6.1` includes bounded public free-tier mode with a durable SQLite quota ledger and one controlled retry for malformed or contract-invalid model output. Authentication, quota, timeout, network, and generic upstream failures are never retried. See `docs/FREE_TIER_DEPLOYMENT.md` and `.env.free-tier.example`. The per-minute limiter and result cache remain in memory by design, while the temporary 100-prompt client calendar-month allowance and global daily ceiling survive restarts. The service is intended for one persistent host; horizontally scaled deployments need a shared transactional quota backend.
+Service `1.6.1` includes bounded public Free Forge mode with a durable SQLite usage ledger and one controlled retry for malformed or contract-invalid model output. Authentication, usage-limit, timeout, network, and generic upstream failures are never retried. See `docs/FREE_TIER_DEPLOYMENT.md` and `.env.free-tier.example`. The per-minute abuse limiter and result cache remain in memory by design, while configured client and global usage allowances survive restarts. Cache hits and requests funded with a client-provided key are not charged to Free Forge. The service is intended for one persistent host; horizontally scaled deployments need a shared transactional usage backend.

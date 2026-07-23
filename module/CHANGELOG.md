@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+- Moved repair consent into the dialog footer with a visible checked state and hover explanation, and preserved the user's original request text for repair provenance.
+- Focused the SEND IT AGAIN!? window on one reachable repair text box and kept it open until the confirmed request succeeds or reports an error.
+- Preserved the Advanced Specification Editor control during preview resets so the first Preview action can update the generated JSON instead of failing with a missing `specs` control.
+- Reissued the tester package as `2.23.1-test.49` after the advanced automation runtime was added to the source tree but omitted from the previous local install archive.
+- Simplified the `SEND IT AGAIN!?` repair window so the original prompt remains in the main Forge window and the repair dialog keeps one large editable notes field.
+- Moved the Advanced Specification Editor into the preview tab row and added a hosted Forge Capacity percentage indicator without exposing raw usage units.
+- Changed the unchanged request action from `Preview` to `Retry` when a reviewed network result can use the one-shot repair flow. `Retry` opens the distinct `SEND IT AGAIN!?` confirmation window showing the reviewed JSON, notes, findings, and one new usage-metered request; the original prompt remains in the main Forge window. Repaired previews require fresh review and approval and never create documents automatically.
+- Removed the user-facing `Report Failed Item` flow. The repair request now carries the evidence needed to correct a reviewed result, while anonymous technical error diagnostics remain separately opt-in.
+- Replaced the single scrolling review-note body with independently collapsible category nodes so Review, Notices, Resolved, Free Forge, and safety Warning entries can be inspected as a text tree.
+- Grouped resolved review entries under the user-facing `Resolved` label, changed manual-review entries to a review icon, cleared stale light-schema notes when the toggle utility is present, and removed duplicate light-toggle activities.
+- Updated trusted light-toggle macros to resolve the actor's active token instead of requiring a manually selected token.
+- Reconciled review notes with the final typed activities and effects so resolved healing and light behaviors no longer retain stale unresolved warnings.
+- Moved automation approval beside normal approval in the footer with a compact two-line `Approve / Automation` label, and reconciled stale light warnings when the final spec contains a supported light toggle.
+- Corrected explicit summon charge costs when model output drifts from the prompt, including the shared summon payload used by multi-profile items.
+- Reorganized preview notes into collapsed Review, Notices, Resolved, Free Forge, and safety Warning groups.
+- Advertised safe compositional capabilities separately from the fourteen compatibility renderer routes.
+- Requested fresh remote previews by default so repeated prompts do not silently reuse completed cached JSON.
+- Added usage-meter response handling while retaining clear errors for the previous request-count service during migration.
+- Reworded unresolved-mechanic review text so compatible secondary mechanics are not described as leftovers.
 - Migrated the Foundry package ID to `dungeon-masters-forge` so install and update notifications use the public product identity.
 - Added first-launch migration for legacy world and client settings without overwriting settings already stored under the new package ID.
 - Kept legacy generated-item flags readable while writing all new document flags under `dungeon-masters-forge`.

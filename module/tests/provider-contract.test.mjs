@@ -72,13 +72,46 @@ const requestBody = buildRemoteProviderRequest("Create a fire dagger", {
     systemId: "dnd5e",
     systemVersion: "5.3.3",
     moduleVersion: "2.8.0",
-    supportedKinds: ["weaponExtraDamage"]
+    supportedKinds: ["weaponExtraDamage"],
+    automationCapabilities: {
+      version: "1.0",
+      supportedRecipes: ["conditionOnHit"],
+      activeModules: ["midi-qol", "itemacro"],
+      settings: { midiQolAutomation: true, itemMacroAutomation: true }
+    }
   }
 });
 assert.equal(requestBody.schemaVersion, REMOTE_PROVIDER_SCHEMA_VERSION);
 assert.equal(requestBody.options.unresolvedPolicy, "block");
 assert.equal(requestBody.context.systemId, "dnd5e");
+assert.equal(requestBody.context.automationCapabilities.supportedRecipes[0], "conditionOnHit");
 assert.equal(JSON.stringify(requestBody).includes("token"), false);
+
+const repairRequestBody = buildRemoteProviderRequest("Create a fire dagger", {
+  requestMode: "repair-attempt",
+  repair: {
+    parentRequestId: "repair-parent-01",
+    attempt: 1,
+    originalRequest: "Create a fire dagger",
+    repairNotes: "Keep the weapon and correct the light toggle review note.",
+    currentReviewedSpecs: [{ kind: "weaponExtraDamage", name: "Remote Ember Dagger" }]
+  }
+});
+assert.equal(repairRequestBody.requestMode, "repair-attempt");
+assert.equal(repairRequestBody.repair.attempt, 1);
+assert.equal(repairRequestBody.repair.parentRequestId, "repair-parent-01");
+
+const normalizedRepairRequestBody = buildRemoteProviderRequest("Layered brief from a second normalization pass", {
+  requestMode: "repair-attempt",
+  repair: {
+    parentRequestId: "repair-parent-02",
+    attempt: 1,
+    originalRequest: "Layered brief retained with the reviewed result",
+    repairNotes: "Preserve the reviewed mechanics.",
+    currentReviewedSpecs: [{ kind: "weaponExtraDamage", name: "Remote Ember Dagger" }]
+  }
+});
+assert.equal(normalizedRepairRequestBody.request, normalizedRepairRequestBody.repair.originalRequest);
 
 const validPayload = {
   schemaVersion: REMOTE_PROVIDER_SCHEMA_VERSION,
@@ -118,9 +151,46 @@ const remoteResult = await requestRemoteCompilation({
 });
 assert.equal(capturedRequest.init.method, "POST");
 assert.equal(capturedRequest.init.headers.Authorization, "Bearer private-token");
+assert.equal(capturedRequest.init.headers["Cache-Control"], undefined);
 assert.equal(JSON.parse(capturedRequest.init.body).request, "Create a fire dagger");
 assert.equal(JSON.stringify(remoteResult).includes("private-token"), false);
 assert.equal(remoteResult.specs[0].name, "Remote Ember Dagger");
+
+const meteredResult = await requestRemoteCompilation({
+  endpoint: "https://forge.example/api/compile",
+  request: "Create a metered fire dagger",
+  provider: { id: "bring-your-own", label: "Bring Your Own API" },
+  fetchImpl: async () => ({
+    ok: true,
+    status: 200,
+    headers: {
+      get(name) {
+        const values = {
+          "x-forge-usage-limit": "1000",
+          "x-forge-usage-remaining": "250",
+          "x-forge-usage-charged": "25",
+          "x-forge-cache": "MISS"
+        };
+        return values[name.toLowerCase()] ?? null;
+      }
+    },
+    json: async () => validPayload
+  })
+});
+assert.deepEqual(meteredResult.usage.capacity, { limit: 1000, remaining: 250, percentRemaining: 25 });
+assert.equal(meteredResult.usage.chargedUnits, 25);
+assert.equal(meteredResult.usage.cacheStatus, "MISS");
+
+await requestRemoteCompilation({
+  endpoint: "https://forge.example/api/compile",
+  token: "private-token",
+  request: "Create a fresh fire dagger",
+  model: "forge-model",
+  provider: { id: "bring-your-own", label: "Bring Your Own API" },
+  refreshCompletedCache: true,
+  fetchImpl
+});
+assert.equal(capturedRequest.init.headers["Cache-Control"], "no-cache");
 
 const invalidFingerprint = normalizeRemoteProviderResponse({
   ...validPayload,
@@ -283,8 +353,8 @@ const monthlyLimitError = remoteHttpError({
     message: "This free-tier client has reached its monthly Forge AI limit."
   }
 });
-assert.match(monthlyLimitError.message, /monthly free-tier limit reached/i);
-assert.match(monthlyLimitError.message, /20 time/i);
+assert.match(monthlyLimitError.message, /monthly hosted usage allowance reached/i);
+assert.match(monthlyLimitError.message, /20 usage units/i);
 
 const dailyGlobalLimitError = remoteHttpError({
   status: 429,
@@ -299,8 +369,24 @@ const dailyGlobalLimitError = remoteHttpError({
     message: "The Dungeon Master's Forge free-tier daily allowance has been reached."
   }
 });
-assert.match(dailyGlobalLimitError.message, /shared free-tier daily limit reached/i);
-assert.match(dailyGlobalLimitError.message, /50 request/i);
+assert.match(dailyGlobalLimitError.message, /shared hosted usage safeguard reached/i);
+assert.match(dailyGlobalLimitError.message, /50 usage units/i);
+
+const usageLimitError = remoteHttpError({
+  status: 429,
+  headers: {
+    get(name) {
+      return name?.toLowerCase() === "x-forge-usage-limit" ? "1000000" : null;
+    }
+  }
+}, "Remote provider", {
+  error: {
+    code: "monthly_client_usage_limit",
+    message: "This Free Forge client has reached its monthly hosted usage allowance."
+  }
+});
+assert.match(usageLimitError.message, /monthly hosted usage allowance reached/i);
+assert.match(usageLimitError.message, /1000000 usage units/i);
 
 assert.throws(
   () => normalizeRemoteProviderResponse({ schemaVersion: REMOTE_PROVIDER_SCHEMA_VERSION, specs: [] }),

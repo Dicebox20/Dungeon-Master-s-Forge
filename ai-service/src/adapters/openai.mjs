@@ -1,5 +1,5 @@
 import { ServiceError } from "../errors.mjs";
-import { buildSystemPrompt } from "../prompt.mjs";
+import { buildSystemPrompt, buildUserPrompt } from "../prompt.mjs";
 
 function chooseModel(envelope, config) {
   const requested = envelope.options.model || config.defaultModel;
@@ -73,7 +73,7 @@ async function compileWithOpenAI(envelope, options) {
         store: false,
         input: [
           { role: "system", content: buildSystemPrompt(envelope) },
-          { role: "user", content: envelope.request },
+          { role: "user", content: buildUserPrompt(envelope) },
           ...(retryHint ? [{ role: "user", content: retryHint }] : [])
         ],
         max_output_tokens: config.maxOutputTokens,
@@ -105,7 +105,10 @@ async function compileWithOpenAI(envelope, options) {
   } catch {
     throw new ServiceError(502, "invalid_openai_response", "OpenAI returned invalid JSON.");
   }
-  return parseModelJson(outputText(payload));
+  return {
+    ...parseModelJson(outputText(payload)),
+    providerUsage: payload.usage ?? {}
+  };
 }
 
 export { chooseModel, compileWithOpenAI, outputText, parseModelJson, resolveUpstreamApiKey };

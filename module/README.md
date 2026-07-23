@@ -4,7 +4,7 @@ Dungeon Master's Forge is a reusable Foundry VTT module for creating and reviewi
 
 It is tested with Foundry VTT v14 and DND5e v5.3.3. Describe an item, review the generated details, and create it in your world only after you approve the result.
 
-Dungeon Master's Forge is an unofficial community module for Foundry VTT and is not affiliated with or endorsed by Foundry Virtual Tabletop, Wizards of the Coast, or the DND5e system team. If submitted to the Foundry package directory, it belongs in the **AI Tools** category because it can generate content from live user prompts; it must not be represented as **Zero AI**.
+Dungeon Master's Forge is an unofficial community module for Foundry VTT and is not affiliated with or endorsed by Foundry Virtual Tabletop, Wizards of the Coast, or the DND5e system team. For the Foundry package directory, it is a runtime tool that turns live user prompts into structured content; it is not a bundled content pack, rules replacement, or background generator.
 
 ## Install
 
@@ -25,7 +25,7 @@ The public module ID is `dungeon-masters-forge`. On first launch, it copies save
 
 Bring Your Own API settings are in **Forge Settings**. You can enter the endpoint and model used by your service there. API tokens stay in memory for the current Foundry session unless you explicitly check **Remember token on this device**. If you do, Foundry stores the token in that browser's local settings, so only use that option on a computer you trust. Depending on the service, the token may be a shared service token or a personal OpenAI API key. For the local reference service, use `http://localhost:8788/v1/forge/compile`.
 
-When a supported item needs Item Macro automation, the Forge displays the exact generated code before creation and requires a separate automation acknowledgement. Review that code before approving it. External providers receive the request text and generated specifications; do not include secrets or private campaign details. Optional anonymous diagnostics exclude prompts, raw specifications, tokens, and world documents. The separate **Report Failed Item** flow explains and confirms its additional request/specification payload before sending. Retention is controlled by the configured service; the current hosted tester service prunes expired reports when a new report is received.
+When a supported item needs Item Macro automation, the Forge displays the exact generated code before creation and requires a separate automation acknowledgement. Review that code before approving it. External providers receive the request text and generated specifications; do not include secrets or private campaign details. If a reviewed network result needs correction, the unchanged request becomes **Retry** and opens a separate **SEND IT AGAIN!?** confirmation. That request includes the current reviewed JSON, review notes, validation findings, and your repair note; the returned result must be reviewed and approved again. Optional anonymous diagnostics remain separately opt-in and exclude prompts, raw specifications, tokens, and world documents.
 
 Use **Check Connection** in Forge Settings before live generation. It tells you whether the remote service is reachable and whether it is running in deterministic `mock` mode or server-side `openai` mode.
 

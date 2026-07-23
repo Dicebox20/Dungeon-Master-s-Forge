@@ -11,7 +11,7 @@ function usage() {
     "  node scripts/quota-admin.mjs reset-all",
     "",
     "Environment:",
-    "  DMF_QUOTA_DATABASE_PATH  Optional path to the SQLite quota ledger.",
+    "  DMF_QUOTA_DATABASE_PATH  Optional path to the SQLite usage ledger.",
     "                           Defaults to ./data/free-tier-quota.sqlite"
   ].join("\n"));
 }
@@ -43,29 +43,29 @@ const location = databaseLocation(process.env.DMF_QUOTA_DATABASE_PATH);
 const database = new DatabaseSync(location);
 database.exec("PRAGMA busy_timeout = 5000");
 database.exec(`
-  CREATE TABLE IF NOT EXISTS daily_quota_usage (
+  CREATE TABLE IF NOT EXISTS forge_usage (
     bucket TEXT NOT NULL,
     period_start INTEGER NOT NULL,
     subject_hash TEXT NOT NULL,
-    request_count INTEGER NOT NULL CHECK (request_count >= 0),
+    usage_units INTEGER NOT NULL CHECK (usage_units >= 0),
     updated_at INTEGER NOT NULL,
     PRIMARY KEY (bucket, period_start, subject_hash)
   ) STRICT
 `);
 
 const listStmt = database.prepare(`
-  SELECT bucket, period_start, COUNT(*) AS subject_count, SUM(request_count) AS request_count, MAX(updated_at) AS updated_at
-  FROM daily_quota_usage
+  SELECT bucket, period_start, COUNT(*) AS subject_count, SUM(usage_units) AS usage_units, MAX(updated_at) AS updated_at
+  FROM forge_usage
   GROUP BY bucket, period_start
   ORDER BY period_start DESC, bucket ASC
 `);
 
 const deleteBucketPeriodStmt = database.prepare(`
-  DELETE FROM daily_quota_usage
+  DELETE FROM forge_usage
   WHERE bucket = ? AND period_start = ?
 `);
 
-const deleteAllStmt = database.prepare("DELETE FROM daily_quota_usage");
+const deleteAllStmt = database.prepare("DELETE FROM forge_usage");
 
 try {
   if (command === "summary") {
@@ -73,7 +73,7 @@ try {
       bucket: row.bucket,
       periodStartUtc: new Date(Number(row.period_start)).toISOString(),
       subjectCount: Number(row.subject_count ?? 0),
-      requestCount: Number(row.request_count ?? 0),
+      usageUnits: Number(row.usage_units ?? 0),
       updatedAtUtc: new Date(Number(row.updated_at ?? 0)).toISOString()
     }));
     console.log(JSON.stringify({

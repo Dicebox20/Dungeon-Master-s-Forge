@@ -1,10 +1,11 @@
 import { createHash, randomBytes } from "node:crypto";
-import { FORGE_SCHEMA_VERSION, KNOWN_SPEC_KINDS, MAX_SPECS_PER_REQUEST, PROMPT_VERSION, SERVICE_VERSION } from "./constants.mjs";
+import { COMPOSITIONAL_CAPABILITIES, FORGE_SCHEMA_VERSION, KNOWN_SPEC_KINDS, MAX_SPECS_PER_REQUEST, PROMPT_VERSION, SERVICE_VERSION } from "./constants.mjs";
 import { ServiceError } from "./errors.mjs";
 import { validateRemoteContent } from "./remote-content-policy.mjs";
 import { analyzeRequestIntent } from "./request-intent.mjs";
 import { canonicalize } from "./result-cache.mjs";
 import { validateSpecStructure } from "./spec-validation.mjs";
+import { normalizeAutomationCapabilities, normalizeAutomationContract } from "./automation-contract.mjs";
 
 const ID_PATTERN = /^[A-Za-z0-9]{16}$/;
 
@@ -393,6 +394,82 @@ function stripRecoverableForbiddenFields(value) {
     next[key] = stripRecoverableForbiddenFields(child);
   }
   return next;
+}
+
+function stripRepairForbiddenFields(value) {
+  if (Array.isArray(value)) return value.map(stripRepairForbiddenFields);
+  if (!object(value)) return value;
+  const next = {};
+  for (const [key, child] of Object.entries(value)) {
+    if (/^(?:flags|macroCommand|scripts?|command|rawConsole|apiToken|authorization|password|secret)$/i.test(key)) continue;
+    next[key] = stripRepairForbiddenFields(child);
+  }
+  return next;
+}
+
+function boundedRepairText(value, max) {
+  return String(value ?? "")
+    .replace(/[\u0000-\u001f\u007f]/g, " ")
+    .trim()
+    .slice(0, max);
+}
+
+function boundedRepairRequest(value, max) {
+  return String(value ?? "")
+    .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, " ")
+    .trim()
+    .slice(0, max);
+}
+
+function normalizeRepairContext(value, maxItemsPerRequest) {
+  if (!object(value)) {
+    throw new ServiceError(400, "invalid_repair_context", "Repair attempts require a bounded repair context.");
+  }
+  const parentRequestId = boundedRepairText(value.parentRequestId, 100);
+  if (!/^[A-Za-z0-9_-]{8,100}$/.test(parentRequestId)) {
+    throw new ServiceError(400, "invalid_repair_context", "Repair attempts require a valid parent request id.");
+  }
+  if (Number(value.attempt) !== 1) {
+    throw new ServiceError(400, "invalid_repair_attempt", "Only the first user-confirmed repair attempt is allowed.");
+  }
+  const originalRequest = boundedRepairRequest(value.originalRequest, 12000);
+  const repairNotes = boundedRepairText(value.repairNotes, 4000);
+  if (!originalRequest || !repairNotes) {
+    throw new ServiceError(400, "invalid_repair_context", "Repair attempts require the original request and repair notes.");
+  }
+  if (!Array.isArray(value.currentReviewedSpecs) || !value.currentReviewedSpecs.length || value.currentReviewedSpecs.length > maxItemsPerRequest) {
+    throw new ServiceError(400, "invalid_repair_context", "Repair attempts require a bounded reviewed specs array.");
+  }
+  const currentReviewedSpecs = stripRepairForbiddenFields(value.currentReviewedSpecs);
+  validateRemoteContent(currentReviewedSpecs, { path: "$repair.currentReviewedSpecs" });
+  const reviewNotes = Array.isArray(value.reviewNotes)
+    ? value.reviewNotes.slice(0, 40).map(note => ({
+        state: boundedRepairText(note?.state, 40),
+        label: boundedRepairText(note?.label, 160),
+        message: boundedRepairText(note?.message, 600),
+        handling: boundedRepairText(note?.handling, 600)
+      })).filter(note => note.message)
+    : [];
+  const deterministicFindings = Array.isArray(value.deterministicFindings)
+    ? value.deterministicFindings.slice(0, 40).map(entry => boundedRepairText(entry, 600)).filter(Boolean)
+    : [];
+  const provenance = object(value.provenance)
+    ? {
+        requestFingerprint: boundedRepairText(value.provenance.requestFingerprint, 120),
+        specFingerprint: boundedRepairText(value.provenance.specFingerprint, 120),
+        providerLane: boundedRepairText(value.provenance.providerLane, 120)
+      }
+    : { requestFingerprint: "", specFingerprint: "", providerLane: "" };
+  return {
+    parentRequestId,
+    attempt: 1,
+    originalRequest,
+    repairNotes,
+    currentReviewedSpecs,
+    reviewNotes,
+    deterministicFindings,
+    provenance
+  };
 }
 
 function unresolvedMechanicExists(spec, matcher) {
@@ -1101,9 +1178,11 @@ function normalizeFreeForgeSrdSummons(spec, requestChunk, supportedKinds) {
 function parseLightRadii(text) {
   const normalizedText = compactText(text);
   const bright = Number(normalizedText.match(/\b(\d+)\s*[- ]?(?:foot|feet|ft\.?)\s+(?:of\s+)?bright\s+light/i)?.[1] ?? 20);
-  const dimMatch = normalizedText.match(/\b(additional\s+|another\s+)?(\d+)\s*[- ]?(?:foot|feet|ft\.?)\s+(?:of\s+)?dim\s+light/i);
-  const dimValue = Number(dimMatch?.[2] ?? 20);
-  return { bright, dim: dimMatch?.[1] ? bright + dimValue : Math.max(bright, dimValue) };
+  const dimBeforeMatch = normalizedText.match(/\b(additional\s+|another\s+)?(\d+)\s*[- ]?(?:foot|feet|ft\.?)\s+(?:of\s+)?dim\s+light/i);
+  const dimAfterMatch = normalizedText.match(/\bdim\s+light\s+for\s+(\d+)\s*(additional|extra)?\s*[- ]?(?:foot|feet|ft\.?)\b/i);
+  const dimValue = Number(dimBeforeMatch?.[2] ?? dimAfterMatch?.[1] ?? 20);
+  const isAdditional = Boolean(dimBeforeMatch?.[1] || dimAfterMatch?.[2]);
+  return { bright, dim: isAdditional ? bright + dimValue : Math.max(bright, dimValue) };
 }
 
 function inferUsesFromText(text, { consumed = false, defaultMax = "" } = {}) {
@@ -1141,6 +1220,18 @@ function normalizeConditionOnHit(spec, requestChunk) {
   if (object(condition.save)) {
     if (!condition.save.ability && condition.save.saveAbility) condition.save.ability = condition.save.saveAbility;
     if ((condition.save.dc == null || condition.save.dc === "") && condition.save.saveDc != null) condition.save.dc = condition.save.saveDc;
+  }
+
+  if (!compactText(condition.targetCreatureType)) {
+    const targetType = /\b(?:against|target(?:ing)?)\s+(?:a|an|the)?\s*(undead|construct|fiend|beast|humanoid|fey|elemental|celestial)\b/i.exec(text)?.[1];
+    if (targetType) condition.targetCreatureType = targetType.toLowerCase();
+  }
+  if (condition.targetCreatureType) {
+    const normalizedTargetType = compactText(condition.targetCreatureType).toLowerCase();
+    condition.targetCreatureType = /^(?:undead|construct|fiend|beast|humanoid|fey|elemental|celestial)$/.test(normalizedTargetType)
+      ? normalizedTargetType
+      : "";
+    if (!condition.targetCreatureType) delete condition.targetCreatureType;
   }
 
   if (!Number.isFinite(Number(condition.durationSeconds))) {
@@ -1720,10 +1811,50 @@ function normalizeMixedStaffSuite(spec, requestChunk) {
   return spec;
 }
 
-function normalizeMalformedUtilitySaveActivities(spec) {
+function auraActivityText(activity) {
+  if (!object(activity)) return "";
+  return compactText([
+    activity.activityName,
+    activity.name,
+    activity.label,
+    activity.description,
+    activity.chatFlavor
+  ].filter(Boolean).join(" ")).toLowerCase();
+}
+
+function normalizeActorTokenAuraActivities(spec, requestChunk) {
+  if (!object(spec) || !/\baura\b/i.test(textForSpecInference(spec, requestChunk))) return spec;
+
+  const normalized = clone(spec);
+  let changed = false;
+  for (const field of ["activities", "saveActivities", "utilityActivities"]) {
+    if (!Array.isArray(normalized[field])) continue;
+    normalized[field] = normalized[field].map(activity => {
+      if (!object(activity) || !/\baura\b|\bstart(?:s)?\s+(?:its|their)\s+turn\b/i.test(auraActivityText(activity))) {
+        return activity;
+      }
+      const target = object(activity.target) ? activity.target : {};
+      const affects = object(target.affects) ? target.affects : {};
+      changed = true;
+      return {
+        ...activity,
+        range: { ...(object(activity.range) ? activity.range : {}), value: null, units: "self" },
+        target: {
+          ...target,
+          affects: { ...affects, count: "1", type: "self", special: "Wielder's actor token" },
+          prompt: false
+        }
+      };
+    });
+  }
+  return changed ? normalized : spec;
+}
+
+function normalizeMalformedUtilitySaveActivities(spec, requestChunk) {
   if (!isSuiteKind(spec.kind) || !Array.isArray(spec.saveActivities)) return spec;
 
   const normalized = clone(spec);
+  const requestText = compactText(requestChunk);
   const utilityActivities = Array.isArray(normalized.utilityActivities)
     ? normalized.utilityActivities.filter(object)
     : [];
@@ -1732,6 +1863,21 @@ function normalizeMalformedUtilitySaveActivities(spec) {
   for (const activity of normalized.saveActivities.filter(object)) {
     const hasSaveAbility = compactText(activity.save?.ability);
     const hasDamage = Array.isArray(activity.damageParts) && activity.damageParts.length > 0;
+    const isNoSaveAuraDamage = hasDamage
+      && /\baura\b/i.test(requestText)
+      && /\baura\b|\bstart(?:s)?\s+(?:its|their)\s+turn\b|\bhostile\b/i.test(auraActivityText(activity));
+    if (isNoSaveAuraDamage) {
+      const utilityActivity = { ...activity };
+      delete utilityActivity.save;
+      delete utilityActivity.damageOnSave;
+      delete utilityActivity.damageParts;
+      utilityActivity.description = [
+        compactText(utilityActivity.description),
+        "Manual review: aura damage remains deferred; activation is anchored to the wielder's actor token."
+      ].filter(Boolean).join(" ");
+      utilityActivities.push(utilityActivity);
+      continue;
+    }
     if (hasSaveAbility || hasDamage) {
       validSaveActivities.push(activity);
       continue;
@@ -1748,6 +1894,54 @@ function normalizeMalformedUtilitySaveActivities(spec) {
   }
 
   normalized.saveActivities = validSaveActivities;
+  normalized.utilityActivities = utilityActivities;
+  return normalized;
+}
+
+function normalizeMalformedAttackActivities(spec) {
+  if (!isSuiteKind(spec.kind) || !Array.isArray(spec.attackActivities)) return spec;
+
+  const normalized = clone(spec);
+  const utilityActivities = Array.isArray(normalized.utilityActivities)
+    ? normalized.utilityActivities.filter(object)
+    : [];
+  const saveActivities = Array.isArray(normalized.saveActivities)
+    ? normalized.saveActivities.filter(object)
+    : [];
+  const validAttackActivities = [];
+
+  for (const activity of normalized.attackActivities.filter(object)) {
+    const hasDamage = Array.isArray(activity.damageParts) && activity.damageParts.length > 0;
+    if (hasDamage) {
+      validAttackActivities.push(activity);
+      continue;
+    }
+
+    const hasSaveAbility = compactText(activity.save?.ability);
+    if (hasSaveAbility) {
+      const saveActivity = { ...activity };
+      delete saveActivity.attackBonus;
+      delete saveActivity.attackType;
+      delete saveActivity.attackClassification;
+      delete saveActivity.ability;
+      delete saveActivity.damageParts;
+      saveActivities.push(saveActivity);
+      continue;
+    }
+
+    const utilityActivity = { ...activity };
+    delete utilityActivity.attackBonus;
+    delete utilityActivity.attackType;
+    delete utilityActivity.attackClassification;
+    delete utilityActivity.ability;
+    delete utilityActivity.save;
+    delete utilityActivity.damageOnSave;
+    delete utilityActivity.damageParts;
+    utilityActivities.push(utilityActivity);
+  }
+
+  normalized.attackActivities = validAttackActivities;
+  normalized.saveActivities = saveActivities;
   normalized.utilityActivities = utilityActivities;
   return normalized;
 }
@@ -2204,6 +2398,37 @@ function normalizeExplicitSpellChargeCosts(spec, requestChunk) {
     });
   }
   return normalized;
+}
+
+function normalizeExplicitActivityChargeCosts(spec, requestChunk) {
+  const text = compactText(requestChunk);
+  const summonCosts = [...text.matchAll(/\b(?:spend|expend|use)\s+(\d+)\s+charges?\s+to\s+(?:summon|conjure|call\s+(?:forth|in))\b/gi)]
+    .map(match => Number(match[1]))
+    .filter(cost => Number.isFinite(cost) && cost > 0);
+  if (summonCosts.length !== 1) return spec;
+
+  const normalized = clone(spec);
+  let changed = false;
+  for (const field of ["activities", "attackActivities", "saveActivities", "utilityActivities"]) {
+    if (!Array.isArray(normalized[field])) continue;
+    normalized[field] = normalized[field].map(activity => {
+      if (!object(activity)) return activity;
+      const type = compactText(activity.type).toLowerCase();
+      const name = compactText(activity.activityName);
+      if (type !== "summon" && !/\bsummon\b/i.test(name)) return activity;
+      if (Number(activity.chargeCost) === summonCosts[0]) return activity;
+      changed = true;
+      return { ...activity, chargeCost: summonCosts[0] };
+      });
+  }
+  if (Array.isArray(normalized.summonProfiles) && normalized.summonProfiles.length) {
+    const summonActivity = object(normalized.summonActivity) ? normalized.summonActivity : {};
+    if (Number(summonActivity.chargeCost) !== summonCosts[0]) {
+      normalized.summonActivity = { ...summonActivity, chargeCost: summonCosts[0] };
+      changed = true;
+    }
+  }
+  return changed ? normalized : spec;
 }
 
 function requestedSpellDc(requestChunk, fallback = 13) {
@@ -2797,12 +3022,15 @@ function normalizeRecoverableModelSlip(spec, requestChunk, supportedKinds) {
   normalized = normalizeSingleActivityStaff(normalized, requestChunk);
   normalized = normalizeMixedStaffSuite(normalized, requestChunk);
   normalized = normalizeSharedActivitySuite(normalized, requestChunk);
-  normalized = normalizeMalformedUtilitySaveActivities(normalized);
+  normalized = normalizeMalformedAttackActivities(normalized);
+  normalized = normalizeActorTokenAuraActivities(normalized, requestChunk);
+  normalized = normalizeMalformedUtilitySaveActivities(normalized, requestChunk);
   normalized = normalizeSuiteSummonShape(normalized);
   normalized = normalizeFreeForgeSrdSummons(normalized, requestChunk, supportedKinds);
   normalized = normalizeToggleLight(normalized, requestChunk);
   normalized = normalizeActivityNames(normalized);
   normalized = normalizeExplicitSpellChargeCosts(normalized, requestChunk);
+  normalized = normalizeExplicitActivityChargeCosts(normalized, requestChunk);
   normalized = normalizeWeaponBase(normalized, requestChunk);
   normalized = normalizeNonHealingSpellConsumable(normalized, requestChunk, supportedKinds);
   normalized = normalizeConsumedHealingUses(normalized, requestChunk);
@@ -2839,22 +3067,45 @@ function validateForgeRequest(payload, limits = {}) {
   if (supportedKinds.length !== suppliedKinds.length) {
     throw new ServiceError(400, "unknown_supported_kind", "context.supportedKinds contains an unknown or duplicate spec kind.");
   }
+  const suppliedCapabilities = Array.isArray(context.supportedCapabilities)
+    ? context.supportedCapabilities.map(String)
+    : [...COMPOSITIONAL_CAPABILITIES];
+  const supportedCapabilities = [...new Set(suppliedCapabilities)]
+    .filter(capability => COMPOSITIONAL_CAPABILITIES.includes(capability));
+  if (supportedCapabilities.length !== suppliedCapabilities.length) {
+    throw new ServiceError(400, "unknown_supported_capability", "context.supportedCapabilities contains an unknown or duplicate capability.");
+  }
+  const automationCapabilities = normalizeAutomationCapabilities(context.automationCapabilities);
 
   const options = object(payload.options) ? payload.options : {};
+  const requestMode = payload.requestMode == null ? "compile" : String(payload.requestMode).trim();
+  if (!["compile", "repair-attempt"].includes(requestMode)) {
+    throw new ServiceError(400, "invalid_request_mode", "requestMode must be compile or repair-attempt.");
+  }
+  const repair = requestMode === "repair-attempt"
+    ? normalizeRepairContext(payload.repair, maxItemsPerRequest)
+    : null;
+  if (repair && repair.originalRequest !== request) {
+    throw new ServiceError(400, "invalid_repair_context", "The repair context must preserve the original request exactly.");
+  }
   return {
     schemaVersion: FORGE_SCHEMA_VERSION,
+    requestMode,
     request,
     context: {
       foundryVersion: String(context.foundryVersion ?? ""),
       systemId: String(context.systemId ?? "dnd5e"),
       systemVersion: String(context.systemVersion ?? ""),
       moduleVersion: String(context.moduleVersion ?? ""),
-      supportedKinds
+      supportedKinds,
+      supportedCapabilities,
+      automationCapabilities
     },
     options: {
       model: String(options.model ?? "").trim(),
       unresolvedPolicy: options.unresolvedPolicy === "block" ? "block" : "review"
-    }
+    },
+    repair
   };
 }
 
@@ -2990,6 +3241,7 @@ function normalizeModelOutput(modelOutput, envelope, options = {}) {
         ? remoteSpec.description
         : envelope.request
     }, requestChunk), requestChunk, warnings, deferred), makeId);
+    if (spec.automation != null) spec.automation = normalizeAutomationContract(spec.automation, `$specs[${index}].automation`);
     validateRemoteContent(spec, { path: `$specs[${index}]` });
     validateUnresolved(spec);
     validateSpecStructure(spec);
@@ -3005,6 +3257,7 @@ function normalizeModelOutput(modelOutput, envelope, options = {}) {
     schemaVersion: FORGE_SCHEMA_VERSION,
     compilerVersion: `dmf-ai-service/${SERVICE_VERSION}`,
     promptVersion: PROMPT_VERSION,
+    requestMode: envelope.requestMode,
     preparedSpecFingerprint: preparedSpecFingerprint(specs),
     request: envelope.request,
     requestCount: specs.length,

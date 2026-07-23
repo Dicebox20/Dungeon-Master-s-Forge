@@ -373,6 +373,11 @@
   line-height: 1.45;
 }
 
+.dm_forge-request textarea[data-forge-repair-locked="true"] {
+  cursor: not-allowed;
+  opacity: 0.82;
+}
+
 .dm_forge-request textarea,
 .dm_forge-specs textarea {
   scrollbar-color: rgb(180 42 51 / 65%) rgb(0 0 0 / 20%);
@@ -468,48 +473,8 @@
   flex: 0 0 auto;
 }
 
-.dm_forge-report-action {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px;
-  border: 1px solid rgb(208 180 129 / 16%);
-  border-radius: 6px;
-  background:
-    linear-gradient(180deg, rgb(30 20 18 / 92%), rgb(18 22 26 / 96%)),
-    rgb(18 22 26 / 96%);
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 3%);
-}
-
-.dm_forge-report-action-copy {
-  display: grid;
-  gap: 4px;
-  min-width: 0;
-}
-
-.dm_forge-report-action-copy strong {
-  color: #f3e8da;
-}
-
-.dm_forge-report-action-copy small {
-  color: #cbb8a2;
-  line-height: 1.45;
-}
-
-.dm_forge-report-button {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  white-space: nowrap;
-}
-
-.dm_forge-report-button:disabled {
-  opacity: 0.6;
-}
-
-.dm_forge-notice-stack {
+.dm_forge-notice-stack,
+.dm_forge-preview-notices {
   display: block;
   border: 1px solid rgb(69 214 204 / 24%);
   border-radius: 6px;
@@ -518,6 +483,10 @@
     linear-gradient(180deg, rgb(16 31 34 / 94%), rgb(14 23 28 / 88%));
   box-shadow: inset 0 1px 0 rgb(167 244 237 / 4%);
   overflow: hidden;
+}
+
+.dm_forge-preview-notices {
+  margin-top: 14px;
 }
 
 .dm_forge-footer-disclosure {
@@ -613,14 +582,67 @@
   border-bottom: 1px solid rgb(255 255 255 / 6%);
 }
 
-.dm_forge-footer-notes {
+.dm_forge-footer-tree {
+  display: grid;
+  gap: 6px;
+  padding: 0 12px 12px;
+}
+
+.dm_forge-footer-group {
+  border: 1px solid rgb(255 255 255 / 8%);
+  border-radius: 5px;
+  background: rgb(255 255 255 / 2%);
+}
+
+.dm_forge-footer-group > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 28px;
+  padding: 5px 8px;
+  color: var(--color-text-subtle);
+  cursor: pointer;
+  font-size: var(--font-size-11);
+  font-weight: 700;
+}
+
+.dm_forge-footer-group > summary::-webkit-details-marker {
+  display: none;
+}
+
+.dm_forge-footer-group > summary:hover,
+.dm_forge-footer-group > summary:focus-visible {
+  color: var(--color-text-primary);
+}
+
+.dm_forge-footer-group-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dm_forge-footer-group[data-state="review"] .dm_forge-footer-group-title i {
+  color: #e5a15d;
+}
+
+.dm_forge-footer-group[data-state="notice"] .dm_forge-footer-group-title i {
+  color: #8a795b;
+}
+
+.dm_forge-footer-group[data-state="resolved"] .dm_forge-footer-group-title i {
+  color: #73c991;
+}
+
+.dm_forge-footer-group[data-state="free-forge"] .dm_forge-footer-group-title i {
+  color: #45d6cc;
+}
+
+.dm_forge-footer-group-body {
   display: grid;
   gap: 8px;
-  padding: 0 12px 12px;
-  max-height: min(44vh, 420px);
-  min-height: 0;
-  overflow-y: auto;
-  scrollbar-gutter: stable;
+  padding: 8px;
+  border-top: 1px solid rgb(255 255 255 / 6%);
 }
 
 .dm_forge-footer-note {
@@ -635,6 +657,10 @@
   border-left-color: #e5a15d;
 }
 
+.dm_forge-footer-note[data-state="review"] {
+  border-left-color: #e5a15d;
+}
+
 .dm_forge-footer-note[data-state="notice"] {
   border-left-color: #8A795B;
 }
@@ -644,6 +670,11 @@
 }
 
 .dm_forge-footer-note[data-state="assumption"] {
+  border-left-color: #73c991;
+}
+
+.dm_forge-footer-note[data-state="reference"],
+.dm_forge-footer-note[data-state="resolved"] {
   border-left-color: #73c991;
 }
 
@@ -832,6 +863,22 @@
   white-space: nowrap;
 }
 
+.dm_forge-code-approval .dm_forge-approval-label {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  line-height: 1;
+}
+
+.dm_forge-code-approval .dm_forge-approval-label small {
+  color: var(--color-text-subtle);
+  font-size: var(--font-size-10);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 .dm_forge-approval-required {
   color: #e5a15d;
   font-size: var(--font-size-10);
@@ -867,42 +914,48 @@
   color: #e5a15d;
 }
 
-.dungeon-masters-forge .form-footer.dm_forge-actions-footer [data-action="report-failed-item"] {
-  margin-left: 0;
+.dungeon-masters-forge .form-footer.dm_forge-actions-footer .dm_forge-capacity {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  color: #73c991;
+  font-size: var(--font-size-12);
+  white-space: nowrap;
+}
+
+.dungeon-masters-forge .form-footer.dm_forge-actions-footer .dm_forge-capacity[data-state="warning"] {
+  color: #e5c05e;
 }
 
 .dungeon-masters-forge .form-footer.dm_forge-actions-footer [data-action="create"] {
   margin-left: 0;
 }
 
-.dm_forge-report-dialog {
+.dm_forge-repair-dialog {
   display: grid;
+  grid-template-rows: auto auto minmax(260px, 1fr) auto auto;
+  min-height: 0;
   gap: 12px;
 }
 
-.dm_forge-report-dialog p,
-.dm_forge-report-dialog li {
+.dm_forge-repair-dialog p {
   color: #e8ddd0;
   line-height: 1.5;
 }
 
-.dm_forge-report-dialog ul {
-  margin: 0;
-  padding-left: 18px;
-}
-
-.dm_forge-report-dialog-field {
+.dm_forge-repair-dialog-field {
   display: grid;
   gap: 6px;
   font-weight: 600;
 }
 
-.dm_forge-report-dialog-field textarea {
-  min-height: 180px;
+.dm_forge-repair-dialog-field textarea {
+  min-height: 260px;
+  height: 100%;
   resize: vertical;
 }
 
-.dm_forge-report-consent {
+.dm_forge-repair-consent {
   display: grid;
   grid-template-columns: auto 1fr;
   align-items: start;
@@ -915,8 +968,44 @@
   line-height: 1.45;
 }
 
-.dm_forge-report-consent input {
+.dm_forge-repair-consent input {
   margin-top: 3px;
+}
+
+.dm_forge-repair-consent-footer {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-block-size: 32px;
+  margin: 0;
+  padding: 5px 8px;
+  border: 1px solid rgb(229 161 93 / 58%);
+  border-radius: 4px;
+  background: rgb(20 24 28 / 96%);
+  color: #f1e7da;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.dm_forge-repair-consent-footer input {
+  position: static;
+  inline-size: 18px;
+  block-size: 18px;
+  margin: 0;
+  clip: auto;
+  clip-path: none;
+  accent-color: #b3312d;
+  cursor: pointer;
+}
+
+.dm_forge-repair-consent-footer span {
+  font-size: var(--font-size-12);
+  font-weight: 600;
+}
+
+.dm_forge-repair-consent-footer:has(input:checked) {
+  border-color: rgb(245 190 120 / 88%);
+  background: linear-gradient(180deg, rgb(179 49 45 / 96%), rgb(126 25 24 / 96%));
 }
 
 .dm_forge-automation-review {
@@ -1010,7 +1099,7 @@
   max-width: 260px;
 }
 
-.dm_forge-report-dialog-status {
+.dm_forge-repair-dialog-status {
   display: block;
   padding: 10px 12px;
   border: 1px solid rgb(208 180 129 / 16%);
@@ -1019,20 +1108,93 @@
   color: #e8ddd0;
 }
 
-.dm_forge-report-dialog-status[data-state="working"] {
+.dm_forge-repair-dialog-status[data-state="working"] {
   color: #f3d39c;
 }
 
-.dm_forge-report-dialog-status[data-state="success"] {
+.dm_forge-repair-dialog-status[data-state="success"] {
   color: #92ddb0;
 }
 
-.dm_forge-report-dialog-status[data-state="warning"] {
+.dm_forge-repair-dialog-status[data-state="warning"] {
   color: #f0c27d;
 }
 
-.dm_forge-report-dialog-status[data-state="error"] {
+.dm_forge-repair-dialog-status[data-state="error"] {
   color: #ffb3b0;
+}
+
+.dm_forge-repair-warning {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border: 2px solid rgb(215 76 72 / 82%);
+  border-radius: 6px;
+  background: linear-gradient(180deg, rgb(87 28 27 / 96%), rgb(42 22 24 / 96%));
+  color: #ffd0c9;
+}
+
+.dm_forge-repair-warning strong {
+  color: #fff6e7;
+  font-size: var(--font-size-16);
+  letter-spacing: 0.08em;
+}
+
+.dm_forge-repair-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+@media (max-width: 620px) {
+  .dm_forge-repair-summary {
+    grid-template-columns: 1fr;
+  }
+}
+
+.dm_forge-repair-summary div {
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid rgb(208 180 129 / 24%);
+  border-radius: 4px;
+  background: rgb(255 255 255 / 3%);
+}
+
+.dm_forge-repair-summary dt {
+  color: var(--color-text-subtle);
+  font-size: var(--font-size-10);
+  text-transform: uppercase;
+}
+
+.dm_forge-repair-summary dd {
+  margin: 3px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.dm_forge-repair-reference {
+  border: 1px solid rgb(208 180 129 / 24%);
+  border-radius: 5px;
+  background: rgb(255 255 255 / 3%);
+}
+
+.dm_forge-repair-reference summary {
+  padding: 8px 10px;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.dm_forge-repair-reference pre {
+  max-height: 180px;
+  margin: 0;
+  padding: 8px 10px;
+  overflow: auto;
+  border-top: 1px solid rgb(255 255 255 / 8%);
+  color: #e8ddd0;
+  font-family: var(--font-monospace, "Consolas", monospace);
+  font-size: var(--font-size-11);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .dm_forge-review-summary[hidden] {
@@ -1088,6 +1250,14 @@
 .dm_forge-review-pill[data-state="unresolved"] i,
 .dm_forge-review-pill[data-state="warning"] i {
   color: #e5a15d;
+}
+
+.dm_forge-review-pill[data-state="review"] i {
+  color: #e5a15d;
+}
+
+.dm_forge-review-pill[data-state="resolved"] i {
+  color: #73c991;
 }
 
 .dm_forge-review-pill[data-state="notice"] i {
@@ -1378,6 +1548,10 @@
   color: #e5a15d;
 }
 
+.dm_forge-review-note[data-state="review"] > i {
+  color: #e5a15d;
+}
+
 .dm_forge-review-note[data-state="notice"] > i {
   color: #8A795B;
 }
@@ -1407,6 +1581,56 @@
   gap: 8px;
 }
 
+.dm_forge-review-note-groups {
+  display: grid;
+  gap: 6px;
+}
+
+.dm_forge-review-note-group {
+  border: 1px solid rgb(208 180 129 / 16%);
+  border-radius: 4px;
+  background: rgb(255 255 255 / 2%);
+}
+
+.dm_forge-review-note-group > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 28px;
+  padding: 4px 8px;
+  cursor: pointer;
+  color: var(--color-text-subtle);
+  font-size: var(--font-size-11);
+  font-weight: 700;
+}
+
+.dm_forge-review-note-group > summary:hover,
+.dm_forge-review-note-group > summary:focus-visible {
+  color: var(--color-text-primary);
+}
+
+.dm_forge-review-note-group-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dm_forge-review-note-group-title i {
+  color: #8a795b;
+}
+
+.dm_forge-review-note-group[data-state="review"] .dm_forge-review-note-group-title i {
+  color: #e5a15d;
+}
+
+.dm_forge-review-note-group-body {
+  display: grid;
+  gap: 8px;
+  padding: 8px;
+  border-top: 1px solid rgb(255 255 255 / 6%);
+}
+
 .dm_forge-item-note-badges {
   display: flex;
   flex-wrap: wrap;
@@ -1426,30 +1650,15 @@
 }
 
 .dm_forge-advanced {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
   border-top: 1px solid var(--color-border-light-primary);
   border-bottom: 1px solid var(--color-border-light-primary);
 }
 
-.dm_forge-advanced > summary {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  min-height: 34px;
-  cursor: pointer;
-  color: var(--color-text-subtle);
-}
-
-.dm_forge-advanced > summary:hover,
-.dm_forge-advanced > summary:focus-visible {
-  color: #f1ded1;
-}
-
-.dm_forge-advanced[open] > summary {
-  color: var(--color-text-primary);
-}
-
 .dm_forge-advanced .dm_forge-specs {
-  margin: 4px 0 10px;
+  width: 100%;
 }
 
 .dm_forge-message {

@@ -1,4 +1,5 @@
 import { MODULE_ID, readForgeFlags } from "./package-identity.js";
+import { normalizeAutomationContract } from "./automation-contract.js";
 
 const DEFAULT_VERIFICATION_WORLD_ID = "dmf-test-world";
 const VERIFICATION_ACTOR_NAME = "DMF Verification Actor";
@@ -60,6 +61,7 @@ function expectedUses(spec = {}) {
 }
 
 function buildVerificationExpectation(spec = {}) {
+  const automation = normalizeAutomationContract(spec.automation);
   return {
     kind: spec.kind ?? "",
     name: spec.name ?? "",
@@ -67,7 +69,10 @@ function buildVerificationExpectation(spec = {}) {
     minimumActivities: expectedActivityCount(spec),
     minimumEffects: expectedEffectCount(spec),
     expectedUses: expectedUses(spec),
-    minimumSummonProfiles: Array.isArray(spec.summonProfiles) ? spec.summonProfiles.length : 0
+    minimumSummonProfiles: Array.isArray(spec.summonProfiles) ? spec.summonProfiles.length : 0,
+    automationRecipe: automation?.recipe ?? "",
+    automationWorkflowPass: automation?.workflowPass ?? "",
+    automationTargetSource: automation?.targetSource ?? ""
   };
 }
 
@@ -87,6 +92,7 @@ function compareDocumentToExpectation(document, expectation = {}) {
   const effects = collectionValues(document?.effects);
   const profiles = activities.flatMap(activity => activityProfiles(activity));
   const forgeFlags = readForgeFlags(document?.flags ?? {});
+  const automation = forgeFlags.automation ? normalizeAutomationContract(forgeFlags.automation) : null;
   const actualUses = document?.system?.uses?.max;
   const failures = [];
 
@@ -111,6 +117,15 @@ function compareDocumentToExpectation(document, expectation = {}) {
   if (profiles.length < (expectation.minimumSummonProfiles ?? 0)) {
     failures.push(`Expected at least ${expectation.minimumSummonProfiles} summon profiles but found ${profiles.length}.`);
   }
+  if (expectation.automationRecipe && automation?.recipe !== expectation.automationRecipe) {
+    failures.push(`Expected automation recipe "${expectation.automationRecipe}" but found "${automation?.recipe ?? "none"}".`);
+  }
+  if (expectation.automationWorkflowPass && automation?.workflowPass !== expectation.automationWorkflowPass) {
+    failures.push(`Expected automation workflow pass "${expectation.automationWorkflowPass}" but found "${automation?.workflowPass ?? "none"}".`);
+  }
+  if (expectation.automationTargetSource && automation?.targetSource !== expectation.automationTargetSource) {
+    failures.push(`Expected automation target source "${expectation.automationTargetSource}" but found "${automation?.targetSource ?? "none"}".`);
+  }
 
   return {
     passed: failures.length === 0,
@@ -120,7 +135,8 @@ function compareDocumentToExpectation(document, expectation = {}) {
       activityCount: activities.length,
       effectCount: effects.length,
       usesMax: actualUses ?? "",
-      summonProfileCount: profiles.length
+      summonProfileCount: profiles.length,
+      automationRecipe: automation?.recipe ?? ""
     }
   };
 }

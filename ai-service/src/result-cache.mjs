@@ -21,6 +21,7 @@ function createCachedCompiler(compile, options = {}) {
   const maxEntries = options.maxEntries ?? 100;
   const now = options.now ?? Date.now;
   const keySelector = typeof options.keySelector === "function" ? options.keySelector : value => value;
+  const refreshSelector = typeof options.refreshSelector === "function" ? options.refreshSelector : () => false;
   const cache = new Map();
   const pending = new Map();
 
@@ -43,13 +44,14 @@ function createCachedCompiler(compile, options = {}) {
 
     const key = cacheKey(keySelector(payload));
     const timestamp = now();
+    const refresh = refreshSelector(payload) === true;
     const cached = cache.get(key);
-    if (cached?.expiresAt > timestamp) {
+    if (!refresh && cached?.expiresAt > timestamp) {
       cache.delete(key);
       cache.set(key, cached);
       return { result: structuredClone(cached.result), cacheStatus: "HIT" };
     }
-    if (cached) cache.delete(key);
+    if (cached && cached.expiresAt <= timestamp) cache.delete(key);
 
     if (pending.has(key)) {
       return { result: structuredClone(await pending.get(key)), cacheStatus: "COALESCED" };
@@ -60,7 +62,7 @@ function createCachedCompiler(compile, options = {}) {
     try {
       const result = await compilation;
       store(key, result);
-      return { result, cacheStatus: "MISS" };
+      return { result, cacheStatus: refresh ? "REFRESH" : "MISS" };
     } finally {
       pending.delete(key);
     }

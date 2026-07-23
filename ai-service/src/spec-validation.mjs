@@ -1,4 +1,5 @@
 import { ServiceError } from "./errors.mjs";
+import { normalizeAutomationContract } from "./automation-contract.mjs";
 
 function isObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -250,6 +251,7 @@ function validateSpecStructure(spec) {
   const validator = validators[spec.kind];
   if (!validator) fail(spec, "a registered structure validator");
   validator(spec);
+  if (spec.automation != null) spec.automation = normalizeAutomationContract(spec.automation, `${spec.name}.automation`);
   return spec;
 }
 

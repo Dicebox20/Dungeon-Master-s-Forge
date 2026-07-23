@@ -4,6 +4,7 @@ import { dirname, resolve } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 
 const DAY_MS = 86400000;
+const REPAIR_ATTEMPT_RETENTION_MS = 90 * DAY_MS;
 
 function dailyPeriod(timestamp) {
   const start = Math.floor(timestamp / DAY_MS) * DAY_MS;
@@ -127,4 +128,101 @@ function createDailyQuotaStore(options = {}) {
   });
 }
 
-export { DAY_MS, createDailyQuotaStore, dailyPeriod, monthlyPeriod, subjectDigest };
+function createUsageMeterStore(options = {}) {
+  const now = options.now ?? Date.now;
+  const hashSecret = String(options.hashSecret ?? "");
+  if (hashSecret.length < 32) throw new Error("Usage storage requires a hash secret of at least 32 characters.");
+
+  const location = databaseLocation(options.databasePath);
+  const database = new DatabaseSync(location);
+  database.exec("PRAGMA busy_timeout = 5000");
+  if (location !== ":memory:") database.exec("PRAGMA journal_mode = WAL");
+  database.exec("PRAGMA synchronous = NORMAL");
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS forge_usage (
+      bucket TEXT NOT NULL,
+      period_start INTEGER NOT NULL,
+      subject_hash TEXT NOT NULL,
+      usage_units INTEGER NOT NULL CHECK (usage_units >= 0),
+      updated_at INTEGER NOT NULL,
+      PRIMARY KEY (bucket, period_start, subject_hash)
+    ) STRICT
+  `);
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS forge_repair_attempts (
+      repair_key TEXT PRIMARY KEY,
+      claimed_at INTEGER NOT NULL
+    ) STRICT
+  `);
+  const selectUsage = database.prepare(`
+    SELECT usage_units FROM forge_usage
+    WHERE bucket = ? AND period_start = ? AND subject_hash = ?
+  `);
+  const upsertUsage = database.prepare(`
+    INSERT INTO forge_usage (bucket, period_start, subject_hash, usage_units, updated_at)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(bucket, period_start, subject_hash) DO UPDATE SET
+      usage_units = usage_units + excluded.usage_units,
+      updated_at = excluded.updated_at
+  `);
+  const claimRepair = database.prepare(`
+    INSERT OR IGNORE INTO forge_repair_attempts (repair_key, claimed_at)
+    VALUES (?, ?)
+  `);
+  const removeExpiredRepairs = database.prepare(
+    "DELETE FROM forge_repair_attempts WHERE claimed_at < ?"
+  );
+  let closed = false;
+
+  function periodStatus(bucket, subject, limit, periodFor, amount = 0) {
+    if (closed) throw new Error("Usage store is closed.");
+    if (!Number.isInteger(limit) || limit < 1) throw new Error("Usage limit must be a positive integer.");
+    if (!Number.isInteger(amount) || amount < 0) throw new Error("Usage amount must be a non-negative integer.");
+    const timestamp = now();
+    const period = periodFor(timestamp);
+    const subjectHash = subjectDigest(hashSecret, String(bucket), String(subject));
+    const retryAfter = Math.max(1, Math.ceil((period.end - timestamp) / 1000));
+    database.exec("BEGIN IMMEDIATE");
+    try {
+      const used = Number(selectUsage.get(String(bucket), period.start, subjectHash)?.usage_units ?? 0);
+      const allowed = used < limit;
+      if (allowed && amount > 0) upsertUsage.run(String(bucket), period.start, subjectHash, amount, timestamp);
+      database.exec("COMMIT");
+      const nextUsed = used + (allowed ? amount : 0);
+      return { allowed, used: nextUsed, remaining: Math.max(0, limit - nextUsed), limit, retryAfter };
+    } catch (error) {
+      try { database.exec("ROLLBACK"); } catch { /* Preserve the storage error. */ }
+      throw error;
+    }
+  }
+
+  return Object.freeze({
+    check: (bucket, subject, limit) => periodStatus(bucket, subject, limit, dailyPeriod),
+    checkMonthly: (bucket, subject, limit) => periodStatus(bucket, subject, limit, monthlyPeriod),
+    consume: (bucket, subject, amount, limit) => periodStatus(bucket, subject, limit, dailyPeriod, amount),
+    consumeMonthly: (bucket, subject, amount, limit) => periodStatus(bucket, subject, limit, monthlyPeriod, amount),
+    claimRepairAttempt(client, parentRequestId) {
+      if (closed) throw new Error("Usage store is closed.");
+      const repairKey = subjectDigest(hashSecret, "repair-attempt", `${String(client)}\0${String(parentRequestId)}`);
+      const timestamp = now();
+      database.exec("BEGIN IMMEDIATE");
+      try {
+        const result = claimRepair.run(repairKey, timestamp);
+        database.exec("COMMIT");
+        try {
+          removeExpiredRepairs.run(timestamp - REPAIR_ATTEMPT_RETENTION_MS);
+        } catch {
+          // Retention cleanup must not reject a valid one-shot claim.
+        }
+        return Number(result?.changes ?? 0) > 0;
+      } catch (error) {
+        try { database.exec("ROLLBACK"); } catch { /* Preserve the original storage error. */ }
+        throw error;
+      }
+    },
+    status: () => ({ kind: "sqlite-usage", durable: location !== ":memory:" }),
+    close() { if (!closed) { closed = true; database.close(); } }
+  });
+}
+
+export { DAY_MS, createDailyQuotaStore, createUsageMeterStore, dailyPeriod, monthlyPeriod, subjectDigest };

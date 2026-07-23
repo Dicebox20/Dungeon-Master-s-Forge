@@ -23,6 +23,12 @@ const SUPPORTED_SPEC_KINDS = Object.freeze([
   "weaponConditionOnHit",
   "weaponExtraDamage"
 ]);
+const SUPPORTED_COMPOSITIONAL_CAPABILITIES = Object.freeze([
+  "areaTargeting", "armorAndShields", "attunement", "chargesAndRecovery",
+  "conditions", "consumables", "damage", "enchantments", "healing",
+  "multiActivityItems", "namedSrdSpells", "onHitRiders", "passiveEffects",
+  "savingThrows", "spellAttacks", "summons", "weaponAttacks"
+]);
 
 const PROVIDERS = Object.freeze([
   Object.freeze({
@@ -235,11 +241,17 @@ async function compileWithProvider(request, options = {}) {
       token: connection.apiToken,
       unresolvedPolicy: connection.unresolvedPolicy,
       request: compileRequest,
+      requestMode: options.requestMode,
+      repair: options.repair,
       context: {
         ...options.context,
-        supportedKinds: capabilities?.compatibleKinds ?? requestedKinds
+        supportedKinds: capabilities?.compatibleKinds ?? requestedKinds,
+        supportedCapabilities: capabilities?.compatibleCapabilities ?? SUPPORTED_COMPOSITIONAL_CAPABILITIES
       },
       provider,
+      // Only send the refresh header after the service advertises support.
+      refreshCompletedCache: options.refreshCompletedCache !== false
+        && capabilities?.request?.cacheControlRefresh === true,
       fetchImpl: options.fetchImpl,
       timeoutMs: options.timeoutMs
     });

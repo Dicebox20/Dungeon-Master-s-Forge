@@ -53,9 +53,9 @@ function loadConfig(env = process.env) {
     publicFreeTier,
     trustProxy: flag(env.DMF_TRUST_PROXY, false),
     rateLimitPerMinute: integer(env.DMF_RATE_LIMIT_PER_MINUTE, 20, { min: 1, max: 10000 }),
-    clientDailyLimit: integer(env.DMF_CLIENT_DAILY_LIMIT, 0, { min: 0, max: 100000 }),
-    clientMonthlyLimit: integer(env.DMF_CLIENT_MONTHLY_LIMIT, publicFreeTier ? 100 : 0, { min: 0, max: 100000 }),
-    globalDailyLimit: integer(env.DMF_GLOBAL_DAILY_LIMIT, publicFreeTier ? 100 : 0, { min: 0, max: 1000000 }),
+    clientDailyUsageLimit: integer(env.DMF_CLIENT_DAILY_USAGE_LIMIT, 0, { min: 0, max: 1000000000 }),
+    clientMonthlyUsageLimit: integer(env.DMF_CLIENT_MONTHLY_USAGE_LIMIT, publicFreeTier ? 500000 : 0, { min: 0, max: 1000000000 }),
+    globalDailyUsageLimit: integer(env.DMF_GLOBAL_DAILY_USAGE_LIMIT, publicFreeTier ? 10000000 : 0, { min: 0, max: 1000000000 }),
     quotaDatabasePath: String(env.DMF_QUOTA_DATABASE_PATH ?? (publicFreeTier ? "./data/free-tier-quota.sqlite" : ":memory:")).trim(),
     quotaHashSecret: String(env.DMF_QUOTA_HASH_SECRET ?? ""),
     errorReportsEnabled: flag(env.DMF_ERROR_REPORTS_ENABLED, publicFreeTier),
@@ -87,8 +87,8 @@ function loadConfig(env = process.env) {
     if (!config.allowedOrigins.includes("*")) {
       throw new ServiceError(500, "invalid_configuration", "Public free-tier mode requires DMF_ALLOWED_ORIGINS=* so downloaded Foundry installations can connect.");
     }
-    if (config.clientMonthlyLimit < 1 || config.globalDailyLimit < 1) {
-      throw new ServiceError(500, "invalid_configuration", "Public free-tier mode requires positive client monthly and global daily limits.");
+    if (config.clientMonthlyUsageLimit < 1 || config.globalDailyUsageLimit < 1) {
+      throw new ServiceError(500, "invalid_configuration", "Public free-tier mode requires positive client monthly and global daily usage limits.");
     }
     if (!config.quotaDatabasePath || config.quotaDatabasePath === ":memory:") {
       throw new ServiceError(500, "invalid_configuration", "Public free-tier mode requires a durable DMF_QUOTA_DATABASE_PATH.");

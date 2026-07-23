@@ -133,6 +133,38 @@ function normalizeSpellActivityCosts(spec, request) {
   return { changed, spec: next };
 }
 
+function normalizeExplicitActivityCosts(spec, request) {
+  const text = compactText(request);
+  const summonCosts = [...text.matchAll(/\b(?:spend|expend|use)\s+(\d+)\s+charges?\s+to\s+(?:summon|conjure|call\s+(?:forth|in))\b/gi)]
+    .map(match => Number(match[1]))
+    .filter(cost => Number.isFinite(cost) && cost > 0);
+  if (summonCosts.length !== 1) return { changed: false, spec };
+
+  const next = clone(spec);
+  let changed = false;
+  for (const listName of ACTIVITY_LISTS) {
+    if (!Array.isArray(next[listName])) continue;
+    next[listName] = next[listName].map(activity => {
+      const type = compactText(activity?.type).toLowerCase();
+      const name = compactText(activity?.activityName);
+      if (!activity || (type !== "summon" && !/\bsummon\b/i.test(name))) return activity;
+      if (Number(activity.chargeCost) === summonCosts[0]) return activity;
+      changed = true;
+      return { ...activity, chargeCost: summonCosts[0] };
+    });
+  }
+  if (Array.isArray(next.summonProfiles) && next.summonProfiles.length) {
+    const summonActivity = next.summonActivity && typeof next.summonActivity === "object"
+      ? next.summonActivity
+      : {};
+    if (Number(summonActivity.chargeCost) !== summonCosts[0]) {
+      next.summonActivity = { ...summonActivity, chargeCost: summonCosts[0] };
+      changed = true;
+    }
+  }
+  return { changed, spec: next };
+}
+
 function removeGenericSpellShadows(spec) {
   const next = clone(spec);
   const namedSpellCount = allActivities(next).filter(({ activity }) => isNamedSpellActivity(activity)).length;
@@ -146,6 +178,22 @@ function removeGenericSpellShadows(spec) {
     removed += before - next[listName].length;
   }
   return { changed: removed > 0, spec: next, removed };
+}
+
+function removeDuplicateToggleLightActivities(spec) {
+  const next = clone(spec);
+  const toggle = next.toggleLight;
+  if (!toggle || !Array.isArray(next.utilityActivities)) return { changed: false, spec: next };
+  const toggleId = compactText(toggle.activityId);
+  const toggleName = compactText(toggle.activityName).toLowerCase();
+  const before = next.utilityActivities.length;
+  next.utilityActivities = next.utilityActivities.filter(activity => {
+    const activityId = compactText(activity?.activityId);
+    const activityName = compactText(activity?.activityName).toLowerCase();
+    if (toggleId && activityId === toggleId) return false;
+    return !toggleName || activityName !== toggleName;
+  });
+  return { changed: before !== next.utilityActivities.length, spec: next };
 }
 
 function normalizeResourcePool(spec, request) {
@@ -186,15 +234,26 @@ function clearResolvedActivityWarnings(spec) {
   const next = clone(spec);
   if (!Array.isArray(next.unresolvedMechanics)) return { changed: false, spec: next };
   const spellNames = namedSpellActivityNames(next);
-  if (!spellNames.length) return { changed: false, spec: next };
+  const activities = allActivities(next).map(({ activity }) => activity);
+  const hasHealingActivity = activities.some(activity =>
+    compactText(activity?.type).toLowerCase() === "heal"
+    || /\b(?:heal|healing|touch)\b/i.test(compactText(activity?.activityName))
+  );
+  const hasLightActivation = Boolean(next.toggleLight) || activities.some(activity =>
+    compactText(activity?.type).toLowerCase() === "utility"
+    && /\b(?:ignite|light|flame)\b/i.test(compactText(activity?.activityName))
+  );
   const before = next.unresolvedMechanics.length;
   next.unresolvedMechanics = next.unresolvedMechanics.filter(mechanic => {
     const category = compactText(mechanic?.category).toLowerCase();
-    const text = [mechanic?.label, mechanic?.reason, mechanic?.handling].map(compactText).join(" ");
+    const text = [mechanic?.label, mechanic?.requestedText, mechanic?.reason, mechanic?.handling].map(compactText).join(" ");
+    const staleRepresentationNote = /(?:cannot express|not preserved|not supported|does not have a native (?:toggleLight|light) field|does not contain .*\b(?:light|toggle)\b|different supported family|separate activation workflow|requires? manual)/i.test(text);
     const mentionsResolvedSpell = spellNames.some(spellName => text.toLowerCase().includes(spellName.toLowerCase()));
     const staleResolvedSpellNote = /(?:spell[- ]cast activity|save-based effect) was not preserved|cannot encode .* spell|activated spell casting is not supported by .* family|does not support spell activities|chosen weapon family has no supported spell-save activity field|daily spell usage integration|partially represented|does not support a spell-activation resource model|does not support a separate spell save dc/i.test(text);
     if (mentionsResolvedSpell && ["unmappedspell", "tableadjudication", "spell"].includes(category)) return false;
     if (staleResolvedSpellNote && ["unmappedspell", "tableadjudication", "spell"].includes(category)) return false;
+    if (hasHealingActivity && /\b(?:heal|healing|touch)\b/i.test(text) && staleRepresentationNote) return false;
+    if (hasLightActivation && /\b(?:light|ignite|flame)\b/i.test(text) && staleRepresentationNote) return false;
     return true;
   });
   if (!next.unresolvedMechanics.length) delete next.unresolvedMechanics;
@@ -224,8 +283,15 @@ function buildLayeredItemBlueprint(spec, request = "") {
   next = deduped.spec;
   if (deduped.changed) assumptions.push("Removed generic activity placeholders shadowed by named spell activities.");
 
+  const lightActivities = removeDuplicateToggleLightActivities(next);
+  next = lightActivities.spec;
+
   const costs = normalizeSpellActivityCosts(next, request);
   next = costs.spec;
+
+  const explicitCosts = normalizeExplicitActivityCosts(next, request);
+  next = explicitCosts.spec;
+  if (explicitCosts.changed) assumptions.push("Applied the explicit summon charge cost from the request to the matching activity.");
 
   const resources = normalizeResourcePool(next, request);
   next = resources.spec;
@@ -234,12 +300,13 @@ function buildLayeredItemBlueprint(spec, request = "") {
 
   const warnings = clearResolvedActivityWarnings(next);
   next = warnings.spec;
+  if (warnings.changed) assumptions.push("Reconciled stale review notes with the final typed activities and effects.");
   layers.namedActivities = { count: allActivities(next).length };
   layers.effects = { count: (next.effects?.length ?? 0) + (next.passiveEffects?.length ?? 0) };
   layers.advancedMechanics = { unresolved: next.unresolvedMechanics?.length ?? 0 };
 
   return {
-    applied: normalized.changed || promoted.changed || materialized.changed || deduped.changed || costs.changed || resources.changed || warnings.changed,
+    applied: normalized.changed || promoted.changed || materialized.changed || deduped.changed || lightActivities.changed || costs.changed || explicitCosts.changed || resources.changed || warnings.changed,
     spec: next,
     layers,
     assumptions

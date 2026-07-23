@@ -34,31 +34,42 @@ test("public free-tier mode requires bounded anonymous server-key deployment", (
     OPENAI_API_KEY: "server-secret",
     DMF_PUBLIC_FREE_TIER: "true",
     DMF_ALLOWED_ORIGINS: "*",
-    DMF_CLIENT_DAILY_LIMIT: "4",
-    DMF_CLIENT_MONTHLY_LIMIT: "20",
-    DMF_GLOBAL_DAILY_LIMIT: "80",
+    DMF_CLIENT_DAILY_USAGE_LIMIT: "40000",
+    DMF_CLIENT_MONTHLY_USAGE_LIMIT: "200000",
+    DMF_GLOBAL_DAILY_USAGE_LIMIT: "800000",
     DMF_QUOTA_DATABASE_PATH: "./data/test-free-tier.sqlite",
     DMF_QUOTA_HASH_SECRET: "test-quota-hash-secret-at-least-32-characters",
     DMF_TRUST_PROXY: "true"
   });
   assert.equal(result.publicFreeTier, true);
   assert.equal(result.trustProxy, true);
-  assert.equal(result.clientDailyLimit, 4);
-  assert.equal(result.clientMonthlyLimit, 20);
-  assert.equal(result.globalDailyLimit, 80);
+  assert.equal(result.clientDailyUsageLimit, 40000);
+  assert.equal(result.clientMonthlyUsageLimit, 200000);
+  assert.equal(result.globalDailyUsageLimit, 800000);
   assert.equal(result.quotaDatabasePath, "./data/test-free-tier.sqlite");
   assert.equal(result.allowClientApiKeyFallback, false);
+
+  const defaultAllowance = loadConfig({
+    DMF_AI_MODE: "openai",
+    OPENAI_API_KEY: "server-secret",
+    DMF_PUBLIC_FREE_TIER: "true",
+    DMF_ALLOWED_ORIGINS: "*",
+    DMF_GLOBAL_DAILY_USAGE_LIMIT: "800000",
+    DMF_QUOTA_DATABASE_PATH: "./data/test-free-tier.sqlite",
+    DMF_QUOTA_HASH_SECRET: "test-quota-hash-secret-at-least-32-characters"
+  });
+  assert.equal(defaultAllowance.clientMonthlyUsageLimit, 500000);
 
   assert.throws(() => loadConfig({
     DMF_AI_MODE: "openai",
     OPENAI_API_KEY: "server-secret",
     DMF_PUBLIC_FREE_TIER: "true",
     DMF_ALLOWED_ORIGINS: "*",
-    DMF_CLIENT_MONTHLY_LIMIT: "0",
-    DMF_GLOBAL_DAILY_LIMIT: "80",
+    DMF_CLIENT_MONTHLY_USAGE_LIMIT: "0",
+    DMF_GLOBAL_DAILY_USAGE_LIMIT: "800000",
     DMF_QUOTA_DATABASE_PATH: "./data/test-free-tier.sqlite",
     DMF_QUOTA_HASH_SECRET: "test-quota-hash-secret-at-least-32-characters"
-  }), /client monthly/);
+  }), /client monthly and global daily usage/);
 
   assert.throws(() => loadConfig({
     DMF_AI_MODE: "openai",

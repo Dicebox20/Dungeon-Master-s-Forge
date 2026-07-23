@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- `2.23.1-test.52` prevents malformed no-save aura damage from becoming a provider 502, preserves it as explicit manual review, and anchors aura activation to the wielder's actor token. The public Free Forge lane now uses a `500,000` metered-unit monthly allowance calibrated to roughly 50 prompts from the prior prompt-count baseline.
+- The repair consent checkbox now sits in the footer with a visible checked state and hover tooltip. Repair reruns now send the user's original request instead of the internal layered brief.
+- `2.23.1-test.51` removes the evidence panels from the repair confirmation so the single retry text box is immediately reachable. The dialog now reports request progress/errors before closing.
+- `2.23.1-test.50` fixes a first-preview regression that removed the Advanced Specification Editor's `specs` control before normalized JSON could be written.
+- `2.23.1-test.49` includes the missing advanced automation runtime files, the compact one-textbox repair dialog, the Advanced Specification Editor preview tab, and the hosted Forge Capacity percentage indicator.
+- `2.23.1-test.48` changes the unchanged request action to `Retry`, opens the existing `SEND IT AGAIN!?` repair confirmation from that action, and removes the separate failed-item report UI. It also adds the advanced automation failure matrix and staged prompt pack; repaired results still require fresh review and approval.
+
 ## 2.23.1-test.45
 
 - Added bounded provenance fingerprints to diagnostic evidence so provider output can be compared with the final reviewed item without exposing prompts, keys, or endpoints.

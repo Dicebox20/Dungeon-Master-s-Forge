@@ -143,4 +143,97 @@ const resolvedStormforgedWarnings = buildLayeredItemBlueprint({
 
 assert.equal(resolvedStormforgedWarnings.spec.unresolvedMechanics, undefined);
 
+const resolvedHealingReview = buildLayeredItemBlueprint({
+  kind: "equipmentPowerSuite",
+  name: "Heartglass Torque",
+  baseItem: "amulet",
+  uses: { max: "3", recovery: [{ period: "dawn", type: "recoverAll", formula: "" }] },
+  activities: [{
+    activityId: "HealingTouch00001",
+    activityName: "Healing Touch",
+    type: "heal",
+    chargeCost: 1,
+    damageParts: [{ number: 2, denomination: 8, bonus: "+2", types: ["healing"] }]
+  }],
+  unresolvedMechanics: [{
+    category: "tableAdjudication",
+    label: "Touch healing action",
+    requestedText: "As an action, spend 1 charge to restore 2d8 + 2 hit points to a creature you touch.",
+    reason: "This item family cannot express a charge-spending healing activity without moving to a different supported family.",
+    handling: "Convert to a charged healing item if the healing activation should be formalized."
+  }]
+}, "Create a charged amulet that heals a touched creature.");
+
+assert.equal(resolvedHealingReview.spec.unresolvedMechanics, undefined);
+assert.ok(resolvedHealingReview.assumptions.some(note => /stale review notes/i.test(note)));
+
+const resolvedLightReview = buildLayeredItemBlueprint({
+  kind: "artifactWeaponHybrid",
+  name: "Sunforged Oathblade",
+  baseItem: "greatsword",
+  toggleLight: { bright: 20, dim: 20 },
+  utilityActivities: [{
+    activityId: "IgniteFlame00001",
+    activityName: "Ignite the Flame",
+    type: "utility"
+  }],
+  unresolvedMechanics: [{
+    category: "tableAdjudication",
+    label: "light-activation-mode",
+    requestedText: "Ignite as a bonus action to shed bright and dim light.",
+    reason: "The supported artifact shape only declaratively supports toggleLight without a separate activation workflow.",
+    handling: "The table may decide whether this is always-on while lit or requires a bonus action to activate."
+  }]
+}, "Create an artifact greatsword with a bonus-action light toggle.");
+
+assert.equal(resolvedLightReview.spec.unresolvedMechanics, undefined);
+
+const resolvedLightSchemaReview = buildLayeredItemBlueprint({
+  kind: "artifactWeaponHybrid",
+  name: "Sunforged Oathblade",
+  toggleLight: { bright: 20, dim: 20 },
+  utilityActivities: [{
+    activityId: "IgniteFlame00001",
+    activityName: "Ignite the Flame",
+    type: "utility"
+  }],
+  unresolvedMechanics: [{
+    category: "lightToggle",
+    label: "Requested light effect",
+    requestedText: "Ignite as a bonus action to shed bright and dim light.",
+    reason: "The generated item does not contain light-toggle data.",
+    handling: "Review the light activity manually."
+  }]
+}, "Create an artifact weapon with an Ignite the Flame light toggle.");
+
+assert.equal(resolvedLightSchemaReview.spec.unresolvedMechanics, undefined);
+
+const dedupedLightActivities = buildLayeredItemBlueprint({
+  kind: "artifactWeaponHybrid",
+  name: "Sunforged Oathblade",
+  toggleLight: { activityId: "IgniteFlame00001", activityName: "Ignite the Flame", bright: 20, dim: 20 },
+  utilityActivities: [
+    { activityId: "IgniteFlame00001", activityName: "Ignite the Flame", type: "utility" },
+    { activityId: "OtherUtility0001", activityName: "Other Utility", type: "utility" }
+  ]
+}, "Create an artifact weapon with an Ignite the Flame light toggle.");
+assert.deepEqual(dedupedLightActivities.spec.utilityActivities.map(activity => activity.activityName), ["Other Utility"]);
+
+const explicitSummonCost = buildLayeredItemBlueprint({
+  kind: "equipmentPowerSuite",
+  name: "Staff of the Bonebound Pact",
+  baseItem: "quarterstaff",
+  utilityActivities: [{
+    activityId: "SummonChosen0001",
+    activityName: "Summon Chosen Ally",
+    type: "summon",
+    chargeCost: 3
+  }],
+  summonProfiles: [{ profileName: "Skeleton", actor: { name: "Skeleton" } }]
+}, "As an action, spend 4 charges to summon one friendly Skeleton or Zombie for 1 hour.");
+
+assert.equal(explicitSummonCost.spec.utilityActivities[0].chargeCost, 4);
+assert.equal(explicitSummonCost.spec.summonActivity.chargeCost, 4);
+assert.ok(explicitSummonCost.assumptions.some(note => /explicit summon charge cost/i.test(note)));
+
 console.log("item-blueprint tests passed");

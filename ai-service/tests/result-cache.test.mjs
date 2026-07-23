@@ -47,6 +47,43 @@ test("expired entries are compiled again", async () => {
   assert.equal(calls, 2);
 });
 
+test("refresh requests replace completed cache entries but still coalesce in-flight work", async () => {
+  let calls = 0;
+  let releaseRefresh;
+  const cached = createCachedCompiler(async input => {
+    calls += 1;
+    if (input.hold) return new Promise(resolve => { releaseRefresh = () => resolve({ call: calls }); });
+    return { call: calls };
+  }, {
+    ttlMs: 1000,
+    maxEntries: 5,
+    keySelector: input => input.payload,
+    refreshSelector: input => input.refresh === true
+  });
+
+  const first = await cached({ payload: { request: "same" } });
+  const refreshed = await cached({ payload: { request: "same" }, refresh: true });
+  const replay = await cached({ payload: { request: "same" } });
+
+  assert.equal(first.cacheStatus, "MISS");
+  assert.equal(refreshed.cacheStatus, "REFRESH");
+  assert.equal(refreshed.result.call, 2);
+  assert.equal(replay.cacheStatus, "HIT");
+  assert.equal(replay.result.call, 2);
+  assert.equal(calls, 2);
+
+  const refreshing = cached({ payload: { request: "held" }, refresh: true, hold: true });
+  await Promise.resolve();
+  const duplicate = cached({ payload: { request: "held" }, refresh: true, hold: true });
+  releaseRefresh();
+  const [refreshResult, duplicateResult] = await Promise.all([refreshing, duplicate]);
+  assert.equal(refreshResult.cacheStatus, "REFRESH");
+  assert.equal(duplicateResult.cacheStatus, "COALESCED");
+  assert.equal(refreshResult.result.call, 3);
+  assert.equal(duplicateResult.result.call, 3);
+  assert.equal(calls, 3);
+});
+
 test("the oldest cached entry is evicted at the configured limit", async () => {
   let calls = 0;
   const cached = createCachedCompiler(async payload => ({ call: ++calls, payload }), {

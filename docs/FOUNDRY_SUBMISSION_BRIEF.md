@@ -1,10 +1,10 @@
 # Dungeon Master's Forge Foundry Submission Brief
 
-Updated: 2026-07-09
+Updated: 2026-07-18
 
-This document is the staff-facing summary for Foundry package review and launch prep.
+This is the short staff-facing summary for Foundry package review and launch prep.
 
-It is meant to help us describe the module clearly, answer predictable AI-policy questions quickly, and keep the public listing honest.
+It gives us a clear way to describe the module, answer common AI-policy questions, and keep the public listing accurate.
 
 ## One-Sentence Summary
 
@@ -15,9 +15,9 @@ Dungeon Master's Forge is a Foundry VTT module that turns GM-written natural-lan
 - Repository: [github.com/Dicebox20/Dungeon-Master-s-Forge](https://github.com/Dicebox20/Dungeon-Master-s-Forge)
 - Stable manifest: [main/module/module.json](https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/main/module/module.json)
 - Stable download: [main/releases/dungeon-masters-forge-v2-2.23.1.zip](https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/main/releases/dungeon-masters-forge-v2-2.23.1.zip)
-- Tester manifest: [main/testing/module.json](https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/main/testing/module.json)
+- Tester manifest: [dm_forge/tester/testing/module.json](https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/dm_forge/tester/testing/module.json)
 
-## What The Module Actually Does
+## What the Module Does
 
 - opens a GM-only Forge window from the Items directory
 - accepts a plain-language item request
@@ -54,6 +54,8 @@ The public package surface should remain human-authored and curated:
 - demo video narration
 - Foundry listing copy
 
+The copy in this worktree is a draft for the Dice Box Group to review and personally approve or rewrite before submission. It is not, by itself, proof of human authorship.
+
 Generated runtime items are user-created world content, not packaged release assets.
 
 ## Safety And Review Model
@@ -78,7 +80,7 @@ This matters for staff review because the module itself is not hard-wired to a s
 
 ## Review Talking Points
 
-If Foundry staff ask what should be tested, the most useful smoke pass is:
+If Foundry staff ask what to test first, this is the most useful smoke pass:
 
 1. install from the manifest
 2. enable the module in a DND5e 5.3.3 world
@@ -106,8 +108,12 @@ Before submitting to Foundry staff, make sure all of these exist and are current
 - at least two real screenshots
 - one short workflow demo video
 - clean module metadata in `module/module.json`
+- chosen software license, matching `LICENSE` notice, and the manifest `license` path
 - one-paragraph explanation of the hosted lane and monthly allowance
 - one-paragraph explanation that the package belongs in `AI Tools`
+- prepared-content provenance for every screenshot, icon, font, video, and other listing asset
+- external-provider, token-storage, error-report consent, and report-retention disclosures
+- a short explanation of the readable generated-code preview and explicit approval boundary
 
 ## Staff FAQ Draft
 
@@ -127,6 +133,6 @@ Not necessarily. The module supports local rules, BYO endpoints, and a hosted Fr
 
 The main protections are validation, review notes, unresolved-mechanics preservation, explicit approval, bounded hosted quotas, and request rejection or downgrade for abusive or impossible prompts.
 
-## Internal Reminder
+## Before We Submit
 
-Do not submit until the public manifest, ZIP, README, screenshots, and support links all match the same release story.
+Do not submit until the public manifest, ZIP, README, screenshots, support links, license notice, asset provenance, and privacy disclosures all tell the same release story. See `docs/FOUNDRY_SUBMISSION_COMPLIANCE.md` for the full gate and Dice Box Group attestations.

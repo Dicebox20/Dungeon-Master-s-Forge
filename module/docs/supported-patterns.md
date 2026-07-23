@@ -70,7 +70,7 @@ Confirmed structure:
 
 - automated ally aura buffs: deferred until Active Auras is compatible with the user's Foundry version; emitted as `allyAura` unresolved records.
 - class-specific resource restoration: deferred because Ki/Focus and similar pools vary across rules editions, imports, and embedded class features; emitted as `classResource` unresolved records.
-- unknown spell mappings: preserved as `unmappedSpell` unresolved records until a deterministic or AI provider supplies an activity mapping.
+- unknown spell mappings: preserved as `unmappedSpell` unresolved records until a deterministic or remote provider supplies an activity mapping.
 
 ## Existing Spell Rule
 

@@ -156,6 +156,7 @@ const preflightResult = await compileWithProvider("Make a fire dagger", {
         json: async () => ({
           service: { name: "Test Forge", version: "1.0.0" },
           forge: { schemaVersion: "1.0", promptVersion: "1.0.0", supportedKinds: ["weaponExtraDamage"] },
+          request: { cacheControlRefresh: true },
           features: { declarativeModelOutputOnly: true, executableModelOutput: false }
         })
       };
@@ -176,6 +177,7 @@ assert.equal(preflightRequests.length, 2);
 assert.equal(preflightRequests[0].url, "https://forge.example/v1/forge/capabilities");
 assert.equal(preflightRequests[0].init.method, "GET");
 assert.deepEqual(JSON.parse(preflightRequests[1].init.body).context.supportedKinds, ["weaponExtraDamage"]);
+assert.equal(preflightRequests[1].init.headers["Cache-Control"], "no-cache");
 assert.equal(preflightResult.providerCapabilities.status, "compatible");
 assert.equal(preflightResult.promptVersion, "1.0.0");
 await assert.rejects(

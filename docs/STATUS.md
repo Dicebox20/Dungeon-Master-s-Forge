@@ -1,21 +1,23 @@
 # Dungeon Master's Forge Release Status
 
-Updated: 2026-07-22
+Updated: 2026-07-23
 
 ## Provider Default
 
 - The source release now defaults to the hosted Free Forge endpoint using `gpt-5.4-mini`.
 - Local Rules remains available as an explicit offline provider, and Bring Your Own API remains unchanged.
-- This change does not alter quotas, provider keys, deployed services, manifests, packages, or release artifacts.
+- The public service now runs the locally verified repair-capable `1.6.1` source for temporary Dice Box Group testing. Provider keys, manifests, packages, release artifacts, the private testing service, and the existing quota ledger remain intact.
 
 ## Current Local Snapshot
 
 - Stable source candidate: `2.23.1`; the existing stable ZIP has not been rebuilt after the current compliance edits.
-- Tester source candidate: `2.23.1-test.45`, with its manifest and download on `dm_forge/tester`.
-- Hosted service: `1.6.1`; public Free Forge limits remain 10 requests per minute, 100 prompts per tester per calendar month, and 50 requests per day across the public service.
-- Verification suites currently pass `46/46` module tests and `198/198` AI-service tests.
+- Tester source candidate: `2.23.1-test.52`, with its manifest and download prepared for `dm_forge/tester`.
+- Hosted service: `1.6.1`; the public client allowance is now `500,000` metered usage units per calendar month, calibrated to roughly 50 prompts from the previous prompt-count baseline. The `10/minute` safeguard and separate `1,000,000,000` global daily ceiling remain in place; the private testing lane remains outside the public ledger.
+- Private testing candidate: safe compositional capabilities are advertised separately from the fourteen compatibility renderer routes. Prompt-count quotas have been replaced with provider-token or deterministic data-size usage metering. Cache hits and client-funded provider requests are uncharged.
+- Last completed verification suites passed `51/51` module tests and `215/215` AI-service tests locally. Tester `.52` is installed locally, and both Droplet services remain healthy after the public repair rollout and requested allowance change.
+- The source patch adds a capability-gated `SEND IT AGAIN!?` repair confirmation flow, fresh approval gating, and bounded report provenance. The public service now advertises `features.repairRerun` and `request.cacheControlRefresh`; a live smoke verified `200` then duplicate `409 repair_already_attempted`. The UUID capture design remains roadmap-only.
 - The local compliance audit covers AI-content classification, runtime approval, executable-output boundaries, token handling, diagnostics consent, external-provider disclosure, branding, and package contents.
-- The Dice Box Group selected MIT licensing. The notice and manifest references are present, and isolated stable/tester candidate archives were inspected locally. The existing stable repository release ZIP was not replaced. Tester build `2.23.1-test.45` was published on `dm_forge/tester` after local verification, and both Droplet service units were restarted from the current service source.
+- The Dice Box Group selected MIT licensing. The notice and manifest references are present, and isolated stable/tester candidate archives were inspected locally. The existing stable repository release ZIP was not replaced. Tester build `2.23.1-test.52` is the local tester candidate; publication remains separate. The public and private Droplet processes were restarted from the verified source, with the public monthly allowance set to `500,000` metered usage units.
 - The stable `main` lane still requires a separate approved release synchronization; do not treat the tester build as the stable public release.
 
 ## Beta V1 Sweep 004
@@ -45,7 +47,7 @@ Updated: 2026-07-22
 ## Publish Candidate
 
 - Stable release candidate: `2.23.1`
-- Current tester release: `2.23.1-test.45`
+- Current tester release: `2.23.1-test.52`
 - Module manifest target: `module/module.json`
 - Release ZIP: `releases/dungeon-masters-forge-v2-2.23.1.zip`
 - Existing stable ZIP SHA-256: `C597701CD56224D925B3270D6AAC26417E6E2FD94F5774E826BDD68529EC25C4` (not rebuilt during the current compliance audit)
@@ -111,7 +113,7 @@ Historical validation notes below still mention earlier `2.23.0-test.*` smoke pa
 
 - The module includes the split-pane Description/Result workflow, Forge Settings, Local Rules, Bring Your Own API, and review-before-create validation.
 - Read-only native DND5e resolution now covers modern spell, equipment, actor, monster feature, and roll-table lookup without mutating compendium content.
-- The reference AI service supports private server-key, personal client-key, and bounded public free-tier deployments. Service `1.6.1` is live on the official Droplet with the current bounded public allowance and one bounded invalid-output retry; Hosted Forge remains disabled in the stable public module until the final release review is complete.
+- The reference AI service supports private server-key, personal client-key, and bounded public free-tier deployments. Service `1.6.1` is live on the official Droplet with the temporary Dice Box Group rollout and one bounded invalid-output retry; Hosted Forge remains disabled in the stable public module until the final release review is complete.
 - Cauldron of Plentiful Resources remains optional and deferred because its current release is incompatible with this Foundry version.
 - The roadmap now tracks charge-scaled multi-spell items where spell level is the default charge cost and extra charge spend can upcast supported SRD spells.
 - Exact-name SRD spell requests should prefer system-native spell activity provenance before falling back to synthesized activities when the Foundry DND5e schema allows it.
@@ -123,7 +125,7 @@ Historical validation notes below still mention earlier `2.23.0-test.*` smoke pa
 - The current workspace AI service suite passes `198` tests.
 - Public export module tests pass after the filename-surface sync to `dungeon-masters-forge.js`.
 - Public export AI service tests remain covered by the current workspace suite.
-- The current local tester candidate is `2.23.1-test.45`.
+- The current local tester candidate is `2.23.1-test.52`, installed locally after the aura-contract repair and allowance update.
 - The installed module manifest on disk matches the tester manifest target for `dungeon-masters-forge`.
 - Foundry Check Connection succeeds against `http://localhost:8788/v1/forge/compile`, and the saved Bring Your Own API selection survives a cold page reload.
 - A true remote compile succeeds in Foundry against service `1.3.0`: Live Ember Dagger returned as a validated `weaponExtraDamage` spec with the requested base and fire damage. No world document was created during the smoke test.

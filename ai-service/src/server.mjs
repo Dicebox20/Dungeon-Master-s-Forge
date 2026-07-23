@@ -5,10 +5,12 @@ import { serviceCapabilities } from "./capabilities.mjs";
 import { PROMPT_VERSION, SERVICE_NAME, SERVICE_VERSION } from "./constants.mjs";
 import { createCompiler } from "./compiler.mjs";
 import { createConcurrencyGate } from "./concurrency-gate.mjs";
+import { validateForgeRequest } from "./contract.mjs";
 import { ServiceError, publicError } from "./errors.mjs";
 import { createErrorReportStore } from "./error-report-store.mjs";
 import { createCachedCompiler } from "./result-cache.mjs";
-import { createDailyQuotaStore } from "./quota-store.mjs";
+import { createUsageMeterStore } from "./quota-store.mjs";
+import { measureUsage } from "./usage.mjs";
 
 function tokenEqual(actual, expected) {
   const left = createHash("sha256").update(String(actual)).digest();
@@ -73,7 +75,8 @@ function applyCors(request, response, config) {
     response.setHeader("Vary", "Origin");
   }
   response.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  response.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type");
+  response.setHeader("Access-Control-Allow-Headers", "Authorization, Cache-Control, Content-Type");
+  response.setHeader("Access-Control-Expose-Headers", "X-Forge-Cache, X-Forge-Usage-Charged, X-Forge-Usage-Limit, X-Forge-Usage-Remaining");
   response.setHeader("Access-Control-Max-Age", "600");
 }
 
@@ -183,6 +186,17 @@ function normalizeErrorReport(payload, requestId, client) {
         includedPreviewNotes: payload.feedback.includedPreviewNotes === true
       }
     : null;
+  const repair = payload.repair && typeof payload.repair === "object" && !Array.isArray(payload.repair)
+    ? {
+        mode: cleanText(payload.repair.mode, 40),
+        parentRequestId: cleanText(payload.repair.parentRequestId, 100),
+        attempted: payload.repair.attempted === true,
+        requestFingerprint: cleanText(payload.repair.requestFingerprint, 120),
+        originalSpecFingerprint: cleanText(payload.repair.originalSpecFingerprint, 120),
+        repairNotes: cleanBlockText(payload.repair.repairNotes, 4000),
+        providerLane: cleanText(payload.repair.providerLane, 100)
+      }
+    : null;
 
   return {
     schemaVersion: cleanText(payload.schemaVersion, 20) || "1.0",
@@ -215,7 +229,8 @@ function normalizeErrorReport(payload, requestId, client) {
     },
     items,
     compilation,
-    feedback
+    feedback,
+    repair
   };
 }
 
@@ -231,13 +246,14 @@ function createForgeServer(options) {
     ttlMs: config.cacheTtlMs,
     maxEntries: config.cacheMaxEntries,
     now: options.now,
-    keySelector: input => input?.payload ?? input
+    keySelector: input => input?.payload ?? input,
+    refreshSelector: input => input?.refreshCache === true
   });
   const logger = options.logger ?? console;
   const rateLimit = createRateLimiter(config.rateLimitPerMinute, options.now);
-  const usesDailyQuota = config.clientDailyLimit > 0 || config.clientMonthlyLimit > 0 || config.globalDailyLimit > 0;
-  const dailyQuotaStore = usesDailyQuota
-    ? (options.dailyQuotaStore ?? createDailyQuotaStore({
+  const usesUsageMeter = config.clientDailyUsageLimit > 0 || config.clientMonthlyUsageLimit > 0 || config.globalDailyUsageLimit > 0;
+  const usageStore = usesUsageMeter
+    ? (options.usageStore ?? createUsageMeterStore({
         databasePath: config.quotaDatabasePath,
         hashSecret: config.quotaHashSecret,
         now: options.now
@@ -249,7 +265,26 @@ function createForgeServer(options) {
         retentionDays: config.errorReportRetentionDays
       }))
     : null;
-  const ownsDailyQuotaStore = usesDailyQuota && !options.dailyQuotaStore;
+  const ownsUsageStore = usesUsageMeter && !options.usageStore;
+  const repairAttempts = new Map();
+
+  function claimRepairAttempt(client, payload) {
+    if (String(payload?.requestMode ?? "compile") !== "repair-attempt") return;
+    const parentRequestId = String(payload?.repair?.parentRequestId ?? "").trim();
+    if (!parentRequestId) return;
+    if (usageStore?.claimRepairAttempt) {
+      if (!usageStore.claimRepairAttempt(client, parentRequestId)) {
+        throw new ServiceError(409, "repair_already_attempted", "This Forge result already has a confirmed repair attempt. Start a new preview if you need another provider evaluation.");
+      }
+      return;
+    }
+    const key = `${client}:${parentRequestId}`;
+    if (repairAttempts.has(key)) {
+      throw new ServiceError(409, "repair_already_attempted", "This Forge result already has a confirmed repair attempt. Start a new preview if you need another provider evaluation.");
+    }
+    repairAttempts.set(key, Date.now());
+    while (repairAttempts.size > 4096) repairAttempts.delete(repairAttempts.keys().next().value);
+  }
 
   const server = createServer(async (request, response) => {
     const requestId = randomUUID();
@@ -274,15 +309,15 @@ function createForgeServer(options) {
           mode: config.mode,
           access: config.publicFreeTier ? "public-free-tier" : "private",
           cache: config.cacheTtlMs > 0 && config.cacheMaxEntries > 0 ? "enabled" : "disabled",
-          quotaStorage: dailyQuotaStore?.status?.() ?? { kind: "disabled", durable: false },
+          quotaStorage: usageStore?.status?.() ?? { kind: "disabled", durable: false },
           compilation: compilationGate.status(),
           requestLimits: {
             maxCharacters: config.maxRequestChars,
             maxItems: config.maxItemsPerRequest,
             perMinute: config.rateLimitPerMinute,
-            perClientDay: config.clientDailyLimit,
-            perClientMonth: config.clientMonthlyLimit,
-            globalPerDay: config.globalDailyLimit
+            perClientDayUsage: config.clientDailyUsageLimit,
+            perClientMonthUsage: config.clientMonthlyUsageLimit,
+            globalPerDayUsage: config.globalDailyUsageLimit
           }
         });
         return;
@@ -352,41 +387,70 @@ function createForgeServer(options) {
         throw new ServiceError(429, "rate_limited", "Forge AI request limit exceeded. Try again shortly.");
       }
 
-      if (!usesClientProviderKey && dailyQuotaStore && config.clientMonthlyLimit > 0) {
-        const monthly = dailyQuotaStore.consumeMonthly("client-month", client, config.clientMonthlyLimit);
-        response.setHeader("X-MonthlyLimit-Limit", String(config.clientMonthlyLimit));
-        response.setHeader("X-MonthlyLimit-Remaining", String(monthly.remaining));
+      if (!usesClientProviderKey && usageStore && config.clientMonthlyUsageLimit > 0) {
+        const monthly = usageStore.checkMonthly("client-month", client, config.clientMonthlyUsageLimit);
+        response.setHeader("X-Forge-Usage-Limit", String(monthly.limit));
+        response.setHeader("X-Forge-Usage-Remaining", String(monthly.remaining));
         if (!monthly.allowed) {
           response.setHeader("Retry-After", String(monthly.retryAfter));
-          throw new ServiceError(429, "monthly_client_limit", "This free-tier client has reached its monthly Forge AI limit.");
+          throw new ServiceError(429, "monthly_client_usage_limit", "This Free Forge client has reached its monthly hosted usage allowance.");
         }
       }
-      if (!usesClientProviderKey && dailyQuotaStore && config.clientDailyLimit > 0) {
-        const daily = dailyQuotaStore.consume("client", client, config.clientDailyLimit);
-        response.setHeader("X-DailyLimit-Limit", String(config.clientDailyLimit));
-        response.setHeader("X-DailyLimit-Remaining", String(daily.remaining));
+      if (!usesClientProviderKey && usageStore && config.clientDailyUsageLimit > 0) {
+        const daily = usageStore.check("client", client, config.clientDailyUsageLimit);
         if (!daily.allowed) {
+          response.setHeader("X-Forge-Usage-Limit", String(daily.limit));
+          response.setHeader("X-Forge-Usage-Remaining", String(daily.remaining));
           response.setHeader("Retry-After", String(daily.retryAfter));
-          throw new ServiceError(429, "daily_client_limit", "This free-tier client has reached its daily Forge AI limit.");
+          throw new ServiceError(429, "daily_client_usage_limit", "This Free Forge client has reached its daily hosted usage allowance.");
         }
       }
-      if (!usesClientProviderKey && dailyQuotaStore && config.globalDailyLimit > 0) {
-        const daily = dailyQuotaStore.consume("global", "global", config.globalDailyLimit);
-        response.setHeader("X-GlobalDailyLimit-Limit", String(config.globalDailyLimit));
-        response.setHeader("X-GlobalDailyLimit-Remaining", String(daily.remaining));
+      if (!usesClientProviderKey && usageStore && config.globalDailyUsageLimit > 0) {
+        const daily = usageStore.check("global", "global", config.globalDailyUsageLimit);
         if (!daily.allowed) {
+          response.setHeader("X-Forge-Usage-Limit", String(daily.limit));
+          response.setHeader("X-Forge-Usage-Remaining", String(daily.remaining));
           response.setHeader("Retry-After", String(daily.retryAfter));
-          throw new ServiceError(429, "daily_global_limit", "The Dungeon Master's Forge free-tier daily allowance has been reached.");
+          throw new ServiceError(429, "daily_global_usage_limit", "Free Forge has reached its hosted daily usage safeguard.");
         }
       }
 
       const payload = await readJsonBody(request, config.bodyLimitBytes);
+      if (String(payload?.requestMode ?? "compile") === "repair-attempt") {
+        // Validate before claiming the one-shot slot so malformed attempts do
+        // not consume the user's only repair opportunity.
+        validateForgeRequest(payload, {
+          maxRequestChars: config.maxRequestChars,
+          maxItemsPerRequest: config.maxItemsPerRequest
+        });
+      }
+      claimRepairAttempt(client, payload);
       const { result, cacheStatus } = await cachedCompile({
         payload,
-        requestApiKey: requiresClientOpenAiKey || usesClientProviderKey ? bearer : ""
+        requestApiKey: requiresClientOpenAiKey || usesClientProviderKey ? bearer : "",
+        refreshCache: /(?:^|,)\s*no-cache\s*(?:,|$)/i.test(String(request.headers["cache-control"] ?? ""))
       });
       response.setHeader("X-Forge-Cache", cacheStatus);
-      sendJson(response, 200, result);
+      const cacheWasCharged = !["HIT", "COALESCED"].includes(cacheStatus);
+      const measured = measureUsage(payload, result);
+      const chargedUnits = !usesClientProviderKey && usageStore && cacheWasCharged ? measured.units : 0;
+      let clientUsage = null;
+      if (chargedUnits > 0 && config.clientMonthlyUsageLimit > 0) {
+        clientUsage = usageStore.consumeMonthly("client-month", client, chargedUnits, config.clientMonthlyUsageLimit);
+        response.setHeader("X-Forge-Usage-Limit", String(clientUsage.limit));
+        response.setHeader("X-Forge-Usage-Remaining", String(clientUsage.remaining));
+      }
+      if (chargedUnits > 0 && config.clientDailyUsageLimit > 0) {
+        usageStore.consume("client", client, chargedUnits, config.clientDailyUsageLimit);
+      }
+      if (chargedUnits > 0 && config.globalDailyUsageLimit > 0) {
+        usageStore.consume("global", "global", chargedUnits, config.globalDailyUsageLimit);
+      }
+      response.setHeader("X-Forge-Usage-Charged", String(chargedUnits));
+      sendJson(response, 200, {
+        ...result,
+        usage: { ...measured, chargedUnits, cacheStatus }
+      });
     } catch (error) {
       if (response.destroyed) return;
       const safe = publicError(error);
@@ -401,7 +465,7 @@ function createForgeServer(options) {
     }
   });
 
-  if (ownsDailyQuotaStore) server.once("close", () => dailyQuotaStore.close());
+  if (ownsUsageStore) server.once("close", () => usageStore.close());
 
   return server;
 }

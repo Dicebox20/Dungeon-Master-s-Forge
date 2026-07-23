@@ -9,6 +9,7 @@ import { MODULE_ID, readForgeFlags } from "./package-identity.js";
 import { armorBonusValue, inferArmorProfile, isImplementCategory, normalizeItemDocumentType, normalizeMagicalBonus, normalizeWeight, safeItemIcon } from "./equipment-normalization.js";
 import { resolveActorByName, resolveDocumentFromMatch } from "./content-resolver.js";
 import { sanitizeForgeSpec } from "./forge-spec-integrity.js";
+import { normalizeAutomationContract } from "./automation-contract.js";
 
 const CHOOSER_ACTIVITY_LISTS = Object.freeze(["attackActivities", "saveActivities", "utilityActivities", "activities"]);
 
@@ -43,6 +44,24 @@ function applyMidiQolActivityDefaults(activity = {}, { enabled = false, target =
   // has selected the intended targets or summon profile.
   if (useCost) midiProperties.forceConsumeDialog = "always";
   return foundry.utils.mergeObject(foundry.utils.deepClone(activity), { midiProperties }, { inplace: false });
+}
+
+function normalizeActorAuraActivitySpec(activitySpec = {}) {
+  const text = [activitySpec.activityName, activitySpec.name, activitySpec.description, activitySpec.chatFlavor]
+    .filter(Boolean)
+    .join(" ");
+  if (!/\baura\b/i.test(text)) return activitySpec;
+  const target = activitySpec.target && typeof activitySpec.target === "object" ? activitySpec.target : {};
+  const affects = target.affects && typeof target.affects === "object" ? target.affects : {};
+  return {
+    ...activitySpec,
+    range: { ...(activitySpec.range && typeof activitySpec.range === "object" ? activitySpec.range : {}), value: null, units: "self" },
+    target: {
+      ...target,
+      affects: { ...affects, count: "1", type: "self", special: "Wielder's actor token" },
+      prompt: false
+    }
+  };
 }
 
 function isFriendlySummon(spec = {}, activitySpec = {}) {
@@ -439,6 +458,7 @@ async function runDungeonMastersForge(FORGE, ITEMS, { validateOnly = false, auth
           ...(spec.unresolvedMechanics?.length ? {
             unresolvedMechanics: foundry.utils.deepClone(spec.unresolvedMechanics)
           } : {}),
+          ...(spec.automation ? { automation: foundry.utils.deepClone(spec.automation) } : {}),
           createdAt: new Date().toISOString()
         }
       }, { inplace: false })
@@ -1409,11 +1429,12 @@ ${activitySpec.macroCommand}
   }
 
   function makeSuiteUtilityActivity(item, spec, activitySpec) {
-    if (activitySpec?.healing) return makeHealingActivity(item, spec, activitySpec);
-    if (Array.isArray(activitySpec?.enchantChanges) && activitySpec.enchantChanges.length) {
-      return makeEnchantActivity(item, spec, activitySpec);
+    const normalizedActivitySpec = normalizeActorAuraActivitySpec(activitySpec);
+    if (normalizedActivitySpec?.healing) return makeHealingActivity(item, spec, normalizedActivitySpec);
+    if (Array.isArray(normalizedActivitySpec?.enchantChanges) && normalizedActivitySpec.enchantChanges.length) {
+      return makeEnchantActivity(item, spec, normalizedActivitySpec);
     }
-    return makeUtilityActivity(item, spec, activitySpec);
+    return makeUtilityActivity(item, spec, normalizedActivitySpec);
   }
 
   function makeAttackActivity(item, spec, activitySpec) {
@@ -1901,7 +1922,7 @@ ${activitySpec.macroCommand}
 
   function toggleLightMacroCommand(itemName, toggle) {
     const flagKey = toggle.flagKey ?? `${makeIdentifier(itemName)}Light`;
-    const warning = toggle.selectedTokenWarning ?? `Select the token holding ${itemName} first.`;
+    const warning = toggle.selectedTokenWarning ?? `Use ${itemName} from an actor with an active token.`;
     const onChat = toggle.onChat ?? `${itemName} begins shedding light.`;
     const offChat = toggle.offChat ?? `${itemName}'s light fades.`;
     const color = toggle.color ?? "#ff7a18";
@@ -1916,7 +1937,17 @@ const WARNING = ${JSON.stringify(warning)};
 const ON_CHAT = ${JSON.stringify(onChat)};
 const OFF_CHAT = ${JSON.stringify(offChat)};
 
-const sourceToken = canvas.tokens.controlled[0];
+const sourceActor =
+  (typeof actor !== "undefined" && actor) ||
+  (typeof item !== "undefined" && (item?.actor ?? item?.parent)) ||
+  (typeof workflow !== "undefined" && workflow?.actor) ||
+  null;
+const sourceToken =
+  (typeof token !== "undefined" && token) ||
+  (typeof workflow !== "undefined" && workflow?.token) ||
+  sourceActor?.getActiveTokens?.(true)?.[0] ||
+  sourceActor?.getActiveTokens?.()?.[0] ||
+  null;
 
 if (!sourceToken) {
   ui.notifications.warn(WARNING);
@@ -2168,6 +2199,7 @@ ui.notifications.info(ITEM_NAME + " light toggled on.");
     const condition = rider.condition ?? "poisoned";
     const effectName = rider.effectName ?? `${spec.name} - ${condition}`;
     const durationSeconds = Number(rider.durationSeconds ?? 30);
+    const targetCreatureType = String(rider.targetCreatureType ?? "").trim().toLowerCase();
     const effectImg = rider.img ?? "icons/svg/aura.svg";
 
     return `
@@ -2175,6 +2207,7 @@ const SAVE_ABILITY = ${JSON.stringify(ability)};
 const SAVE_DC = ${dc};
 const DURATION_SECONDS = ${durationSeconds};
 const CONDITION = ${JSON.stringify(condition)};
+const TARGET_CREATURE_TYPE = ${JSON.stringify(targetCreatureType)};
 const EFFECT_NAME = ${JSON.stringify(effectName)};
 const EFFECT_IMG = ${JSON.stringify(effectImg)};
 const SOURCE_LABEL = ${JSON.stringify(FORGE.sourceLabel)};
@@ -2193,6 +2226,8 @@ if (!targets.length) {
   ui.notifications.warn((macroItem?.name ?? "Weapon") + " found no hit or targeted enemy for the condition save.");
   return;
 }
+
+let matchingTargets = 0;
 
 async function rollSave(targetActor, targetToken) {
   const abilityData = targetActor.system?.abilities?.[SAVE_ABILITY] ?? {};
@@ -2250,6 +2285,9 @@ for (const target of targets) {
   const targetToken = target.document ? target : canvas.tokens.get(target.id);
   const targetActor = target.actor ?? targetToken?.actor;
   if (!targetActor) continue;
+  const targetType = String(targetActor.system?.details?.type?.value ?? targetActor.system?.details?.type ?? "").toLowerCase();
+  if (TARGET_CREATURE_TYPE && targetType !== TARGET_CREATURE_TYPE) continue;
+  matchingTargets += 1;
 
   const total = await rollSave(targetActor, targetToken);
   if (total < SAVE_DC) {
@@ -2265,6 +2303,10 @@ for (const target of targets) {
       content: "<p><strong>" + (macroItem?.name ?? "Weapon") + ":</strong> " + targetActor.name + " succeeds on the save (" + total + ").</p>"
     });
   }
+}
+
+if (TARGET_CREATURE_TYPE && matchingTargets === 0) {
+  ui.notifications.info((macroItem?.name ?? "Weapon") + " found no matching " + TARGET_CREATURE_TYPE + " hit target.");
 }
 `.trim();
   }
@@ -2472,7 +2514,11 @@ for (const target of targets) {
     };
   }
 
-  const preparedItems = ITEMS.map(spec => sanitizeForgeSpec(spec).spec);
+  const preparedItems = ITEMS.map(spec => {
+    const sanitized = sanitizeForgeSpec(spec).spec;
+    const automation = normalizeAutomationContract(sanitized.automation);
+    return automation ? { ...sanitized, automation } : sanitized;
+  });
   validateSpecs(preparedItems);
   const automationCodePreview = generatedAutomationCode(preparedItems);
 
@@ -2529,4 +2575,4 @@ for (const target of targets) {
   };
 }
 
-export { activityNeedsTargetConfirmation, applyMidiQolActivityDefaults, clonedSrdSummonActorData, forceExplicitChoiceOnAttack, forceSummonUseConfirmation, isFriendlySummon, itemHasExplicitActivityChoices, multiActivityStaffActivityLists, normalizeSrdActorLookupName, runDungeonMastersForge, suppressMidiTargetConfirmationForUtility };
+export { activityNeedsTargetConfirmation, applyMidiQolActivityDefaults, clonedSrdSummonActorData, forceExplicitChoiceOnAttack, forceSummonUseConfirmation, isFriendlySummon, itemHasExplicitActivityChoices, multiActivityStaffActivityLists, normalizeActorAuraActivitySpec, normalizeSrdActorLookupName, runDungeonMastersForge, suppressMidiTargetConfirmationForUtility };

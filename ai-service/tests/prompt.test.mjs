@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { PROMPT_VERSION } from "../src/constants.mjs";
 import { validateForgeRequest } from "../src/contract.mjs";
-import { buildSystemPrompt } from "../src/prompt.mjs";
+import { buildSystemPrompt, buildUserPrompt } from "../src/prompt.mjs";
 import { envelope } from "./helpers.mjs";
 
 function prompt(overrides = {}) {
@@ -30,7 +30,8 @@ test("prompt limits generation to client-supported Forge kinds", () => {
   const payload = envelope();
   payload.context.supportedKinds = ["weaponExtraDamage", "nativeSummon"];
   const result = buildSystemPrompt(validateForgeRequest(payload));
-  assert.match(result, /Use only these supported kind values:\nweaponExtraDamage, nativeSummon/);
+  assert.match(result, /Use only these compatibility renderer kind values:\nweaponExtraDamage, nativeSummon/);
+  assert.match(result, /renderer kind is not a feature ceiling/i);
 });
 
 test("prompt forbids executable model output", () => {
@@ -48,11 +49,11 @@ test("prompt includes target versions and unresolved policy", () => {
   assert.match(result, /Do not silently automate unsupported behavior/);
 });
 
-test("prompt explains dominant-family handling for hybrid requests", () => {
+test("prompt composes hybrid mechanics without treating kinds as feature ceilings", () => {
   const result = prompt();
   assert.match(result, /Emit exactly one supported kind for every spec/);
-  assert.match(result, /choose the dominant supported family/);
-  assert.match(result, /move unsupported or secondary mechanics into unresolvedMechanics/);
+  assert.match(result, /preserve all compatible secondary mechanics/);
+  assert.match(result, /Do not defer a mechanic merely because it belongs to a different historical family/);
   assert.match(result, /If the request includes "Complexity layer" sections, they still describe the same item/);
   assert.match(result, /Build each item from simple to complex in this order whenever possible/);
 });
@@ -71,4 +72,46 @@ test("prompt treats condition weapon workflow as a renderer default", () => {
   assert.match(result, /conditionOnHit.*default focused single-creature target/i);
   assert.match(result, /do not emit a workflow-verification or no-extra-target-dialog clause/i);
   assert.match(result, /do not promise automatic targeting of every token in a template/i);
+});
+
+test("prompt advertises only the local runtime's trusted automation recipes", () => {
+  const result = buildSystemPrompt(validateForgeRequest(envelope({
+    context: {
+      ...envelope().context,
+      automationCapabilities: {
+        version: "1.0",
+        supportedRecipes: ["conditionOnHit"],
+        activeModules: ["midi-qol", "itemacro"],
+        settings: { midiQolAutomation: true, itemMacroAutomation: true }
+      }
+    }
+  })));
+  assert.match(result, /trusted declarative automation recipes: conditionOnHit/);
+  assert.match(result, /must never contain executable code/);
+});
+
+test("repair prompt carries reviewed context without permitting executable behavior", () => {
+  const request = "Create a rare torch called Ashen Mercy with a toggleable 20-foot bright light.";
+  const result = validateForgeRequest(envelope({
+    request,
+    requestMode: "repair-attempt",
+    repair: {
+      parentRequestId: "repair-parent-01",
+      attempt: 1,
+      originalRequest: request,
+      repairNotes: "Preserve the torch and correct the light toggle review note.",
+      currentReviewedSpecs: [{ kind: "equipmentPowerSuite", name: "Ashen Mercy" }],
+      reviewNotes: [{ state: "notice", label: "Notice", message: "The light note is stale.", handling: "Review the generated toggle." }],
+      deterministicFindings: ["The generated spec contains toggleLight data."],
+      provenance: { providerLane: "bring-your-own" }
+    }
+  }));
+  const system = buildSystemPrompt(result);
+  const user = buildUserPrompt(result);
+  assert.match(system, /user-confirmed repair attempt, not a normal retry/i);
+  assert.match(system, /Do not add executable code, macros, scripts, world writes/i);
+  assert.match(user, /Original Forge request:/);
+  assert.match(user, /Preserve the torch and correct the light toggle review note/);
+  assert.match(user, /Ashen Mercy/);
+  assert.match(user, /stale/);
 });

@@ -5,7 +5,7 @@ import { extractNamedSrdSummon, genericSrdSummonActor } from "./srd-summon-profi
 const COMPILER_VERSION = "2.4.0";
 const DEFAULT_SAVE_DC = 13;
 
-const KNOWN_CASTING_SPELLS = /\b(?:clairvoyance|command|ice\s+storm|cone\s+of\s+cold|flame\s+strike|burning\s+hands|thunderwave|ice\s+knife|poison\s+spray|ray\s+of\s+sickness|cloudkill)\b/i;
+const KNOWN_CASTING_SPELLS = /\b(?:clairvoyance|command|dimension\s+door|hold\s+person|ice\s+storm|cone\s+of\s+cold|flame\s+strike|burning\s+hands|misty\s+step|thunderwave|ice\s+knife|poison\s+spray|ray\s+of\s+sickness|cloudkill)\b/i;
 
 const DAMAGE_TYPES = [
   "acid", "bludgeoning", "cold", "fire", "force", "lightning", "necrotic",
@@ -35,6 +35,32 @@ const CREATURES = {
 };
 
 const SAVE_SPELLS = {
+  "misty step": {
+    name: "Misty Step",
+    img: "icons/magic/movement/abstract-young-blue.webp",
+    chargeCost: 2,
+    range: { units: "self" },
+    target: { affects: { count: "1", type: "self", special: "The caster" }, prompt: false },
+    activityType: "utility"
+  },
+  "hold person": {
+    name: "Hold Person",
+    img: "icons/magic/control/encase-creature-humanoid-hold.webp",
+    chargeCost: 3,
+    range: { value: 60, units: "ft" },
+    target: { affects: { count: "1", type: "creature", special: "One humanoid" }, prompt: true },
+    saveAbility: "wis",
+    activityType: "save"
+  },
+  "dimension door": {
+    name: "Dimension Door",
+    img: "icons/magic/movement/portal-connectivity-pink.webp",
+    chargeCost: 4,
+    range: { value: 500, units: "ft" },
+    target: { affects: { count: "1", type: "creature", special: "One willing creature" }, prompt: true },
+    activityType: "utility",
+    manualReview: "Teleportation requires manual execution after choosing the destination."
+  },
   "ice storm": {
     name: "Ice Storm",
     img: "icons/magic/air/weather-clouds-snow.webp",
@@ -172,6 +198,19 @@ function collectUnresolvedMechanics(context) {
     deferred.push("Each unmapped spell clause was recorded in unresolvedMechanics for explicit review.");
   }
 
+  if (/\bdimension\s+door\b/i.test(request)) {
+    mechanics.push(unresolvedMechanic(
+      name,
+      "tableAdjudication",
+      "Teleportation requires manual execution",
+      matchingClause(request, /\bdimension\s+door\b/i),
+      "The safe declarative activity can describe the willing target, but it cannot choose or move a token destination.",
+      "Use the activity to record the power, then resolve the destination manually after review."
+    ));
+    warnings.push("Dimension Door was preserved as a reviewed activity; token movement remains manual.");
+    deferred.push("Teleportation is not executed by the Forge renderer.");
+  }
+
   return mechanics;
 }
 
@@ -203,6 +242,11 @@ function detectSaveSpells(text) {
   return Object.entries(SAVE_SPELLS)
     .filter(([key]) => new RegExp(`\\b${key.replace(/ /g, "\\s+")}\\b`, "i").test(text))
     .map(([, profile]) => profile);
+}
+
+function detectTargetCreatureType(text) {
+  const match = String(text).match(/\b(?:against|target(?:ing)?)\s+(?:a|an|the)?\s*(undead|construct|fiend|beast|humanoid|fey|elemental|celestial)\b/i);
+  return match?.[1]?.toLowerCase() ?? "";
 }
 
 function detectThrowableConsumableSubject(text) {
@@ -244,7 +288,8 @@ function detectName(request, fields, subject, assumptions) {
   if (/\bholy\s+water\b/i.test(request)) return "Holy Water";
   const title = firstTitleLine(request);
   if (title) return title;
-  const named = request.match(/\b(?:named|called)\s+["']?([^"'.,;\n]+)["']?/i)?.[1]?.trim();
+  const namedMatch = request.match(/\b(?:named|called)\s+(?:"([^"\n]+)"|'([^'\n]+)'|([^.,;\n]+))/i);
+  const named = namedMatch ? [namedMatch[1], namedMatch[2], namedMatch[3]].find(Boolean)?.trim() : "";
   if (named) return named;
 
   const damageType = DAMAGE_TYPES.find(type => new RegExp(`\\b${type}\\b`, "i").test(request));
@@ -465,9 +510,10 @@ function compileMultiSpellItem(context, spells) {
       chatFlavor: `Spend charges to cast ${spell.name} from ${name}.`,
       range: spell.range,
       target: spell.target,
-      save: { ability: spell.saveAbility, dc: saveDc },
-      damageOnSave: "half",
-      damageParts: spell.damageParts
+      ...(spell.saveAbility ? { save: { ability: spell.saveAbility, dc: saveDc } } : {}),
+      ...(spell.saveAbility ? { damageOnSave: "half" } : {}),
+      ...(spell.damageParts ? { damageParts: spell.damageParts } : {}),
+      ...(spell.manualReview ? { manualReview: spell.manualReview } : {})
     }))
   };
 }
@@ -668,7 +714,7 @@ function compileThrowableConsumableAttack(context) {
         "tableAdjudication",
         "Ongoing thrown-consumable effect",
         matchingClause(request, /\b(?:at the start of each of its turns|until .* extinguish|until extinguished|ongoing|continues? to burn)\b/i),
-        "The initial thrown attack is supported, but the follow-up burning or extinguish sequence is not fully automated for consumable projectiles.",
+        "The initial thrown attack is supported, but the follow-up burning or extinguish sequence remains manual review for consumable projectiles.",
         "Resolve the initial attack natively, then track the ongoing damage or extinguish condition manually."
       )
     ];
@@ -694,9 +740,11 @@ function compileThrowableConsumableSave(context) {
 
 function parseLightRadii(text) {
   const bright = Number(text.match(/\b(\d+)\s*[- ]?(?:foot|feet|ft\.?)\s+(?:of\s+)?bright\s+light/i)?.[1] ?? 20);
-  const dimMatch = text.match(/\b(additional\s+)?(\d+)\s*[- ]?(?:foot|feet|ft\.?)\s+(?:of\s+)?dim\s+light/i);
-  const dimValue = Number(dimMatch?.[2] ?? 20);
-  return { bright, dim: dimMatch?.[1] ? bright + dimValue : Math.max(bright, dimValue) };
+  const dimBeforeMatch = text.match(/\b(additional\s+)?(\d+)\s*[- ]?(?:foot|feet|ft\.?)\s+(?:of\s+)?dim\s+light/i);
+  const dimAfterMatch = text.match(/\bdim\s+light\s+for\s+(\d+)\s*(additional|extra)?\s*[- ]?(?:foot|feet|ft\.?)\b/i);
+  const dimValue = Number(dimBeforeMatch?.[2] ?? dimAfterMatch?.[1] ?? 20);
+  const isAdditional = Boolean(dimBeforeMatch?.[1] || dimAfterMatch?.[2]);
+  return { bright, dim: isAdditional ? bright + dimValue : Math.max(bright, dimValue) };
 }
 
 function compileHybridArtifact(context) {
@@ -781,6 +829,45 @@ function compileHybridArtifact(context) {
   };
 }
 
+function compileSelfTargetLightUtility(context) {
+  const { request, name, rarity, attunement } = context;
+  const radii = parseLightRadii(request);
+  return {
+    kind: "equipmentPowerSuite",
+    name,
+    img: "icons/magic/fire/flame-burning-campfire-orange.webp",
+    description: request,
+    rarity,
+    attunement,
+    equipmentType: "wondrous",
+    itemType: "equipment",
+    uses: { max: "", recovery: [] },
+    effects: [],
+    utilityActivities: [],
+    toggleLight: {
+      activityId: stableId(`${name} Toggle Light`),
+      activityName: "Toggle Ember Effect",
+      activityImg: "icons/magic/fire/flame-burning-campfire-orange.webp",
+      activationType: "bonus",
+      effectId: stableId(`${name} Light Effect`),
+      effectName: `${name} Ember Effect`,
+      effectImg: "icons/magic/fire/flame-burning-campfire-orange.webp",
+      flagKey: `${stableId(name)}Light`,
+      bright: radii.bright,
+      dim: radii.dim,
+      color: "#ff7a18",
+      alpha: 0.35,
+      animation: { type: "torch", speed: 3, intensity: 4 },
+      onChat: `${name} ignites, shedding bright light for ${radii.bright} feet and dim light to ${radii.dim} feet.`,
+      offChat: `${name}'s ember effect fades.`,
+      chatFlavor: `Toggle ${name}'s self-only ember effect.`,
+      duration: { value: 1, units: "minute" },
+      range: { units: "self" },
+      target: { affects: { count: "1", type: "self" }, prompt: false }
+    }
+  };
+}
+
 function compileWeapon(context) {
   const { request, lower, name, rarity, attunement, weaponName, assumptions, warnings, deferred } = context;
   const weapon = WEAPONS[weaponName];
@@ -838,6 +925,7 @@ function compileWeapon(context) {
         condition,
         effectName: `${name} - ${titleCase(condition)}`,
         durationSeconds,
+        ...(detectTargetCreatureType(request) ? { targetCreatureType: detectTargetCreatureType(request) } : {}),
         img: "icons/svg/poison.svg"
       }
     } : {})
@@ -1115,6 +1203,11 @@ function compileOne(request) {
   } else if (saveSpells.length >= 2 && /\b(?:staff|wand|rod)\b/i.test(trimmed)) {
     pattern = "multiActivityStaff";
     spec = compileMultiSpellItem(context, saveSpells);
+  } else if (!weaponName
+    && /\b(?:toggle|toggles|sheds?|bright\s+light|dim\s+light|ignite)\b/i.test(trimmed)
+    && /\b(?:charm|lantern|torch|brooch|item)\b/i.test(trimmed)) {
+    pattern = "equipmentPowerSuite";
+    spec = compileSelfTargetLightUtility(context);
   } else if (!weaponName
     && /\b(?:helm|helmet|circlet|crown|ring|amulet|wand|rod|staff)\b/i.test(trimmed)
     && (/\b(?:ranged|melee)\b[^.\n]{0,80}\battack\b/i.test(trimmed)

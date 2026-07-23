@@ -46,6 +46,29 @@ const plainLanguageOil = buildReviewSummaries([{
 }], null)[0];
 assert.ok(plainLanguageOil.mechanics.some(value => value.includes("Adds 1d4 lightning damage")));
 
+const automationReview = buildReviewSummaries([{
+  kind: "weaponConditionOnHit",
+  name: "Gravebell",
+  description: "A weapon with a restrained condition rider.",
+  conditionOnHit: { condition: "poisoned", targetCreatureType: "undead" },
+  automation: { recipe: "conditionOnHit", targetFilter: { creatureType: "undead" }, requires: ["midi-qol", "itemacro"] }
+}], null)[0];
+assert.equal(automationReview.unresolvedCount, 0);
+assert.ok(automationReview.notes.some(note => note.label === "Automation contract" && /trusted postActiveEffects/i.test(note.message)));
+
+const lightWarningReconciled = buildReviewSummaries([{
+  kind: "artifactWeaponHybrid",
+  name: "Ashen Mercy",
+  toggleLight: { activityName: "Ignite the Flame", bright: 20, dim: 40 },
+  utilityActivities: [{
+    activityName: "Ignite the Flame",
+    description: "As a bonus action, ignite the blade to shed bright and dim light."
+  }]
+}], {
+  warnings: ["A requested light effect was not preserved in the generated Foundry structure."]
+})[0];
+assert.equal(lightWarningReconciled.notes.some(note => /requested light effect/i.test(note.message)), false);
+
 const magicArmor = buildReviewSummaries([{
   kind: "shieldArmorBonus",
   name: "Moonshadow Leather",
@@ -119,7 +142,7 @@ const notices = buildReviewSummaries([{
   kind: "weaponConditionOnHit",
   name: "Notice Test Blade",
   rarity: "rare",
-  conditionOnHit: { condition: "poisoned", save: { ability: "con", dc: 13 }, durationSeconds: 60 }
+  conditionOnHit: { condition: "poisoned", save: { ability: "con", dc: 13 }, durationSeconds: 60, targetCreatureType: "undead" }
 }], {
   assumptions: [],
   warnings: ["The request uses standard on-hit rider wording."],
@@ -127,6 +150,7 @@ const notices = buildReviewSummaries([{
 })[0];
 assert.deepEqual(notices.notes.filter(note => note.state === "notice").map(note => note.label), ["Notice"]);
 assert.equal(notices.notes.some(note => note.state === "warning"), false);
+assert.ok(notices.mechanics.some(value => /target filter: Undead/.test(value)));
 
 assert.equal(weapon.reviewState, "forge-ready");
 assert.equal(weapon.reviewStateLabel, "Forge-ready");

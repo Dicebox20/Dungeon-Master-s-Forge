@@ -24,7 +24,8 @@ function buildRetryHint(error) {
     `Previous validation error [${code}]: ${message}`,
     "Keep the same item count and explicit item names.",
     "Preserve any valid mechanics.",
-    "If one mechanic does not fit a supported family, keep the dominant supported family and move the leftover mechanic into unresolvedMechanics instead of inventing a partial hybrid schema.",
+    "Use a suite or hybrid compatibility renderer to preserve every safely representable mechanic on the same item.",
+    "Move a mechanic into unresolvedMechanics only when no advertised declarative capability or trusted engine recipe can represent it safely.",
     "For ally auras, class-resource restoration, and similar unsupported automation, record the clause in unresolvedMechanics instead of encoding it through effect flags or scripts.",
     "Do not emit flags, macroCommand, scripts, executable code, unsupported kinds, or malformed IDs."
   ].join(" ");
@@ -53,7 +54,10 @@ function createCompiler(options) {
           compileAttempt: attempt,
           retryHint: attempt > 0 ? buildRetryHint(lastError) : ""
         });
-        return normalizeModelOutput(modelOutput, envelope, { makeId: options.makeId });
+        return {
+          ...normalizeModelOutput(modelOutput, envelope, { makeId: options.makeId }),
+          providerUsage: modelOutput?.providerUsage ?? {}
+        };
       } catch (error) {
         lastError = error;
         if (!shouldRetryModelOutput(error, config.mode, attempt)) throw error;

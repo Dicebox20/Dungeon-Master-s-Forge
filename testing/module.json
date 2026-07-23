@@ -8,10 +8,10 @@
     }
   ],
   "license": "LICENSE",
-  "version": "2.23.1-test.45",
+  "version": "2.23.1-test.52",
   "url": "https://github.com/Dicebox20/Dungeon-Master-s-Forge",
   "manifest": "https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/dm_forge/tester/testing/module.json",
-  "download": "https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/dm_forge/tester/testing/releases/dungeon-masters-forge-v2-2.23.1-test.45.zip",
+  "download": "https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/dm_forge/tester/testing/releases/dungeon-masters-forge-v2-2.23.1-test.52.zip",
   "readme": "https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/dm_forge/tester/testing/README.md",
   "changelog": "https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/dm_forge/tester/testing/CHANGELOG.md",
   "compatibility": {

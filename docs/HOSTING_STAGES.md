@@ -28,7 +28,7 @@ Must be true:
 
 - the endpoint is reachable from another intended computer
 - CORS or origin handling allows the approved Foundry clients
-- anonymous access is bounded by durable monthly client quotas and a global daily ceiling
+- anonymous access is bounded by durable monthly client and daily global usage allowances
 - basic rate limiting and concurrency limits exist
 - logs are clear enough to troubleshoot failures
 - the manifest install works on a second machine
