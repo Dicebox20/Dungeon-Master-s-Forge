@@ -110,6 +110,19 @@ Then:
 4. Click **Create Items**.
 5. Open the created item and verify the extra damage entry exists.
 
+## Repair A Reviewed Result
+
+Use **Retry** when the result is close to the original request but a mechanic is wrong or missing. It sends one new provider request and does not approve, create, or execute anything automatically.
+
+1. Leave the original prompt unchanged and review the item in the main Forge window.
+2. Click **Retry** and confirm that the window says **SEND IT AGAIN!?**.
+3. In **What should it have done?**, write the exact correction in plain language.
+4. Do not paste the original prompt or JSON. The Forge includes the displayed prompt, reviewed JSON, review findings, and your repair note automatically.
+5. Check **I understand**, then click **Send repair request** once.
+6. Review the returned preview and notes from the beginning. Approve and create only if the repaired result is correct.
+
+If the request fails, record the visible error and request ID, take the immediate structured snapshot, and do not repeatedly resend the same repair. Use a new preview only when you are intentionally testing a new request.
+
 ## Current Known Limits
 
 - Free Forge is a temporary tester service and still uses a staging hostname.

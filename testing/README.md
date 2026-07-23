@@ -146,9 +146,18 @@ For each test, please look at the preview before creation. When possible, open t
 
 ## Repair a Result
 
-When a reviewed network result is incorrect, leave the original request unchanged and click **Retry**. The Forge opens **SEND IT AGAIN!?**, showing the original prompt, current reviewed JSON, review notes, and validation findings. Add the specific correction, acknowledge the one new request, and send it. The repaired result returns to preview and requires fresh review and approval.
+Use **Retry** when the reviewed result is close to the original request but one or more mechanics are wrong, missing, or mapped incorrectly. Retry is not approval, it is not an automatic hidden retry, and it is not for starting a different item.
 
-Do not use Retry for a new idea, and do not include secrets or private campaign details in repair notes. For a creation or in-world behavior failure, capture the immediate structured snapshot and send the concise observation with the exported item JSON only when requested.
+1. Leave the original prompt unchanged. If you want a completely different item, use **Preview** with a new prompt instead.
+2. Review the item, JSON, review notes, and validation findings in the main Forge window.
+3. Click **Retry**. The clearly marked **SEND IT AGAIN!?** window opens.
+4. In **What should it have done?**, describe only the correction in plain language. Be specific about what was missing or wrong. For example: `Keep the original wand and five charges, but make the saving throw Dexterity DC 15 and preserve the 4d6 cold damage.`
+5. Do not paste the original prompt or JSON into the repair field. The Forge sends the displayed original prompt, reviewed JSON, review findings, and your repair note together.
+6. Check **I understand**. Its tooltip explains that this sends one new provider request and that the result must be reviewed again before creation.
+7. Click **Send repair request** once and wait for the result. Do not click it again while the request is processing.
+8. When the repaired result returns to preview, read its review notes and validation findings again. Check **Approve** only after the repaired result is correct, then click **Create Items** if you want to create it.
+
+The repair request uses the hosted allowance like other fresh model work. A failed repair does not create or execute anything automatically. If the dialog reports an error, record the visible message and request ID, take the immediate structured snapshot, and do not keep resending the same repair for that preview. Never include passwords, API keys, or private campaign details in repair notes.
 
 ### Anonymous Error Reports
 
