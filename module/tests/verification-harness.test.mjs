@@ -186,6 +186,7 @@ test("a run creates only tagged test copies and cleanup removes only the matchin
     expectedWorldId: "dmf-test-world",
     runTag: "B7-safe",
     specs: [{ kind: "weaponExtraDamage", name: "Tagged Blade" }],
+    capabilitySnapshot: { version: "1.0", activeModules: ["midi-qol"], runtime: { activityTypes: ["attack"] } },
     createItems: async (_specs, config) => {
       assert.equal(config.itemFolderName, "DMF Verification Items");
       assert.equal(config.actorFolderName, "DMF Verification Summons");
@@ -194,6 +195,9 @@ test("a run creates only tagged test copies and cleanup removes only the matchin
     }
   });
   assert.equal(report.passed, 1);
+  assert.deepEqual(report.capabilitySnapshot.runtime.activityTypes, ["attack"]);
+  assert.equal(report.documentSnapshots[0].name, "Tagged Blade");
+  assert.equal(report.checks[0].documentSnapshot.source.name, "Tagged Blade");
   assert.equal(game.actors.length, 1);
   assert.equal(game.actors[0].items.length, 1);
 

@@ -87,6 +87,16 @@ function activityProfiles(activity = {}) {
   return collectionValues(activity.profiles ?? activity.system?.profiles);
 }
 
+function documentSnapshot(document) {
+  const source = clone(document?.toObject?.() ?? document ?? {});
+  return {
+    uuid: String(document?.uuid ?? source?.uuid ?? ""),
+    name: String(document?.name ?? source?.name ?? ""),
+    type: String(document?.type ?? source?.type ?? ""),
+    source
+  };
+}
+
 function compareDocumentToExpectation(document, expectation = {}) {
   const activities = collectionValues(document?.system?.activities);
   const effects = collectionValues(document?.effects);
@@ -131,6 +141,7 @@ function compareDocumentToExpectation(document, expectation = {}) {
     passed: failures.length === 0,
     failures,
     actual: {
+      uuid: String(document?.uuid ?? ""),
       type: document?.type ?? "",
       activityCount: activities.length,
       effectCount: effects.length,
@@ -252,7 +263,8 @@ async function runVerificationHarness({
   expectedWorldId,
   runTag,
   specs,
-  createItems
+  createItems,
+  capabilitySnapshot = null
 } = {}) {
   const normalizedRunTag = normalizeRunTag(runTag);
   if (!Array.isArray(specs) || specs.length === 0) throw new Error("Verification requires at least one prepared item specification.");
@@ -281,6 +293,7 @@ async function runVerificationHarness({
     return {
       name: copy?.name ?? item?.name ?? "",
       expectation,
+      documentSnapshot: documentSnapshot(copy ?? item),
       ...compareDocumentToExpectation(copy, expectation)
     };
   });
@@ -292,6 +305,8 @@ async function runVerificationHarness({
     total: checks.length,
     passed: checks.filter(check => check.passed).length,
     warnings: checks.filter(check => !check.passed).length,
+    capabilitySnapshot: capabilitySnapshot ? clone(capabilitySnapshot) : null,
+    documentSnapshots: checks.map(check => check.documentSnapshot),
     checks,
     manualChecks: [
       "Review target selection, token placement, and optional module behavior before counting a full-function success.",
@@ -345,6 +360,7 @@ export {
   buildVerificationExpectation,
   cleanupVerificationRun,
   compareDocumentToExpectation,
+  documentSnapshot,
   normalizeRunTag,
   runVerificationHarness,
   setupVerificationHarness,

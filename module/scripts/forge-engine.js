@@ -10,8 +10,30 @@ import { armorBonusValue, inferArmorProfile, isImplementCategory, normalizeItemD
 import { resolveActorByName, resolveDocumentFromMatch } from "./content-resolver.js";
 import { sanitizeForgeSpec } from "./forge-spec-integrity.js";
 import { normalizeAutomationContract } from "./automation-contract.js";
+import { assertPreflight, preflightDocumentSource, preflightDocumentUpdate } from "./document-preflight.js";
 
 const CHOOSER_ACTIVITY_LISTS = Object.freeze(["attackActivities", "saveActivities", "utilityActivities", "activities"]);
+
+function partitionItemActivityChanges(updateData = {}) {
+  const activityChanges = [];
+  const activityDeletes = [];
+  const otherChanges = {};
+  for (const [rawPath, value] of Object.entries(updateData ?? {})) {
+    const deletePrefix = rawPath.startsWith("-=") ? "-=" : "";
+    const path = deletePrefix ? rawPath.slice(2) : rawPath;
+    const activityPath = path.startsWith("system.activities.")
+      ? path.slice("system.activities.".length)
+      : "";
+    if (!activityPath) {
+      otherChanges[rawPath] = value;
+    } else if (deletePrefix || activityPath.startsWith("-=")) {
+      activityDeletes.push(activityPath.replace(/^-=/, ""));
+    } else {
+      activityChanges.push([activityPath, value]);
+    }
+  }
+  return { activityChanges, activityDeletes, otherChanges };
+}
 
 function itemHasExplicitActivityChoices(spec = {}) {
   return CHOOSER_ACTIVITY_LISTS.some(listName => Array.isArray(spec?.[listName]) && spec[listName].length > 0)
@@ -186,6 +208,35 @@ function clonedSrdSummonActorData(sourceActor, actorSpec, folder, forgeFlags = {
 }
 
 async function runDungeonMastersForge(FORGE, ITEMS, { validateOnly = false, authorizeGeneratedAutomation = false } = {}) {
+  async function updateCreatedItem(created, updateData, label) {
+    assertPreflight(label, preflightDocumentUpdate(created, updateData, { strict: true }));
+    return created.update(updateData);
+  }
+
+  async function applyCreatedItemChanges(created, updateData, label) {
+    assertPreflight(label, preflightDocumentUpdate(created, updateData, { strict: true }));
+    const { activityChanges, activityDeletes, otherChanges } = partitionItemActivityChanges(updateData);
+
+    if (typeof created.createActivity !== "function" || typeof created.updateActivity !== "function" || typeof created.deleteActivity !== "function") {
+      return updateCreatedItem(created, updateData, label);
+    }
+
+    for (const activityId of activityDeletes) {
+      if (created.system.activities?.get?.(activityId)) await created.deleteActivity(activityId);
+    }
+    for (const [activityId, activityData] of activityChanges) {
+      if (created.system.activities?.get?.(activityId)) {
+        await created.updateActivity(activityId, activityData);
+      } else {
+        const type = String(activityData?.type ?? "").trim();
+        if (!type) throw new Error(`${label} activity ${activityId} is missing its DND5e activity type.`);
+        await created.createActivity(type, activityData, { renderSheet: false });
+      }
+    }
+    if (Object.keys(otherChanges).length) await updateCreatedItem(created, otherChanges, label);
+    return created;
+  }
+
   const midiQolAutomation = FORGE.midiQolAutomation === true;
   // Item Macro is its own capability. Recipes that also need Midi-QOL declare
   // that combination in the negotiated automation route.
@@ -449,7 +500,7 @@ async function runDungeonMastersForge(FORGE, ITEMS, { validateOnly = false, auth
       type: normalizeItemDocumentType(data.type, "equipment"),
       img: safeItemIcon(data.img)
     };
-    return Item.create({
+    const source = {
       ...itemData,
       folder: folder.id,
       flags: foundry.utils.mergeObject(itemData.flags ?? {}, {
@@ -464,7 +515,9 @@ async function runDungeonMastersForge(FORGE, ITEMS, { validateOnly = false, auth
           createdAt: new Date().toISOString()
         }
       }, { inplace: false })
-    });
+    };
+    assertPreflight(spec.name, preflightDocumentSource({ DocumentClass: Item, source, strict: true }));
+    return Item.create(source);
   }
 
   async function createWeaponExtraDamage(spec, folder) {
@@ -544,7 +597,7 @@ async function runDungeonMastersForge(FORGE, ITEMS, { validateOnly = false, auth
       updateData[`system.activities.${activity._id}`] = activity;
     }
 
-    if (Object.keys(updateData).length) await created.update(updateData);
+    if (Object.keys(updateData).length) await applyCreatedItemChanges(created, updateData, spec.name);
     return game.items.get(created.id) ?? created;
   }
 
@@ -690,7 +743,7 @@ async function runDungeonMastersForge(FORGE, ITEMS, { validateOnly = false, auth
 
     const created = game.items.get(item.id) ?? item;
     const activity = makeSaveActivity(created, spec);
-    await created.update({ [`system.activities.${activity._id}`]: activity });
+    await applyCreatedItemChanges(created, { [`system.activities.${activity._id}`]: activity }, spec.name);
     return game.items.get(created.id) ?? created;
   }
 
@@ -734,7 +787,7 @@ async function runDungeonMastersForge(FORGE, ITEMS, { validateOnly = false, auth
         requireMagic: false
       }
     }, { inplace: false });
-    await created.update({ [`system.activities.${activityData._id}`]: activityData });
+    await applyCreatedItemChanges(created, { [`system.activities.${activityData._id}`]: activityData }, spec.name);
     return game.items.get(created.id) ?? created;
   }
 
@@ -805,7 +858,7 @@ async function runDungeonMastersForge(FORGE, ITEMS, { validateOnly = false, auth
       const activity = summonActivityDocument(created, spec, spec.summonActivity ?? spec, actorsByProfileId);
       updateData[`system.activities.${activity._id}`] = activity;
     }
-    await created.update(updateData);
+    await applyCreatedItemChanges(created, updateData, spec.name);
     const resolved = game.items.get(created.id) ?? created;
     return createdActors.length ? { item: resolved, actors: createdActors } : resolved;
   }
@@ -923,7 +976,7 @@ async function runDungeonMastersForge(FORGE, ITEMS, { validateOnly = false, auth
       const summon = summonActivityDocument(created, spec, spec.summonActivity ?? spec, actorsByProfileId);
       updateData[`system.activities.${summon._id}`] = summon;
     }
-    await created.update(updateData);
+    await applyCreatedItemChanges(created, updateData, spec.name);
     const resolved = game.items.get(created.id) ?? created;
     return createdActors.length ? { item: resolved, actors: createdActors } : resolved;
   }
@@ -1113,7 +1166,7 @@ async function runDungeonMastersForge(FORGE, ITEMS, { validateOnly = false, auth
         requireMagic: true
       }
     }, { inplace: false });
-    await created.update({ [`system.activities.${activityData._id}`]: activityData });
+    await applyCreatedItemChanges(created, { [`system.activities.${activityData._id}`]: activityData }, spec.name);
     return { item: game.items.get(created.id) ?? created, actor: summonActor };
   }
 
@@ -1607,7 +1660,7 @@ ${activitySpec.macroCommand}
       const activityData = summonActivityDocument(created, spec, spec.summonActivity ?? spec, actorsByProfileId);
       updateData[`system.activities.${activityData._id}`] = activityData;
     }
-    if (Object.keys(updateData).length) await created.update(updateData);
+    if (Object.keys(updateData).length) await applyCreatedItemChanges(created, updateData, spec.name);
     const refreshed = game.items.get(created.id) ?? created;
     return createdActors.length ? { item: refreshed, actors: createdActors } : refreshed;
   }
@@ -1855,7 +1908,7 @@ ${activitySpec.macroCommand}
 
     const created = game.items.get(item.id) ?? item;
     const activityData = summonActivityDocument(created, spec, spec, actorsByProfileId);
-    await created.update({ [`system.activities.${activityData._id}`]: activityData });
+    await applyCreatedItemChanges(created, { [`system.activities.${activityData._id}`]: activityData }, spec.name);
     return { item: game.items.get(created.id) ?? created, actors: createdActors };
   }
 
@@ -1918,7 +1971,7 @@ ${activitySpec.macroCommand}
       updateData[`system.activities.${activityData._id}`] = activityData;
     }
 
-    if (Object.keys(updateData).length) await created.update(updateData);
+    if (Object.keys(updateData).length) await applyCreatedItemChanges(created, updateData, spec.name);
     return { item: game.items.get(created.id) ?? created, actors: createdActors };
   }
 
@@ -2189,7 +2242,7 @@ ui.notifications.info(ITEM_NAME + " light toggled on.");
       updateData[`system.activities.${activityData._id}`] = activityData;
     }
 
-    await created.update(updateData);
+    await applyCreatedItemChanges(created, updateData, spec.name);
     if (createdActors.length) return { item: game.items.get(created.id) ?? created, actors: createdActors };
     return game.items.get(created.id) ?? created;
   }
@@ -2362,7 +2415,7 @@ if (TARGET_CREATURE_TYPE && matchingTargets === 0) {
     }
 
     const midiAttackData = buildWeaponBaseAttackData(attack, spec);
-    await created.update({
+    await applyCreatedItemChanges(created, {
       [`system.activities.${attack.id}`]: midiAttackData,
       ...(() => {
         const redundant = {};
@@ -2370,7 +2423,7 @@ if (TARGET_CREATURE_TYPE && matchingTargets === 0) {
         return redundant;
       })(),
       ...conditionOnHitHookUpdate(created, spec, attack.id)
-    });
+    }, spec.name);
 
     return game.items.get(created.id) ?? created;
   }
@@ -2577,4 +2630,4 @@ if (TARGET_CREATURE_TYPE && matchingTargets === 0) {
   };
 }
 
-export { activityNeedsTargetConfirmation, applyMidiQolActivityDefaults, clonedSrdSummonActorData, forceExplicitChoiceOnAttack, forceSummonUseConfirmation, isFriendlySummon, itemHasExplicitActivityChoices, multiActivityStaffActivityLists, normalizeActorAuraActivitySpec, normalizeSrdActorLookupName, runDungeonMastersForge, suppressMidiTargetConfirmationForUtility };
+export { activityNeedsTargetConfirmation, applyMidiQolActivityDefaults, clonedSrdSummonActorData, forceExplicitChoiceOnAttack, forceSummonUseConfirmation, isFriendlySummon, itemHasExplicitActivityChoices, multiActivityStaffActivityLists, normalizeActorAuraActivitySpec, normalizeSrdActorLookupName, partitionItemActivityChanges, runDungeonMastersForge, suppressMidiTargetConfirmationForUtility };

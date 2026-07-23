@@ -29,13 +29,24 @@ test("capability snapshots expose supported recipes and v14 compatibility warnin
     authorizeGeneratedAutomation: false
   });
   assert.equal(snapshot.warnings.length, 2);
-  assert.deepEqual(snapshot.modules.find(module => module.id === "midi-qol"), { id: "midi-qol", active: true, version: "14.0.11" });
+  assert.deepEqual(snapshot.modules.find(module => module.id === "midi-qol"), {
+    id: "midi-qol",
+    title: "Midi-QOL",
+    active: true,
+    version: "14.0.11",
+    compatibility: null,
+    requires: []
+  });
   assert.deepEqual(resolveAutomationRoute("conditionOnHit", snapshot), {
     recipe: "conditionOnHit",
     layer: "Midi-QOL + Item Macro",
     selectedLayer: "Midi-QOL + Item Macro",
     dependencies: ["midi-qol", "itemacro"],
     dependencyLabels: ["Midi-QOL", "Item Macro"],
+    dependencyStates: [
+      { id: "midi-qol", label: "Midi-QOL", active: true, installed: true, version: "14.0.11" },
+      { id: "itemacro", label: "Item Macro", active: true, installed: true, version: "3.0.1" }
+    ],
     available: true,
     status: "available",
     fallback: "DND5e core attack and review note",
@@ -60,4 +71,28 @@ test("capability routing can select Item Macro independently while preserving co
   assert.equal(snapshot.supportedRecipes.includes("selfTargetLight"), true);
   assert.equal(resolveAutomationRoute("conditionOnHit", snapshot).selectedLayer, "DND5e core (fallback)");
   assert.equal(resolveAutomationRoute("selfTargetLight", snapshot).selectedLayer, "Item Macro");
+});
+
+test("capability snapshots capture version-safe runtime evidence without secrets", () => {
+  const runtime = {
+    CONFIG: { DND5E: { activityTypes: { save: {}, attack: {}, utility: {} } } },
+    Hooks: { events: new Map([["dnd5e.preUseActivity", []], ["midi-qol.RollComplete", []], ["unrelated", []]]) },
+    MidiQOL: {
+      configSettings: () => ({
+        enableWorkflow: true,
+        autoApplyDamage: true,
+        gmAutoDamage: false,
+        secretKey: "must not be captured"
+      })
+    }
+  };
+  const snapshot = buildAutomationCapabilitySnapshot({ game: fakeGame(), runtime });
+  assert.deepEqual(snapshot.runtime.activityTypes, ["attack", "save", "utility"]);
+  assert.deepEqual(snapshot.runtime.hooks, ["dnd5e.preUseActivity", "midi-qol.RollComplete"]);
+  assert.deepEqual(snapshot.runtime.midiQolSettings, {
+    enableWorkflow: true,
+    autoApplyDamage: true,
+    gmAutoDamage: false
+  });
+  assert.equal(JSON.stringify(snapshot).includes("secretKey"), false);
 });

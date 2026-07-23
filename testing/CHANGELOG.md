@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `2.23.1-test.56` routes generated DND5e activities through the system's public `createActivity`, `updateActivity`, and `deleteActivity` APIs, adds a strict Foundry DataModel preflight before writes, and records capability/document snapshots in the isolated harness.
 - `2.23.1-test.54` restores the per-item review-note text tree and removes the duplicate aggregate review-notes panel from the preview.
 - `2.23.1-test.53` adds capability-routed automation metadata to the preview and hosted capabilities response, shows the selected layer and required modules before approval, and removes the duplicate per-item review-notes card.
 - `2.23.1-test.52` prevents malformed no-save aura damage from becoming a provider 502, preserves it as explicit manual review, and anchors aura activation to the wielder's actor token. The public Free Forge lane now uses a `500,000` metered-unit monthly allowance calibrated to roughly 50 prompts from the prior prompt-count baseline.

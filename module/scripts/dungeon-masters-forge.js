@@ -487,6 +487,7 @@ async function runIsolatedVerificationHarness(specs, { runTag, ...overrides } = 
     ...verificationHarnessEnvironment(overrides),
     runTag,
     specs: sanitizedSpecs,
+    capabilitySnapshot: currentConfig().automationCapabilities,
     createItems: (verificationSpecs, config = {}) => createPreparedSpecs(verificationSpecs, {
       ...config,
       // The isolated harness only creates tagged documents and never executes activities.

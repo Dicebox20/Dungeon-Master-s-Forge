@@ -142,11 +142,17 @@ function automationReviewNote(contract, route = null) {
   if (route) {
     const required = route.dependencyLabels?.length ? route.dependencyLabels.join(", ") : "none";
     const status = route.available ? "Selected" : "Fallback";
+    const dependencyEvidence = (route.dependencyStates ?? [])
+      .filter(dependency => dependency.active && !dependency.installed)
+      .map(dependency => `${dependency.label} has no reported version`);
+    const evidence = dependencyEvidence.length
+      ? ` Evidence warning: ${dependencyEvidence.join("; ")}.`
+      : " Final DataModel and safe-use checks remain required before treating this route as verified.";
     return {
       state: route.available ? "note" : "review",
       label: "Automation layer",
       message: `${status} ${route.selectedLayer} layer for ${normalized.recipe} via the trusted ${normalized.workflowPass} path with ${normalized.targetSource} as its target source${target}.`,
-      handling: `Required modules: ${required}. ${route.available ? "This layer is available in the current world." : `${route.reason} ${route.fallback}.`} Authority: ${normalized.authority}; fallback: ${normalized.fallback}.`
+      handling: `Required modules: ${required}. ${route.available ? "This layer is available in the current world." : `${route.reason} ${route.fallback}.`} Authority: ${normalized.authority}; fallback: ${normalized.fallback}.${evidence}`
     };
   }
   return {

@@ -28,7 +28,7 @@ globalThis.CONST ??= {
   TOKEN_DISPOSITIONS: { FRIENDLY: 1 }
 };
 
-const { activityNeedsTargetConfirmation, applyMidiQolActivityDefaults, clonedSrdSummonActorData, forceExplicitChoiceOnAttack, forceSummonUseConfirmation, isFriendlySummon, itemHasExplicitActivityChoices, multiActivityStaffActivityLists, normalizeActorAuraActivitySpec, normalizeSrdActorLookupName, suppressMidiTargetConfirmationForUtility } = await import("../scripts/forge-engine.js");
+const { activityNeedsTargetConfirmation, applyMidiQolActivityDefaults, clonedSrdSummonActorData, forceExplicitChoiceOnAttack, forceSummonUseConfirmation, isFriendlySummon, itemHasExplicitActivityChoices, multiActivityStaffActivityLists, normalizeActorAuraActivitySpec, normalizeSrdActorLookupName, partitionItemActivityChanges, suppressMidiTargetConfirmationForUtility } = await import("../scripts/forge-engine.js");
 
 const forgeEngineSource = await (await import("node:fs/promises")).readFile(new URL("../scripts/forge-engine.js", import.meta.url), "utf8");
 assert.doesNotMatch(
@@ -47,6 +47,19 @@ assert.equal(itemHasExplicitActivityChoices({
   kind: "artifactWeaponHybrid",
   saveActivities: [{ activityId: "CastBurning12345" }]
 }), true);
+
+assert.deepEqual(
+  partitionItemActivityChanges({
+    "system.activities.Attack123": { type: "attack" },
+    "-=system.activities.Old456": null,
+    "flags.midi-qol.onUseMacroName": "[postActiveEffects]ActivityMacro-Attack123"
+  }),
+  {
+    activityChanges: [["Attack123", { type: "attack" }]],
+    activityDeletes: ["Old456"],
+    otherChanges: { "flags.midi-qol.onUseMacroName": "[postActiveEffects]ActivityMacro-Attack123" }
+  }
+);
 assert.equal(itemHasExplicitActivityChoices({
   kind: "artifactWeaponHybrid",
   summonProfiles: [{ profileId: "SummonWolf000001" }]
