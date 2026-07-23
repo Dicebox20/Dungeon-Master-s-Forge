@@ -22,21 +22,21 @@ Beta completion measures dependable, reviewable workflows and safe boundaries. I
 ## Tester Distribution
 
 - Tester manifest: `https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/dm_forge/tester/testing/module.json`
-- Current tester version: `2.23.1-test.53`
-- Current tester download: `https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/dm_forge/tester/testing/releases/dungeon-masters-forge-v2-2.23.1-test.53.zip`
+- Current tester version: `2.23.1-test.54`
+- Current tester download: `https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/dm_forge/tester/testing/releases/dungeon-masters-forge-v2-2.23.1-test.54.zip`
 - Current ZIP SHA-256: `BA6B92DA22679F9507CAEF2EA76CA8A32DD7A80CC5CD8B7F9C8AF9311206B5EB`
 
 The production manifest remains on `main`. Keep tester artifacts and URLs on `dm_forge/tester` until a release is deliberately promoted.
 
 ## Current Compliance State
 
-- Local source candidates are stable `2.23.1` and tester `2.23.1-test.53`.
+- Local source candidates are stable `2.23.1` and tester `2.23.1-test.54`.
 - Public-facing documentation now describes the runtime AI flow, review-before-create boundary, provider data flow, token storage, diagnostic consent, and unofficial Foundry status.
 - The service and module suites currently pass `216/216` and `52/52` respectively.
 - The active routing policy is capability-based: native DND5e is selected only when complete and reliable; verified Midi-QOL, DAE, Item Macro, and related routes are preferred when they provide required workflow behavior; portable core data and a review note are the fallback when a route is unavailable or unverified.
 - The Dice Box Group selected MIT licensing. The stable and tester builders require and include `LICENSE`; isolated candidate archives passed local inspection. Repeat the final build after any source change before an approved release action.
 - The existing stable ZIP is an older archive and must not be described as the current compliant submission package.
-- Tester build `2.23.1-test.53` is installed locally and prepared for tester publication. The stable `main` lane, provider keys, and stable release ZIP remain unchanged. The explicitly requested public monthly allowance is `500,000` metered usage units.
+- Tester build `2.23.1-test.54` is installed locally and prepared for tester publication. The stable `main` lane, provider keys, and stable release ZIP remain unchanged. The explicitly requested public monthly allowance is `500,000` metered usage units.
 
 ## Hosted Service
 
@@ -73,7 +73,7 @@ Before each code patch, inspect the accessible Brain Hub organizer project files
 - The universal UI name is now `Dungeon Master's Forge`. Fresh folder defaults are `Dungeon Master's Forge` and `Dungeon Master's Forge Summons`; existing world folder settings are intentionally not migrated automatically.
 - Scene Region testing was stopped before applying changes after the user deprioritized it for the initial Free Forge tier. The exact autonomous Region and guarded controls were verified, and no Region behavior was written.
 - Live console inspection found no Forge runtime error. `ForgeSettingsApplication` still emits Foundry's V1 Application deprecation warning and should move to ApplicationV2 before Foundry 16 compatibility is required.
-- Local tester `2.23.1-test.53` retains the disabled-by-default native Scene Region Forge, adds capability-routed automation metadata, final-spec review-note reconciliation, explicit summon-cost repair, collapsed review categories, the user-confirmed `Retry` repair flow, the compact repair dialog, the Advanced Specification Editor tab, and the hosted capacity indicator. It also prevents malformed no-save aura damage from reaching the provider as an invalid contract, preserves that limitation for manual review, anchors aura activation to the wielder's actor token, and removes the duplicate per-item review-notes card. The repair confirmation exposes only the reachable retry field and reports request progress/errors in place.
+- Local tester `2.23.1-test.54` retains the disabled-by-default native Scene Region Forge, adds capability-routed automation metadata, final-spec review-note reconciliation, explicit summon-cost repair, collapsed review categories, the user-confirmed `Retry` repair flow, the compact repair dialog, the Advanced Specification Editor tab, and the hosted capacity indicator. It also prevents malformed no-save aura damage from reaching the provider as an invalid contract, preserves that limitation for manual review, anchors aura activation to the wielder's actor token, restores per-item review notes, and removes the duplicate aggregate preview card. The repair confirmation exposes only the reachable retry field and reports request progress/errors in place.
 - The 15-case Region sweep passes, native create/update/delete reconciliation works, generated item Active Effects link through `applyActiveEffect`, and a manually created `Manual Weather Guard` behavior survives Forge reconciliation.
 - The reusable selected test Region is named `DMF test.41 Autonomous Region`; do not target any other Region during automated testing.
 - The recurring `free-forge-beta-sweep` automation was deleted at the user's request. Future item/Region sweeps are manual; do not recreate a scheduled task unless explicitly requested.

@@ -2,7 +2,7 @@
 
 Welcome to the Dungeon Master's Forge tester group, and thank you for helping us improve it.
 
-The current public tester build is **2.23.1-test.53**. Install it in Foundry from this manifest URL:
+The current public tester build is **2.23.1-test.54**. Install it in Foundry from this manifest URL:
 
 `https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/dm_forge/tester/testing/module.json`
 

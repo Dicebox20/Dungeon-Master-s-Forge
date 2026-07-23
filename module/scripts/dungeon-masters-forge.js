@@ -1053,7 +1053,7 @@ function clearForgeResultState(dialog) {
   dialog._dm_forgePreviewRequest = null;
   dialog._dm_forgeAutomationCodeRequired = false;
   setReviewValidated(dialog, false);
-  for (const selector of ["[data-forge-compile-report]", "[data-forge-preview]", "[data-forge-automation-review]", "[data-forge-notices]", "[data-forge-diagnostics]"]) {
+  for (const selector of ["[data-forge-compile-report]", "[data-forge-preview]", "[data-forge-automation-review]", "[data-forge-diagnostics]"]) {
     const output = dialog.element?.querySelector(selector);
     if (!output) continue;
     output.hidden = true;
@@ -1159,24 +1159,6 @@ function reviewNoteHTML(note) {
         ${note.handling ? `<small>${escapeHTML(note.handling)}</small>` : ""}
       </div>
     </div>
-  `;
-}
-
-function footerReviewNoteHTML(note) {
-  return `
-    <div class="dm_forge-footer-note" data-state="${escapeHTML(note.state)}">
-      ${reviewNoteHTML(note)}
-    </div>
-  `;
-}
-
-function footerReviewBadgeHTML(note) {
-  const tooltip = [note.label, note.message, note.handling].filter(Boolean).join(" - ");
-  return `
-    <span class="dm_forge-footer-badge" data-state="${escapeHTML(note.state)}" title="${escapeHTML(tooltip)}">
-      <i class="fa-solid ${reviewNoteIcon(note.state)}"></i>
-      <span>${escapeHTML(note.label)}</span>
-    </span>
   `;
 }
 
@@ -1346,6 +1328,7 @@ function reviewItemHTML(summary) {
             `
           }
         </section>
+        ${itemNoteBadgesHTML(summary.notes)}
       </div>
     </article>
   `;
@@ -1371,49 +1354,6 @@ function collectFooterNotes(summaries, validation) {
   }
   const order = { warning: 0, review: 1, unresolved: 1, deferred: 1, notice: 2, "free-forge": 3, resolved: 4, assumption: 4, reference: 4, note: 4 };
   return notes.sort((left, right) => (order[left.state] ?? 99) - (order[right.state] ?? 99));
-}
-
-function renderFooterNotices(dialog, summaries, validation) {
-  const output = dialog.element?.querySelector("[data-forge-notices]");
-  if (!output) return;
-  const notes = collectFooterNotes(summaries, validation);
-  output.hidden = notes.length === 0;
-  const groups = summarizeFooterNotes(notes);
-  output.innerHTML = notes.length
-    ? `
-      <details class="dm_forge-footer-disclosure">
-        <summary class="dm_forge-footer-head">
-          <div class="dm_forge-footer-summary">
-            <strong>Review notes</strong>
-            <span>${notes.length} note${notes.length === 1 ? "" : "s"}</span>
-          </div>
-          <div class="dm_forge-footer-badges">
-            ${groups.map(group => footerReviewBadgeHTML({
-              state: group.state,
-              label: `${group.label} ${group.notes.length}`,
-              message: `${group.notes.length} ${group.label.toLowerCase()} note${group.notes.length === 1 ? "" : "s"}`,
-              handling: group.notes.slice(0, 3).map(note => note.message).join(" | ")
-            })).join("")}
-            <span class="dm_forge-footer-more">Expand for details</span>
-          </div>
-        </summary>
-        <div class="dm_forge-footer-tree">
-          ${groups.map(group => `
-            <details class="dm_forge-footer-group" data-state="${escapeHTML(group.state)}">
-              <summary>
-                <span class="dm_forge-footer-group-title">
-                  <i class="fa-solid ${reviewNoteIcon(group.state)}"></i>
-                  <span>${escapeHTML(group.label)}</span>
-                </span>
-                <span>${group.notes.length}</span>
-              </summary>
-              <div class="dm_forge-footer-group-body">${group.notes.map(footerReviewNoteHTML).join("")}</div>
-            </details>
-          `).join("")}
-        </div>
-      </details>
-    `
-    : "";
 }
 
 function titleCaseWords(value) {
@@ -1855,13 +1795,11 @@ async function renderPreview(dialog, validation, compilation = dialog._dm_forgeC
     </div>
     ${reviewOverviewHTML(summaries)}
     <div class="dm_forge-review-items">${summaries.map(reviewItemHTML).join("")}</div>
-    <div class="dm_forge-preview-notices" data-forge-notices hidden></div>
   `;
   const compiledKinds = dialog.element?.querySelector("[data-forge-compiled-kinds]");
   if (compiledKinds) {
     compiledKinds.textContent = validation.specs.map(spec => String(spec?.kind ?? "").trim()).filter(Boolean).join(", ");
   }
-  renderFooterNotices(dialog, summaries, validation);
   renderAutomationCodeReview(dialog, validation.automationCodePreview ?? []);
   const reviewNotes = collectFooterNotes(summaries, validation);
   renderForgeCapacity(dialog, compilation?.usage);
