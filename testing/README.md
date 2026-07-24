@@ -16,6 +16,7 @@ The current public tester build is **2.23.1-test.62**. This is a review-first to
 - [What Free Forge Can Do](#what-free-forge-can-do)
 - [Current Free Forge Limits](#current-free-forge-limits)
 - [What We Need From Testers](#what-we-need-from-testers)
+- [Ten-Prompt Sweep](TESTER_PROMPT_SWEEP_2026-07-23.md)
 - [Repair a Result](#repair-a-result)
 - [Bring Your Own API](#bring-your-own-api)
 - [Keep API Keys Safe](#keep-api-keys-safe)
@@ -52,6 +53,8 @@ The current tester build is `2.23.1-test.62`. Free Forge does not require a pers
 For a first session, run one simple item, one item with charges or healing, and one more complicated item with a mechanic you are comfortable checking in Foundry. Stop and review whenever the Forge marks a mechanic for manual review.
 
 Use the [Dungeon Master's Forge Feature Menu](DMF_FEATURE_MENU_FOR_TESTERS.md) when you want to choose a specific item feature or automation behavior.
+
+For a ready-made progression from simple items to the current supported automation boundary, use the [ten-prompt tester sweep](TESTER_PROMPT_SWEEP_2026-07-23.md). Each prompt has a short checklist for preview, JSON, created-document, live-behavior, and review-note checks.
 
 ## Run Your First Test
 
