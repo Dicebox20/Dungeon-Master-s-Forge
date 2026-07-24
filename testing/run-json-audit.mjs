@@ -42,12 +42,18 @@ const expectedKinds = [
   ["weaponConditionOnHit"], ["artifactWeaponHybrid"], ["passiveEffectEquipment"], ["equipmentPowerSuite"], ["artifactWeaponHybrid"]
 ];
 const isObject = value => value && typeof value === "object" && !Array.isArray(value);
+const hasRecipe = (value, recipe) => Boolean(
+  value?.automation?.recipe === recipe
+  || value?.workflowAutomation?.recipe === recipe
+  || value?.utility?.recipe === recipe
+  || value?.effectRecipe === recipe
+);
 
 function auditSpec(spec, index) {
   const findings = [];
   if (!spec) return ["missing_spec"];
   if (!expectedKinds[index].includes(spec.kind)) findings.push(`kind:${spec.kind ?? "missing"} expected ${expectedKinds[index].join(" or ")}`);
-  if (index === 0 && (!Number(spec.magicalBonus) || !Array.isArray(spec.extraDamageParts) || !spec.extraDamageParts.length)) findings.push("missing +1 or extra damage");
+  if (index === 0 && (!Number(spec.magicalBonus ?? spec.damage?.magicalBonus) && spec.damage?.magical !== true || !Array.isArray(spec.extraDamageParts) || !spec.extraDamageParts.length)) findings.push("missing +1 or extra damage");
   if (index === 1 && (!Array.isArray(spec.effects) || !spec.effects.length)) findings.push("missing passive effects");
   if (index === 2 && (String(spec.uses?.max) !== "1" || !isObject(spec.healing))) findings.push("missing one-use healing payload");
   if (index === 3 && (String(spec.uses?.max) !== "6" || !isObject(spec.save) || !Array.isArray(spec.damageParts))) findings.push("missing charged save payload");
@@ -60,7 +66,7 @@ function auditSpec(spec, index) {
   const hasLightRoute = Boolean(
     isObject(spec.toggleLight)
     || spec.automation?.recipe === "selfTargetLight"
-    || lightActivities.some(activity => activity?.automation?.recipe === "selfTargetLight" || activity?.utility?.recipe === "selfTargetLight" || isObject(activity?.toggleLight))
+    || lightActivities.some(activity => hasRecipe(activity, "selfTargetLight") || isObject(activity?.toggleLight) || isObject(activity?.lightToggle))
   );
   if (index === 6 && (!lightActivities.length || !hasLightRoute)) findings.push("missing explicit selfTargetLight metadata");
   if (index === 7 && (!Array.isArray(spec.effects) || spec.effects.length < 1)) findings.push("missing attunement-gated effects");

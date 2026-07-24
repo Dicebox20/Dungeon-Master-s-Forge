@@ -8,7 +8,7 @@ test("capabilities describe the stable Forge compatibility boundary", () => {
   const result = serviceCapabilities(config());
   assert.deepEqual(result.service, {
     name: "Dungeon Master's Forge AI Service",
-    version: "1.6.6"
+    version: "1.6.7"
   });
   assert.equal(result.forge.schemaVersion, "1.0");
   assert.equal(result.forge.promptVersion, PROMPT_VERSION);

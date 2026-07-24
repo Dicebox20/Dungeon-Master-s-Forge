@@ -32,7 +32,8 @@ The production manifest remains on `main`. Keep tester artifacts and URLs on `dm
 
 - Local source candidates are stable `2.23.1` and tester `2.23.1-test.64`.
 - Public-facing documentation now describes the runtime AI flow, review-before-create boundary, provider data flow, token storage, diagnostic consent, and unofficial Foundry status.
-- The service and module suites currently pass `243/243` and `80/80` respectively.
+- The service and module suites currently pass `245/245` and `80/80` respectively.
+- The version-matched hosted ten-item sweep returned `200` for all ten requests and passed `10/10` semantic JSON audits after the checker was aligned with the canonical contract. The audit includes Foundry v14/DND5e 5.3.3 field checks; this remains structural evidence, not proof of live in-world behavior.
 - The active routing policy is capability-based: native DND5e is selected only when complete and reliable; verified Midi-QOL, DAE, Item Macro, and related routes are preferred when they provide required workflow behavior; portable core data and a review note are the fallback when a route is unavailable or unverified.
 - The Dice Box Group selected MIT licensing. The stable and tester builders require and include `LICENSE`; isolated candidate archives passed local inspection. Repeat the final build after any source change before an approved release action.
 - The existing stable ZIP is an older archive and must not be described as the current compliant submission package.
