@@ -16,7 +16,7 @@ Beta completion measures dependable, reviewable workflows and safe boundaries. I
 
 - Repository: `Dungeon-Master-s-Forge`
 - Active branch: `dm_forge/tester`
-- Latest known commit: `17d5fa0 Add public tester list`
+- Latest known commit: `4504d6d Align tester audit with Foundry contract`
 - Do not delete existing untracked tester ZIP files. They may be user-created release artifacts.
 
 ## Tester Distribution
