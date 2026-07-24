@@ -176,6 +176,7 @@ assert.match(script, /const validation = await validateSpecs\(compilation\.specs
 assert.match(script, /preserveExistingWhenUnspecified: true/);
 assert.match(script, /needs\?\|requires\?\|requiring/);
 assert.match(script, /async function createPreparedSpecs\(specs, configOverrides = \{\}\)/);
+assert.match(script, /const enrichedSpecs = await enrichSpecsWithSystemReferences\(repairedSpecs, requestText\);[\s\S]*return enrichedSpecs\.map\(normalizeAutomationMetadata\);/);
 assert.match(script, /const result = await createPreparedSpecs\(validation\.specs, \{/);
 assert.match(styles, /\.dm_forge-settings-shell > \.form-footer button[\s\S]*color: #f6ebe2/);
 assert.match(forgeEngine, /function compactText\(value\)/);

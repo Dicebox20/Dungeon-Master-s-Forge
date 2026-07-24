@@ -432,7 +432,8 @@ function repairSpecsForValidation(specs, requestText = "") {
 
 async function prepareSpecsForForge(input, requestText = "") {
   const repairedSpecs = repairSpecsForValidation(normalizeSpecs(input), requestText);
-  return enrichSpecsWithSystemReferences(repairedSpecs, requestText).map(normalizeAutomationMetadata);
+  const enrichedSpecs = await enrichSpecsWithSystemReferences(repairedSpecs, requestText);
+  return enrichedSpecs.map(normalizeAutomationMetadata);
 }
 
 function currentConfig(overrides = {}) {

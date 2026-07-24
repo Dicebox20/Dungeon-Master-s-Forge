@@ -12,7 +12,7 @@ Thank you to the people helping us test Dungeon Master's Forge before release. Y
 
 ## Current Build
 
-The current public tester build is **2.23.1-test.62**.
+The current public tester build is **2.23.1-test.63**.
 
 Install or update it from Foundry's **Add-on Modules** screen by using this manifest URL:
 

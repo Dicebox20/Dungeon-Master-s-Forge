@@ -11,10 +11,10 @@ Updated: 2026-07-23
 ## Current Local Snapshot
 
 - Stable source candidate: `2.23.1`; the existing stable ZIP has not been rebuilt after the current compliance edits.
-- Tester source candidate: `2.23.1-test.62`, with its manifest, release ZIP, and local Foundry installation prepared for `dm_forge/tester`; publication remains a separate Git release action.
+- Tester source candidate: `2.23.1-test.63`, with its manifest, release ZIP, and local Foundry installation prepared for `dm_forge/tester`; publication remains a separate Git release action.
 - Hosted service: `1.6.6`; both lanes advertise automation contract `1.0` and template catalog `1.0` with 10 records, while only four production recipes are negotiated. The public client allowance remains `500,000` metered usage units per calendar month, calibrated to roughly 50 prompts from the previous prompt-count baseline. The `10/minute` safeguard and separate `1,000,000,000` global daily ceiling remain in place; the private testing lane remains outside the public ledger.
 - Private testing candidate: safe compositional capabilities are advertised separately from the fourteen compatibility renderer routes. Prompt-count quotas have been replaced with provider-token or deterministic data-size usage metering. Cache hits and client-funded provider requests are uncharged.
-- Last completed verification suites passed `80/80` module tests and `237/237` AI-service tests locally. The all-automation contract sweep covers every production template and confirms all planned templates remain deferred. Tester `.62` is installed locally, and both Droplet services are healthy on the deployed `1.6.6` service contract.
+- Last completed verification suites passed `80/80` module tests and `237/237` AI-service tests locally. The all-automation contract sweep covers every production template and confirms all planned templates remain deferred. Tester `.63` is installed locally, and both Droplet services are healthy on the deployed `1.6.6` service contract.
 - The source patch adds a capability-gated `SEND IT AGAIN!?` repair confirmation flow, fresh approval gating, and bounded report provenance. The public service now advertises `features.repairRerun` and `request.cacheControlRefresh`; a live smoke verified `200` then duplicate `409 repair_already_attempted`. The UUID capture design remains roadmap-only.
 - The local compliance audit covers AI-content classification, runtime approval, executable-output boundaries, token handling, diagnostics consent, external-provider disclosure, branding, and package contents.
 - The Dice Box Group selected MIT licensing. The notice and manifest references are present. The existing stable repository release ZIP was not replaced. Prior tester archives and the pre-`.62` local installation are preserved, with the public monthly allowance set to `500,000` metered usage units.
@@ -47,8 +47,8 @@ Updated: 2026-07-23
 ## Publish Candidate
 
 - Stable release candidate: `2.23.1`
-- Current tester release candidate: `2.23.1-test.62`
-- Current tester ZIP SHA-256: `0C3CE959B99937D736EAC0E42AE1B58CA2C6861511AF8CEA62F9E94186070EA1`
+- Current tester release candidate: `2.23.1-test.63`
+- Current tester ZIP SHA-256: `33B6364FA95109524F472E5AF134D930557CFA9C10EFB72DE3EF8D430B68DA95`
 - Module manifest target: `module/module.json`
 - Release ZIP: `releases/dungeon-masters-forge-v2-2.23.1.zip`
 - Existing stable ZIP SHA-256: `C597701CD56224D925B3270D6AAC26417E6E2FD94F5774E826BDD68529EC25C4` (not rebuilt during the current compliance audit)

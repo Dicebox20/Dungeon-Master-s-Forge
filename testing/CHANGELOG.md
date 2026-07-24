@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 2.23.1-test.63
+
+- Fixes the Foundry validation path so asynchronous system-reference enrichment completes before automation normalization.
+- Prevents `enrichSpecsWithSystemReferences(...).map is not a function` from blocking Preview and Validate.
+- Adds a repeatable JSON-audit utility that retains complete provider responses before scoring their item shape and review notes.
+
 ## 2.23.1-test.62
 
 - Preserves every declared automation route in advanced specification JSON, including mixed condition and self-light items.
