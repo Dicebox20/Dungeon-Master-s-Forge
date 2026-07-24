@@ -14,7 +14,7 @@ Updated: 2026-07-23
 - Tester source candidate: `2.23.1-test.64`, with its manifest, release ZIP, and local Foundry installation prepared for `dm_forge/tester`; publication remains a separate Git release action.
 - Hosted service: `1.6.7`; both lanes advertise automation contract `1.0` and template catalog `1.0` with 10 records, while only four production recipes are negotiated. The public client allowance remains `500,000` metered usage units per calendar month, calibrated to roughly 50 prompts from the previous prompt-count baseline. The `10/minute` safeguard and separate `1,000,000,000` global daily ceiling remain in place; the private testing lane remains outside the public ledger.
 - Private testing candidate: safe compositional capabilities are advertised separately from the fourteen compatibility renderer routes. Prompt-count quotas have been replaced with provider-token or deterministic data-size usage metering. Cache hits and client-funded provider requests are uncharged.
-- Last completed verification suites passed `80/80` module tests and `242/242` AI-service tests locally. The all-automation contract sweep covers every production template and confirms all planned templates remain deferred. Tester `.63` is installed locally, and both Droplet services are healthy on the deployed `1.6.7` service contract.
+- Last completed verification suites passed `80/80` module tests and `243/243` AI-service tests locally. The all-automation contract sweep covers every production template and confirms all planned templates remain deferred. Tester `.63` remains installed locally while `.64` is the refreshed public package candidate, and both Droplet services are healthy on the deployed `1.6.7` service contract.
 - The source patch adds a capability-gated `SEND IT AGAIN!?` repair confirmation flow, fresh approval gating, and bounded report provenance. The public service now advertises `features.repairRerun` and `request.cacheControlRefresh`; a live smoke verified `200` then duplicate `409 repair_already_attempted`. The UUID capture design remains roadmap-only.
 - The local compliance audit covers AI-content classification, runtime approval, executable-output boundaries, token handling, diagnostics consent, external-provider disclosure, branding, and package contents.
 - The Dice Box Group selected MIT licensing. The notice and manifest references are present. The existing stable repository release ZIP was not replaced. Prior tester archives and the pre-`.62` local installation are preserved, with the public monthly allowance set to `500,000` metered usage units.
@@ -48,7 +48,7 @@ Updated: 2026-07-23
 
 - Stable release candidate: `2.23.1`
 - Current tester release candidate: `2.23.1-test.64`
-- Current tester ZIP SHA-256: `036DD0DFBEFDF12D6F89DE7B6D1AD6AD3556F4A55F28CFAC338BCBE9AD098787`
+- Current tester ZIP SHA-256: `CACF437BA6886AB9E338C9E90393027B5C393648094CBC04C8C2AE0173B2D3B9`
 - Module manifest target: `module/module.json`
 - Release ZIP: `releases/dungeon-masters-forge-v2-2.23.1.zip`
 - Existing stable ZIP SHA-256: `C597701CD56224D925B3270D6AAC26417E6E2FD94F5774E826BDD68529EC25C4` (not rebuilt during the current compliance audit)

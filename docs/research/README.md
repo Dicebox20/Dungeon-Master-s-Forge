@@ -33,7 +33,7 @@ It is not a release claim. A source in this library can explain what a field or 
 | DND5e | 5.3.3 | This is the item, activity, Active Effect, and SRD-document contract DMF must create against. |
 | DMF stable module | 2.23.1 | Main-branch release source. |
 | DMF tester module | 2.23.1-test.62 | Current tester package candidate with the isolated harness flag; publication is a separate release action. |
-| Forge AI service | 1.6.6 | HTTP compile, health, capability, quota, cache, repair, report, and automation-template endpoint implementation. |
+| Forge AI service | 1.6.7 | HTTP compile, health, capability, quota, cache, repair, report, and automation-template endpoint implementation. |
 | Midi-QOL | 14.0.11 | Capability-selected execution layer for timing, targeting, and workflow behavior when the active recipe requires it. |
 | DAE | 14.0.12 | Optional Active Effect enhancement. It wraps core behavior. |
 | Item Macro | 3.0.1 | Optional executable-code path. It requires especially strict review. |

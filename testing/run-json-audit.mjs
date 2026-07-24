@@ -21,7 +21,7 @@ const context = {
   foundryVersion: "14.365",
   systemId: "dnd5e",
   systemVersion: "5.3.3",
-  moduleVersion: "2.23.1-test.63",
+  moduleVersion: "2.23.1-test.64",
   supportedKinds: [
     "artifactWeaponHybrid", "casterUtilityEquipment", "chargedHealing", "chargedSaveDamage",
     "equipmentPowerSuite", "legendaryEquipmentSuite", "multiActivityStaff", "nativeEnchant",

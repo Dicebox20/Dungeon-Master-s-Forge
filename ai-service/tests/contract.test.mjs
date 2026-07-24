@@ -3028,3 +3028,27 @@ test("recovery formulas are translated before they reach the Foundry schema", ()
 
   assert.deepEqual(result.specs[0].uses.recovery, [{ period: "dawn", type: "formula", formula: "1d6 + 6" }]);
 });
+
+test("light-bearing weapon output is promoted to the hybrid renderer", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a +3 greatsword called Dawncoil Oathblade. It deals an extra 1d8 radiant damage on every hit. As a bonus action, ignite or extinguish it; the wielder's actor token emits 20 feet of bright light and 20 additional feet of dim light."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "weaponExtraDamage",
+      name: "Dawncoil Oathblade",
+      baseItem: "greatsword",
+      weaponType: "martialM",
+      magicalBonus: 3,
+      damage: { base: { number: 2, denomination: 6, bonus: "", types: ["slashing"] } },
+      extraDamageParts: [{ number: 1, denomination: 8, bonus: "", types: ["radiant"] }],
+      utilityActivities: [{
+        activityName: "Ignite or Extinguish Blade",
+        automation: { recipe: "selfTargetLight" },
+        toggleLight: { brightLight: 20, dimLight: 40, duration: "toggle", toggleState: "reversible" }
+      }]
+    }]
+  }, request, { makeId: ids() });
+
+  assert.equal(result.specs[0].kind, "artifactWeaponHybrid");
+});

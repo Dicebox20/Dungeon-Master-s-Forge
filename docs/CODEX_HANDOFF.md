@@ -24,7 +24,7 @@ Beta completion measures dependable, reviewable workflows and safe boundaries. I
 - Tester manifest: `https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/dm_forge/tester/testing/module.json`
 - Current tester version: `2.23.1-test.64` (source/package candidate; publication remains a separate release action)
 - Current tester download: `https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/dm_forge/tester/testing/releases/dungeon-masters-forge-v2-2.23.1-test.64.zip`
-- Current ZIP SHA-256: `036DD0DFBEFDF12D6F89DE7B6D1AD6AD3556F4A55F28CFAC338BCBE9AD098787`
+- Current ZIP SHA-256: `CACF437BA6886AB9E338C9E90393027B5C393648094CBC04C8C2AE0173B2D3B9`
 
 The production manifest remains on `main`. Keep tester artifacts and URLs on `dm_forge/tester` until a release is deliberately promoted.
 
@@ -32,7 +32,7 @@ The production manifest remains on `main`. Keep tester artifacts and URLs on `dm
 
 - Local source candidates are stable `2.23.1` and tester `2.23.1-test.64`.
 - Public-facing documentation now describes the runtime AI flow, review-before-create boundary, provider data flow, token storage, diagnostic consent, and unofficial Foundry status.
-- The service and module suites currently pass `242/242` and `80/80` respectively.
+- The service and module suites currently pass `243/243` and `80/80` respectively.
 - The active routing policy is capability-based: native DND5e is selected only when complete and reliable; verified Midi-QOL, DAE, Item Macro, and related routes are preferred when they provide required workflow behavior; portable core data and a review note are the fallback when a route is unavailable or unverified.
 - The Dice Box Group selected MIT licensing. The stable and tester builders require and include `LICENSE`; isolated candidate archives passed local inspection. Repeat the final build after any source change before an approved release action.
 - The existing stable ZIP is an older archive and must not be described as the current compliant submission package.

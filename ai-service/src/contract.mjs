@@ -2017,6 +2017,16 @@ function normalizeMalformedUtilitySaveActivities(spec, requestChunk) {
   return normalized;
 }
 
+function normalizeLightBearingWeapon(spec, requestChunk, supportedKinds) {
+  if (spec.kind !== "weaponExtraDamage" || !supportedKinds.includes("artifactWeaponHybrid")) return spec;
+  const text = textForSpecInference(spec, requestChunk);
+  const hasLightRequest = /\b(?:ignite|extinguish|bright\s+light|dim\s+light|actor\s+token)\b/i.test(text);
+  if (!hasLightRequest || !object(spec.toggleLight) && !specHasToggleLightSupport(spec)) return spec;
+  const normalized = clone(spec);
+  normalized.kind = "artifactWeaponHybrid";
+  return normalized;
+}
+
 function normalizeMissingConditionOnHit(spec, requestChunk) {
   if (!["weaponConditionOnHit", "artifactWeaponHybrid"].includes(spec.kind) || object(spec.conditionOnHit)) return spec;
   const text = compactText(requestChunk);
@@ -3150,6 +3160,7 @@ function normalizeRecoverableModelSlip(spec, requestChunk, supportedKinds) {
   normalized = clearResolvedNamedSpellReview(normalized, requestChunk);
   normalized = normalizePassiveWeaponBonusTrinket(normalized, requestChunk, supportedKinds);
   normalized = normalizeExplicitArmorChassis(normalized, requestChunk, supportedKinds);
+  normalized = normalizeLightBearingWeapon(normalized, requestChunk, supportedKinds);
   normalized = normalizeRequestedResistances(normalized, requestChunk);
   normalized = normalizeRequestedSkillAdvantage(normalized, requestChunk);
   normalized = normalizeRequestedDarkvision(normalized, requestChunk);

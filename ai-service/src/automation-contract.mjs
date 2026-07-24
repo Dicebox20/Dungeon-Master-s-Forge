@@ -23,6 +23,8 @@ const WORKFLOW_PASS_ALIASES = Object.freeze({
   "on hit": "postActiveEffects",
   "attack-hit": "postActiveEffects",
   "attack hit": "postActiveEffects",
+  hitTargets: "postActiveEffects",
+  "hit targets": "postActiveEffects",
   "post-active-effects": "postActiveEffects"
 });
 const AUTHORITY_ALIASES = Object.freeze({
