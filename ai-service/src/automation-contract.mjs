@@ -69,7 +69,7 @@ function fail(message, path = "automation") {
 }
 
 function normalizeRecipe(value, path) {
-  const raw = text(value, "recipe", 80, path);
+  const raw = text(object(value) ? value.recipe : value, "recipe", 80, path);
   const template = automationTemplateById(raw);
   if (template) {
     if (template.status !== "production") fail(`recipe "${raw}" is not a production template.`, path);

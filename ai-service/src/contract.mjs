@@ -626,7 +626,9 @@ function nestedConditionOnHit(activity) {
 }
 
 function nestedToggleLight(activity) {
-  const direct = object(activity?.toggleLight) ? activity.toggleLight : null;
+  const direct = object(activity?.toggleLight)
+    ? activity.toggleLight
+    : (object(activity?.lightToggle) ? activity.lightToggle : null);
   const effect = Array.isArray(activity?.effects)
     ? activity.effects.find(entry => object(entry?.toggleLight))
     : null;
@@ -650,6 +652,11 @@ function normalizeNestedAutomationPayloads(spec) {
       normalized.conditionOnHit = conditionOnHit;
       changed = true;
     }
+  }
+  if (!object(normalized.toggleLight) && object(normalized.lightToggle)) {
+    normalized.toggleLight = clone(normalized.lightToggle);
+    delete normalized.lightToggle;
+    changed = true;
   }
   if (!object(normalized.toggleLight)) {
     const toggleLight = activities.map(nestedToggleLight).find(Boolean);

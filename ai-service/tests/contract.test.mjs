@@ -3052,3 +3052,49 @@ test("light-bearing weapon output is promoted to the hybrid renderer", () => {
 
   assert.equal(result.specs[0].kind, "artifactWeaponHybrid");
 });
+
+test("nested lightToggle aliases are promoted to canonical self-light metadata", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a +3 greatsword called Dawncoil Oathblade. It deals extra radiant damage and can ignite or extinguish, emitting bright and dim light from the wielder's actor token."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "weaponExtraDamage",
+      name: "Dawncoil Oathblade",
+      baseItem: "greatsword",
+      damage: { base: { number: 2, denomination: 6, bonus: "", types: ["slashing"] } },
+      extraDamageParts: [{ number: 1, denomination: 8, bonus: "", types: ["radiant"] }],
+      utilityActivities: [{
+        activityName: "Ignite or Extinguish",
+        templateId: "self-token-light-toggle",
+        lightToggle: { brightLight: 20, dimLight: 40, duration: "special", toggleState: "toggle" }
+      }]
+    }]
+  }, request, { makeId: ids() });
+
+  assert.equal(result.specs[0].kind, "artifactWeaponHybrid");
+  assert.equal(result.specs[0].toggleLight.brightLight, 20);
+});
+
+test("object-wrapped automation recipe labels are translated before validation", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a rare staff called Cinderfrost Staff. It has 8 charges and can cast Burning Hands."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "multiActivityStaff",
+      name: "Cinderfrost Staff",
+      baseItem: "staff",
+      uses: { max: "8", recovery: [{ period: "lr", type: "recoverAll", formula: "" }] },
+      activities: [{
+        activityName: "Cast Burning Hands",
+        chargeCost: 2,
+        save: { ability: "dex", dc: 15 },
+        damageParts: [{ number: 3, denomination: 6, bonus: "", types: ["fire"] }]
+      }],
+      automation: { recipe: { recipe: "multiActivityResource" } }
+    }]
+  }, request, { makeId: ids() });
+
+  assert.equal(result.specs[0].automation.recipe, "multiActivityResource");
+});
