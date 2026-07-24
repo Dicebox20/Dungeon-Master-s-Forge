@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 2.23.1-test.64
+
+- Adds a final Foundry-safe cleanup for recovery formulas before item preflight and creation.
+- Removes natural-language recovery suffixes and spacing drift that can invalidate DND5e use recovery fields.
+- Keeps the hosted service and local creation paths aligned for charged-item recovery.
+
 ## 2.23.1-test.63
 
 - Fixes the Foundry validation path so asynchronous system-reference enrichment completes before automation normalization.

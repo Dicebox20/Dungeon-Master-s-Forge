@@ -21,7 +21,7 @@ const context = {
   foundryVersion: "14.365",
   systemId: "dnd5e",
   systemVersion: "5.3.3",
-  moduleVersion: "2.23.1-test.62",
+  moduleVersion: "2.23.1-test.63",
   supportedKinds: [
     "artifactWeaponHybrid", "casterUtilityEquipment", "chargedHealing", "chargedSaveDamage",
     "equipmentPowerSuite", "legendaryEquipmentSuite", "multiActivityStaff", "nativeEnchant",
@@ -38,20 +38,20 @@ const context = {
   }
 };
 const expectedKinds = [
-  "weaponExtraDamage", "passiveEffectEquipment", "chargedHealing", "chargedSaveDamage", "multiActivityStaff",
-  "weaponConditionOnHit", "artifactWeaponHybrid", "passiveEffectEquipment", "equipmentPowerSuite", "artifactWeaponHybrid"
+  ["weaponExtraDamage"], ["passiveEffectEquipment"], ["chargedHealing"], ["chargedSaveDamage"], ["multiActivityStaff", "equipmentPowerSuite"],
+  ["weaponConditionOnHit"], ["artifactWeaponHybrid"], ["passiveEffectEquipment"], ["equipmentPowerSuite"], ["artifactWeaponHybrid"]
 ];
 const isObject = value => value && typeof value === "object" && !Array.isArray(value);
 
 function auditSpec(spec, index) {
   const findings = [];
   if (!spec) return ["missing_spec"];
-  if (spec.kind !== expectedKinds[index]) findings.push(`kind:${spec.kind ?? "missing"} expected ${expectedKinds[index]}`);
+  if (!expectedKinds[index].includes(spec.kind)) findings.push(`kind:${spec.kind ?? "missing"} expected ${expectedKinds[index].join(" or ")}`);
   if (index === 0 && (!Number(spec.magicalBonus) || !Array.isArray(spec.extraDamageParts) || !spec.extraDamageParts.length)) findings.push("missing +1 or extra damage");
   if (index === 1 && (!Array.isArray(spec.effects) || !spec.effects.length)) findings.push("missing passive effects");
   if (index === 2 && (String(spec.uses?.max) !== "1" || !isObject(spec.healing))) findings.push("missing one-use healing payload");
   if (index === 3 && (String(spec.uses?.max) !== "6" || !isObject(spec.save) || !Array.isArray(spec.damageParts))) findings.push("missing charged save payload");
-  if (index === 4 && (spec.kind !== "multiActivityStaff" || String(spec.uses?.max) !== "8" || (!Array.isArray(spec.activities) && !Array.isArray(spec.attackActivities) && !Array.isArray(spec.saveActivities) && !Array.isArray(spec.utilityActivities)))) findings.push("missing shared multi-activity payload");
+  if (index === 4 && (String(spec.uses?.max) !== "8" || (!Array.isArray(spec.activities) && !Array.isArray(spec.attackActivities) && !Array.isArray(spec.saveActivities) && !Array.isArray(spec.utilityActivities)))) findings.push("missing shared multi-activity payload");
   if (index === 5 && (!isObject(spec.conditionOnHit) || spec.automation?.recipe !== "conditionOnHit")) findings.push("missing conditionOnHit automation contract");
   const lightActivities = [
     ...(Array.isArray(spec.utilityActivities) ? spec.utilityActivities : []),

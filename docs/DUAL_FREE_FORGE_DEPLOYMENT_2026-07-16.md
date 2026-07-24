@@ -16,22 +16,28 @@ only the elevated limits were restored.
 
 ## Verification
 
-- Public `/health`: HTTP 200, service `1.6.5`, public-free-tier access, SQLite quota storage.
+- Public `/health`: HTTP 200, service `1.6.7`, public-free-tier access, SQLite quota storage.
 - Public `/v1/forge/capabilities`: HTTP 200, Hosted Forge enabled, executable model output disabled.
 - Testing unauthenticated compile: HTTP 401.
-- Testing authenticated compile: HTTP 200, service `1.6.5`, one `weaponExtraDamage` item.
+- Testing authenticated compile: HTTP 200, service `1.6.7`, one `weaponExtraDamage` item.
 - Both capability responses advertise automation contract `1.0`, template catalog `1.0` with 10 records, repair reruns, and negotiated cache refresh.
 - Both systemd services and Caddy: active.
 - The testing hostname received a valid TLS certificate through Caddy.
 
 ## 2026-07-23 Refresh
 
-- Deployed service `1.6.6` from the same locally tested source to both `/opt/dmforge-ai` and `/opt/dmforge-ai-testing`.
+- Deployed service `1.6.7` from the same locally tested source to both `/opt/dmforge-ai` and `/opt/dmforge-ai-testing`.
 - Public and private `/health` checks returned HTTP 200 after restart; both systemd units are active.
 - The public capability response advertises four production automation recipes and keeps six planned templates deferred. Executable provider output remains disabled.
 - Public limits remain `10/min`, `500,000` usage units per client-month, and `1,000,000,000` usage units per global day. Private limits and authentication remain unchanged.
 - Service source backups were created on the Droplet before replacement. No environment files, quota ledgers, bearer tokens, or Caddy configuration were changed.
 - The matching tester package is `2.23.1-test.62` with SHA-256 `0C3CE959B99937D736EAC0E42AE1B58CA2C6861511AF8CEA62F9E94186070EA1`.
+
+## 2026-07-23 Contract Repair Refresh
+
+- Added trusted recovery for nested save, light-toggle, and explicit on-hit condition payloads, named Burning Hands recovery, and schema-safe recovery formula cleanup.
+- The matching tester module is `2.23.1-test.64` with the recovery-formula creation guard.
+- Public limits, private authentication, quota ledgers, environment files, reverse-proxy configuration, and provider keys remain unchanged.
 
 ## Operations
 

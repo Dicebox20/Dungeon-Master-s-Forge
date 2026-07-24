@@ -22,26 +22,26 @@ Beta completion measures dependable, reviewable workflows and safe boundaries. I
 ## Tester Distribution
 
 - Tester manifest: `https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/dm_forge/tester/testing/module.json`
-- Current tester version: `2.23.1-test.63` (source/package candidate; publication remains a separate release action)
-- Current tester download: `https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/dm_forge/tester/testing/releases/dungeon-masters-forge-v2-2.23.1-test.63.zip`
-- Current ZIP SHA-256: `33B6364FA95109524F472E5AF134D930557CFA9C10EFB72DE3EF8D430B68DA95`
+- Current tester version: `2.23.1-test.64` (source/package candidate; publication remains a separate release action)
+- Current tester download: `https://raw.githubusercontent.com/Dicebox20/Dungeon-Master-s-Forge/dm_forge/tester/testing/releases/dungeon-masters-forge-v2-2.23.1-test.64.zip`
+- Current ZIP SHA-256: `036DD0DFBEFDF12D6F89DE7B6D1AD6AD3556F4A55F28CFAC338BCBE9AD098787`
 
 The production manifest remains on `main`. Keep tester artifacts and URLs on `dm_forge/tester` until a release is deliberately promoted.
 
 ## Current Compliance State
 
-- Local source candidates are stable `2.23.1` and tester `2.23.1-test.63`.
+- Local source candidates are stable `2.23.1` and tester `2.23.1-test.64`.
 - Public-facing documentation now describes the runtime AI flow, review-before-create boundary, provider data flow, token storage, diagnostic consent, and unofficial Foundry status.
-- The service and module suites currently pass `237/237` and `80/80` respectively.
+- The service and module suites currently pass `242/242` and `80/80` respectively.
 - The active routing policy is capability-based: native DND5e is selected only when complete and reliable; verified Midi-QOL, DAE, Item Macro, and related routes are preferred when they provide required workflow behavior; portable core data and a review note are the fallback when a route is unavailable or unverified.
 - The Dice Box Group selected MIT licensing. The stable and tester builders require and include `LICENSE`; isolated candidate archives passed local inspection. Repeat the final build after any source change before an approved release action.
 - The existing stable ZIP is an older archive and must not be described as the current compliant submission package.
-- Tester build `2.23.1-test.63` is installed locally and is the current package candidate. The stable `main` lane, provider keys, and stable release ZIP remain unchanged. The explicitly requested public monthly allowance is `500,000` metered usage units.
+- Tester build `2.23.1-test.64` is the current package candidate. The stable `main` lane, provider keys, and stable release ZIP remain unchanged. The explicitly requested public monthly allowance is `500,000` metered usage units.
 
 ## Hosted Service
 
 - DigitalOcean service name: Dungeon Master's Forge AI Service
-- Last verified service version: `1.6.6`
+- Last verified service version: `1.6.7`
 - Listener: localhost port `8788`, exposed through the configured reverse proxy/domain
 - Health route: `/health`
 - Last known public access: `public-free-tier`

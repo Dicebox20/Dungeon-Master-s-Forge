@@ -1859,6 +1859,133 @@ test("condition riders and named light utilities do not trigger false unresolved
   assert.equal(unresolvedCategories.has("lightToggle"), false);
 });
 
+test("shared activity save payloads do not receive a stale save-damage review note", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a rare staff called Cinderfrost Staff. It has 8 charges. Spend 2 charges to cast Burning Hands in a 15-foot cone for 3d6 fire damage, or 3 charges to cast Shatter for 3d8 thunder damage."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "multiActivityStaff",
+      name: "Cinderfrost Staff",
+      description: "A staff with two charged save activities.",
+      uses: { max: "8", recovery: [{ period: "dawn", type: "recoverAll", formula: "" }] },
+      activities: [
+        {
+          activityName: "Burning Hands",
+          chargeCost: 2,
+          save: { ability: "dex", dc: 15 },
+          damageParts: [{ number: 3, denomination: 6, bonus: "", types: ["fire"] }]
+        },
+        {
+          activityName: "Shatter",
+          chargeCost: 3,
+          save: { ability: "con", dc: 15 },
+          damageParts: [{ number: 3, denomination: 8, bonus: "", types: ["thunder"] }]
+        }
+      ]
+    }]
+  }, request, { makeId: ids() });
+
+  assert.equal((result.specs[0].unresolvedMechanics ?? []).some(mechanic => mechanic.category === "saveDamage"), false);
+});
+
+test("named Burning Hands recovers its concrete save and cone damage payload", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a rare staff called Cinderfrost Staff. It has 8 charges. Spend 2 charges to cast Burning Hands in a 15-foot cone for 3d6 fire damage, or 3 charges to cast Shatter for 3d8 thunder damage."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "equipmentPowerSuite",
+      name: "Cinderfrost Staff",
+      description: "A staff with two named spell activities.",
+      utilityActivities: [
+        { activityName: "Burning Hands", save: { ability: "dex", dc: 15 } },
+        { activityName: "Shatter", save: { ability: "con", dc: 15 } }
+      ]
+    }]
+  }, request, { makeId: ids() });
+
+  const spec = result.specs[0];
+  assert.equal(spec.saveActivities.length, 2);
+  assert.deepEqual(spec.saveActivities.map(activity => activity.activityName).sort(), ["Cast Burning Hands", "Cast Shatter"]);
+  const burningHands = spec.saveActivities.find(activity => activity.activityName === "Cast Burning Hands");
+  assert.deepEqual(burningHands.damageParts, [{ number: 3, denomination: 6, bonus: "", types: ["fire"] }]);
+  assert.equal((spec.unresolvedMechanics ?? []).some(mechanic => mechanic.category === "saveDamage"), false);
+});
+
+test("nested hybrid automation payloads are promoted to trusted canonical routes", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create an artifact halberd called Winter's Mercy. On a hit, the target must make a DC 17 Constitution save or be restrained for 1 round. As a bonus action, it emits 20 feet of bright light and 20 feet of dim light.",
+    context: {
+      ...envelope().context,
+      automationCapabilities: {
+        version: "1.0",
+        supportedRecipes: ["conditionOnHit", "selfTargetLight"],
+        supportedTemplates: ["workflow-condition-rider", "self-token-light-toggle"],
+        activeModules: ["midi-qol", "itemacro"],
+        settings: { midiQolAutomation: true, itemMacroAutomation: true },
+        routes: []
+      }
+    }
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "artifactWeaponHybrid",
+      name: "Winter's Mercy",
+      description: "A halberd with a condition rider and self-sourced light.",
+      utilityActivities: [
+        {
+          activityName: "Ignite or Extinguish",
+          automation: { recipe: "selfTargetLight" },
+          toggleLight: { brightLight: 20, dimLight: 20, toggleState: "toggle" }
+        },
+        {
+          activityName: "Freezing Sweep",
+          onHitRiders: [{
+            recipe: "conditionOnHit",
+            condition: "restrained",
+            save: { ability: "con", dc: 17 },
+            durationSeconds: 6
+          }]
+        }
+      ]
+    }]
+  }, request, { makeId: ids() });
+
+  const spec = result.specs[0];
+  assert.equal(spec.conditionOnHit.condition, "restrained");
+  assert.equal(spec.conditionOnHit.save.ability, "con");
+  assert.equal(spec.toggleLight.bright, 20);
+  assert.equal(spec.toggleLight.dim, 20);
+  assert.deepEqual(
+    [...new Set([spec.automation, ...(spec.automationRoutes ?? [])].map(route => route.recipe))],
+    ["conditionOnHit", "selfTargetLight"]
+  );
+  assert.equal((spec.unresolvedMechanics ?? []).some(mechanic => ["lightToggle", "saveDamage"].includes(mechanic.category)), false);
+});
+
+test("explicit hybrid hit riders are recovered when the model omits the rider payload", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create an artifact halberd called Winter's Mercy. It is a +3 halberd. When it hits a creature, the target must make a DC 17 Constitution saving throw or become restrained until the end of the wielder's next turn."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "artifactWeaponHybrid",
+      name: "Winter's Mercy",
+      description: "A frozen halberd.",
+      utilityActivities: [{ activityName: "Condition Rider" }]
+    }]
+  }, request, { makeId: ids() });
+
+  const spec = result.specs[0];
+  assert.deepEqual(spec.conditionOnHit, {
+    condition: "restrained",
+    save: { ability: "con", dc: 17 },
+    durationSeconds: 6
+  });
+  assert.equal((spec.unresolvedMechanics ?? []).some(mechanic => mechanic.category === "conditionOnHit"), false);
+});
+
 test("named spell aliases in utility fields are preserved for review logic", () => {
   const request = validateForgeRequest(envelope({
     request: "Create a rare breastplate called Hearthwarden Breastplate. It can heal allies in a 15-foot burst for 2d8+3 and cast Beacon of Hope once per dawn."
@@ -2879,4 +3006,25 @@ test("condition riders preserve an explicit creature-type filter", () => {
   }, request, { makeId: ids() });
 
   assert.equal(result.specs[0].conditionOnHit.targetCreatureType, "undead");
+});
+
+test("recovery formulas are translated before they reach the Foundry schema", () => {
+  const request = validateForgeRequest(envelope({
+    request: "Create a rare staff called Winter's Mercy. It has 12 charges and regains 1 d6 + 6 charges daily at dawn."
+  }));
+  const result = normalizeModelOutput({
+    specs: [{
+      kind: "chargedSaveDamage",
+      name: "Winter's Mercy",
+      description: request.request,
+      itemType: "equipment",
+      equipmentType: "wand",
+      baseItem: "wand",
+      save: { ability: "dex", dc: 14 },
+      damageParts: [{ number: 1, denomination: 6, bonus: "", types: ["cold"] }],
+      uses: { max: "12", recovery: [{ period: "dawn", type: "formula", formula: "1 d6 + 6 charges" }] }
+    }]
+  }, request, { makeId: ids() });
+
+  assert.deepEqual(result.specs[0].uses.recovery, [{ period: "dawn", type: "formula", formula: "1d6 + 6" }]);
 });

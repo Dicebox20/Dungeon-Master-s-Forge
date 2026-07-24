@@ -4,7 +4,7 @@ Welcome, and thank you for helping us test Dungeon Master's Forge. This is a tem
 
 See the [public tester list](testers.md) for the people currently helping with testing.
 
-The current public tester build is **2.23.1-test.63**. This is a review-first tool: it prepares Foundry data for you to inspect, but it does not replace your rules judgment or create anything until you approve it.
+The current public tester build is **2.23.1-test.64**. This is a review-first tool: it prepares Foundry data for you to inspect, but it does not replace your rules judgment or create anything until you approve it.
 
 ## Contents
 
@@ -48,7 +48,7 @@ Our goal is to make Foundry item creation easier for people who are not comforta
 7. Confirm that the provider is **Free Forge**.
 8. Click **Check Connection** before your first live test.
 
-The current tester build is `2.23.1-test.63`. Free Forge does not require a personal endpoint, API token, or OpenAI key.
+The current tester build is `2.23.1-test.64`. Free Forge does not require a personal endpoint, API token, or OpenAI key.
 
 For a first session, run one simple item, one item with charges or healing, and one more complicated item with a mechanic you are comfortable checking in Foundry. Stop and review whenever the Forge marks a mechanic for manual review.
 

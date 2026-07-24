@@ -81,6 +81,7 @@ const SRD_SPELL_PATTERNS = Object.freeze([
   { pattern: /\bcommand\b/i, label: "Command" },
   { pattern: /\bfly\b/i, label: "Fly" },
   { pattern: /\bfireball\b/i, label: "Fireball" },
+  { pattern: /\bburning\s+hands\b/i, label: "Burning Hands" },
   { pattern: /\blightning bolt\b/i, label: "Lightning Bolt" },
   { pattern: /\bshatter\b/i, label: "Shatter" },
   { pattern: /\bclairvoyance\b/i, label: "Clairvoyance" },
@@ -140,6 +141,20 @@ const RECOVERABLE_SPELL_PROFILES = Object.freeze([
     target: Object.freeze({
       template: { count: "1", type: "sphere", size: 10, units: "ft" },
       affects: { type: "creature", special: "Creatures in the 10-foot-radius sphere" },
+      prompt: true
+    })
+  }),
+  Object.freeze({
+    name: "Burning Hands",
+    type: "save",
+    defaultChargeCost: 1,
+    save: Object.freeze({ ability: "dex" }),
+    damageOnSave: "half",
+    damageParts: Object.freeze([{ number: 3, denomination: 6, bonus: "", types: Object.freeze(["fire"]) }]),
+    range: Object.freeze({ units: "self" }),
+    target: Object.freeze({
+      template: { count: "1", type: "cone", size: 15, units: "ft" },
+      affects: { type: "creature", special: "Creatures in a 15-foot cone" },
       prompt: true
     })
   }),
@@ -241,6 +256,19 @@ function secureId() {
 
 function compactText(value) {
   return String(value ?? "").replace(/\s+/g, " ").trim();
+}
+
+function normalizeRecoveryFormula(value) {
+  return compactText(value)
+    .replace(/\b(?:charges?|uses?)\b.*$/i, "")
+    .replace(/\s+d\s*(?=\d)/gi, "d")
+    .trim();
+}
+
+function normalizeRecoveryEntries(entries) {
+  return (Array.isArray(entries) ? entries : []).map(entry => object(entry)
+    ? { ...entry, formula: normalizeRecoveryFormula(entry.formula) }
+    : entry);
 }
 
 function unwrapNameQuotes(value) {
@@ -542,10 +570,15 @@ function specHasSaveDamageSupport(spec) {
   if (spec.kind === "chargedSaveDamage") return true;
   if (object(spec.save) && Array.isArray(spec.damageParts) && spec.damageParts.length) return true;
   if (object(spec.conditionOnHit?.save)) return true;
-  for (const field of ["saveActivities", "utilityActivities"]) {
+  for (const field of ["activities", "saveActivities", "utilityActivities"]) {
     if (!Array.isArray(spec[field])) continue;
     if (spec[field].some(activity =>
-      object(activity) && object(activity.save) && Array.isArray(activity.damageParts) && activity.damageParts.length
+      object(activity) && (
+        (object(activity.save) && Array.isArray(activity.damageParts) && activity.damageParts.length)
+        || (Array.isArray(activity.saveActivities) && activity.saveActivities.some(nested =>
+          object(nested) && object(nested.save) && Array.isArray(nested.damageParts) && nested.damageParts.length
+        ))
+      )
     )) return true;
   }
   return false;
@@ -555,10 +588,77 @@ function specHasToggleLightSupport(spec) {
   if (object(spec.toggleLight)) return true;
   return Array.isArray(spec.utilityActivities) && spec.utilityActivities.some(activity => {
     if (!object(activity)) return false;
+    if (object(activity.toggleLight)) return true;
+    if (Array.isArray(activity.effects) && activity.effects.some(effect => object(effect?.toggleLight))) return true;
+    if (activity.automation?.recipe === "selfTargetLight") return true;
     const name = compactText(activity.activityName || activity.name || activity.label || "");
     const description = compactText(activity.description || "");
     return /\b(light|bright|dim|shed|glow|ignite)\b/i.test(`${name} ${description}`);
   });
+}
+
+function nestedAutomationActivities(spec) {
+  return ["activities", "attackActivities", "saveActivities", "utilityActivities"]
+    .flatMap(field => Array.isArray(spec?.[field]) ? spec[field].filter(object) : []);
+}
+
+function nestedConditionOnHit(activity) {
+  const candidates = [
+    ...(Array.isArray(activity?.onHitRiders) ? activity.onHitRiders : []),
+    ...(Array.isArray(activity?.effects) ? activity.effects : [])
+  ].filter(candidate => object(candidate));
+  const rider = candidates.find(candidate =>
+    candidate.recipe === "conditionOnHit"
+    || object(candidate.save) && compactText(candidate.condition || candidate.conditionName || candidate.name)
+  );
+  if (!rider) return null;
+  const save = object(rider.save) ? clone(rider.save) : (object(rider.savingThrow) ? clone(rider.savingThrow) : undefined);
+  const condition = compactText(rider.condition || rider.conditionName || rider.name);
+  if (!condition || !save) return null;
+  return {
+    condition,
+    save,
+    ...(rider.durationSeconds != null ? { durationSeconds: rider.durationSeconds } : {}),
+    ...(object(rider.duration) ? { duration: clone(rider.duration) } : {}),
+    ...(rider.targetCreatureType ? { targetCreatureType: rider.targetCreatureType } : {}),
+    ...(rider.effectName ? { effectName: rider.effectName } : {})
+  };
+}
+
+function nestedToggleLight(activity) {
+  const direct = object(activity?.toggleLight) ? activity.toggleLight : null;
+  const effect = Array.isArray(activity?.effects)
+    ? activity.effects.find(entry => object(entry?.toggleLight))
+    : null;
+  const toggle = direct ?? effect?.toggleLight;
+  if (!object(toggle)) return null;
+  return {
+    ...clone(toggle),
+    activityName: compactText(toggle.activityName || activity.activityName || activity.name || "Toggle Light") || "Toggle Light",
+    ...(toggle.target || activity.target ? { target: clone(toggle.target || activity.target) } : {})
+  };
+}
+
+function normalizeNestedAutomationPayloads(spec) {
+  const activities = nestedAutomationActivities(spec);
+  if (!activities.length) return spec;
+  const normalized = clone(spec);
+  let changed = false;
+  if (!object(normalized.conditionOnHit)) {
+    const conditionOnHit = activities.map(nestedConditionOnHit).find(Boolean);
+    if (conditionOnHit) {
+      normalized.conditionOnHit = conditionOnHit;
+      changed = true;
+    }
+  }
+  if (!object(normalized.toggleLight)) {
+    const toggleLight = activities.map(nestedToggleLight).find(Boolean);
+    if (toggleLight) {
+      normalized.toggleLight = toggleLight;
+      changed = true;
+    }
+  }
+  return changed ? normalized : spec;
 }
 
 function hasOnlyGenericUtilityNames(spec) {
@@ -582,7 +682,15 @@ function appendRequestDerivedUnresolved(spec, requestChunk, warnings = [], defer
   const unresolved = Array.isArray(normalized.unresolvedMechanics)
     ? normalized.unresolvedMechanics.filter(mechanic => object(mechanic))
     : [];
-  let changed = false;
+  const filteredUnresolved = unresolved.filter(mechanic => {
+    const category = comparableText(mechanic.category || "");
+    if (category === "savedamage" && specHasSaveDamageSupport(normalized)) return false;
+    if (category === "lighttoggle" && specHasToggleLightSupport(normalized)) return false;
+    return true;
+  });
+  let changed = filteredUnresolved.length !== unresolved.length;
+  unresolved.length = 0;
+  unresolved.push(...filteredUnresolved);
 
   if (/\baura\b/i.test(text) && !unresolvedMechanicExists({ unresolvedMechanics: unresolved }, mechanic =>
     comparableText(mechanic.category || "") === "allyaura"
@@ -1208,7 +1316,7 @@ function inferUsesFromText(text, { consumed = false, defaultMax = "" } = {}) {
   } else if (/long\s+rest/i.test(text)) {
     recovery = [{ period: "lr", type: "recoverAll", formula: "" }];
   } else if (/dawn|daily/i.test(text)) {
-    const formula = /\bregains?\s+([^.;\n]+?)\s+(?:charges?|uses?)\b/i.exec(text)?.[1]?.trim() ?? "";
+    const formula = normalizeRecoveryFormula(/\bregains?\s+([^.;\n]+?)\s+(?:charges?|uses?)\b/i.exec(text)?.[1]);
     recovery = [{ period: "dawn", type: formula ? "formula" : "recoverAll", formula }];
   }
 
@@ -1909,6 +2017,28 @@ function normalizeMalformedUtilitySaveActivities(spec, requestChunk) {
   return normalized;
 }
 
+function normalizeMissingConditionOnHit(spec, requestChunk) {
+  if (!["weaponConditionOnHit", "artifactWeaponHybrid"].includes(spec.kind) || object(spec.conditionOnHit)) return spec;
+  const text = compactText(requestChunk);
+  if (!/\b(?:on|when)\s+(?:a\s+)?hit\b|\b(?:hits?|struck)\b/i.test(text)) return spec;
+  const condition = detectConditionFromText(text);
+  const saveMatch = text.match(/\bDC\s*(\d+)\s+(Strength|Dexterity|Constitution|Intelligence|Wisdom|Charisma)\s+sav(?:e|ing throw)\b/i);
+  if (!condition || !saveMatch) return spec;
+  const durationSeconds = /\bfor\s+1\s+round\b|\buntil\s+(?:the\s+)?(?:end|start)\s+of\s+(?:the\s+)?(?:wielder'?s?|your|the target'?s?)\s+next turn\b/i.test(text)
+    ? 6
+    : /\bfor\s+1\s+minute\b/i.test(text)
+      ? 60
+      : null;
+  return {
+    ...clone(spec),
+    conditionOnHit: {
+      condition,
+      save: { ability: saveMatch[2].slice(0, 3).toLowerCase(), dc: Number(saveMatch[1]) },
+      ...(durationSeconds ? { durationSeconds } : {})
+    }
+  };
+}
+
 function normalizeMalformedAttackActivities(spec) {
   if (!isSuiteKind(spec.kind) || !Array.isArray(spec.attackActivities)) return spec;
 
@@ -2294,14 +2424,14 @@ function normalizeMissingUses(spec, requestChunk) {
   const existingRecovery = Array.isArray(existing.recovery) ? existing.recovery : [];
   const inferredRecovery = Array.isArray(inferred.recovery) ? inferred.recovery : [];
   const recovery = inferredRecovery.length
-    ? inferredRecovery
+    ? normalizeRecoveryEntries(inferredRecovery)
     : existingRecovery.length
-    ? existingRecovery.map((entry, index) => {
+    ? normalizeRecoveryEntries(existingRecovery.map((entry, index) => {
       const inferredEntry = inferredRecovery[index];
       if (!object(entry) || !object(inferredEntry) || compactText(entry.formula) || !compactText(inferredEntry.formula)) return entry;
       return { ...entry, formula: inferredEntry.formula };
-    })
-    : inferredRecovery;
+    }))
+    : normalizeRecoveryEntries(inferredRecovery);
   normalized.uses = {
     ...existing,
     max: existingMax || inferred.max || "1",
@@ -2915,7 +3045,7 @@ function normalizeNativeSummonShape(spec, requestChunk, supportedKinds) {
     && (object(spec.summonActor) || object(spec.actor) || object(spec.profile?.actor) || hasSingleProfileActor);
   if (!supportedKinds.includes("nativeSummon") || (!summonLike && spec.kind !== "nativeSummon")) return spec;
   if (
-    ["multiActivityStaff", "equipmentPowerSuite", "legendaryEquipmentSuite", "casterUtilityEquipment"].includes(spec.kind)
+    ["multiActivityStaff", "equipmentPowerSuite", "legendaryEquipmentSuite", "casterUtilityEquipment", "artifactWeaponHybrid"].includes(spec.kind)
     && (
     (Array.isArray(spec.activities) && spec.activities.length)
     || (Array.isArray(spec.saveActivities) && spec.saveActivities.length)
@@ -3026,6 +3156,8 @@ function normalizeRecoverableModelSlip(spec, requestChunk, supportedKinds) {
   normalized = normalizeThrowableConsumableSpec(normalized, requestChunk);
   normalized = normalizeNativeEnchant(normalized, requestChunk, supportedKinds);
   normalized = normalizeNativeSummonShape(normalized, requestChunk, supportedKinds);
+  normalized = normalizeNestedAutomationPayloads(normalized);
+  normalized = normalizeMissingConditionOnHit(normalized, requestChunk);
   normalized = normalizeConditionOnHit(normalized, requestChunk);
   normalized = normalizeWeaponExtraDamageParts(normalized, requestChunk);
   normalized = normalizeWandSaveActivity(normalized, requestChunk);

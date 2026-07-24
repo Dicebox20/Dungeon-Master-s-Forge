@@ -362,11 +362,22 @@ async function runDungeonMastersForge(FORGE, ITEMS, { validateOnly = false, auth
     };
   }
 
+  function normalizeRecoveryFormula(value) {
+    return String(value ?? "")
+      .replace(/\b(?:charges?|uses?)\b.*$/i, "")
+      .replace(/\s+d\s*(?=\d)/gi, "d")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
   function usesData(uses = {}) {
     return {
       spent: uses.spent ?? 0,
       max: String(uses.max ?? ""),
-      recovery: uses.recovery ?? [],
+      recovery: Array.isArray(uses.recovery) ? uses.recovery.map(recovery => ({
+        ...recovery,
+        formula: normalizeRecoveryFormula(recovery?.formula)
+      })) : [],
       autoDestroy: Boolean(uses.autoDestroy ?? false)
     };
   }

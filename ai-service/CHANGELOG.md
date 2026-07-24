@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 1.6.7 - 2026-07-23
+
+- Recovered trusted nested save, light-toggle, and explicit on-hit condition payloads before contract validation.
+- Removed stale save-damage and light-toggle review notes when the corresponding mechanic is present in the normalized specification.
+- Added deterministic Burning Hands recovery for named spell activities, including its save, cone, damage, and charge cost.
+- Preserved hybrid weapon routes when a model also returns summon-shaped nested data.
+- Normalized natural-language recovery suffixes and spacing drift before the result reaches Foundry.
+
 - Added the explicit `repair-attempt` request contract with bounded reviewed context, executable-field stripping, prompt guidance, capability advertisement, and one-shot parent-result protection.
 - Kept repair requests separate from the bounded malformed-output retry; each confirmed repair is a fresh metered compilation and returns to review.
 - Expanded the capability contract so the fourteen renderer kinds remain compatible routes instead of acting as the full feature ceiling.
